@@ -9575,54 +9575,55 @@ kbd {
     flex-direction: column;
     width: 100%;
     max-width: 420px;
-    padding: 56px 28px 40px;
-    min-height: 100svh;
+    /* Natural padding — no forced min-height, content flows compactly */
+    padding: 48px 24px 36px;
   }
   .mob-auth-logo {
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 36px;
+    margin-bottom: 28px;
   }
   .mob-auth-wordmark {
-    font-size: 1.5rem;
+    font-size: 1.4rem;
     font-weight: 800;
     color: #fff;
     letter-spacing: -0.02em;
   }
-  .mob-welcome-hero { margin-bottom: 28px; }
+  .mob-welcome-hero { margin-bottom: 20px; }
   .mob-welcome-title {
-    font-size: 2.1rem;
+    font-size: 1.85rem;
     font-weight: 800;
     color: #fff;
-    line-height: 1.15;
+    line-height: 1.2;
     letter-spacing: -0.03em;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
   }
   .mob-welcome-sub {
-    font-size: 0.93rem;
+    font-size: 0.88rem;
     color: var(--text-soft);
-    line-height: 1.6;
+    line-height: 1.55;
+    max-width: 30ch;
   }
   .mob-feature-list {
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    margin-bottom: 36px;
-    flex: 1;
+    gap: 10px;
+    /* Fixed margin, no flex: 1 stretching */
+    margin-bottom: 28px;
   }
   .mob-feature-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    font-size: 0.93rem;
+    gap: 11px;
+    font-size: 0.9rem;
     color: var(--text-soft);
     font-weight: 500;
   }
   .mob-feature-check {
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
     border-radius: 50%;
     background: rgba(52,211,153,0.15);
     border: 1.5px solid #34d399;
@@ -9630,14 +9631,14 @@ kbd {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     font-weight: 700;
     flex-shrink: 0;
   }
   .mob-welcome-actions {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
   }
 
   /* ── Shared mobile button styles ─────────────────────────────── */
