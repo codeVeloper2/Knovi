@@ -215,6 +215,25 @@ export default function DashboardLayout() {
         </main>
       </div>
 
+      {/* ── Mobile bottom nav (≤768px only) ── */}
+      <nav className="mob-bottom-nav" aria-label="Main navigation">
+        <NavLink to="/app" end className={({ isActive }) => `mob-nav-item${isActive ? " mob-nav-item--active" : ""}`}>
+          <HomeIcon /><span>Home</span>
+        </NavLink>
+        <NavLink to="/app/discover" className={({ isActive }) => `mob-nav-item${isActive ? " mob-nav-item--active" : ""}`}>
+          <DiscoverIcon /><span>Discover</span>
+        </NavLink>
+        <NavLink to="/app/chat" className={({ isActive }) => `mob-nav-item${isActive ? " mob-nav-item--active" : ""}`}>
+          <ChatIcon /><span>Chat</span>
+        </NavLink>
+        <NavLink to="/app/rooms" className={({ isActive }) => `mob-nav-item${isActive ? " mob-nav-item--active" : ""}`}>
+          <RoomsIcon /><span>Study</span>
+        </NavLink>
+        <NavLink to="/app/learn" className={({ isActive }) => `mob-nav-item${isActive ? " mob-nav-item--active" : ""}`}>
+          <LearnIcon /><span>Learn</span>
+        </NavLink>
+      </nav>
+
       <ShortcutsModal open={scOpen} onClose={() => setScOpen(false)} />
 
       <ConfirmDialog
