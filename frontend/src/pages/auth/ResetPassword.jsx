@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { AuthShell, LockIcon, Eye, EyeOff, Spinner } from "./Login";
+import { AuthShell, LockIcon, Eye, EyeOff, Spinner, MobBackIcon } from "./Login";
 import { useAuth } from "../../context/AuthContext";
 
 function scorePassword(password) {
@@ -66,7 +66,9 @@ export default function ResetPassword() {
   }
 
   return (
-    <AuthShell topRight={<>Remembered it? <Link to="/login">Log in</Link></>}>
+    <AuthShell topRight={<>Remembered it? <Link to="/login">Log in</Link></>}
+      mobileBack={<Link to="/login" className="mob-back-link"><MobBackIcon /> Back to Login</Link>}
+    >
       <h2>Reset Password</h2>
       <p className="card-subtitle">Make it strong and secure.</p>
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { AuthShell, Spinner } from "./Login";
+import { AuthShell, Spinner, MobBackIcon } from "./Login";
+import { EmailIllustration, SuccessIllustration } from "./MobileWelcome";
 import { useAuth } from "../../context/AuthContext";
 
 const LEN = 6;
@@ -85,7 +86,10 @@ export default function VerifyEmail() {
   }
 
   return (
-    <AuthShell topRight={<>Back to <Link to="/login">sign in</Link></>}>
+    <AuthShell topRight={<>Back to <Link to="/login">sign in</Link></>}
+      mobileBack={<Link to="/login" className="mob-back-link"><MobBackIcon /> Back</Link>}
+    >
+      <div className="mob-auth-illus"><EmailIllustration /></div>
       <h2>Verify your email</h2>
       <p className="card-subtitle">
         Enter the 6-digit code we sent to{" "}
@@ -99,7 +103,12 @@ export default function VerifyEmail() {
       {info && !devCode && <div className="alert alert-ok">{info}</div>}
 
       {status === "success" ? (
-        <div className="alert alert-ok">Email verified! Taking you into PeerUp…</div>
+        <div className="mob-success-state">
+          <div className="mob-auth-illus"><SuccessIllustration /></div>
+          <h2 className="mob-success-title">Account Created!</h2>
+          <p className="mob-success-sub">Your account has been successfully verified. Welcome to PeerUp!</p>
+          <div className="alert alert-ok" style={{ display: "none" }}>Email verified! Taking you into PeerUp…</div>
+        </div>
       ) : (
         <form onSubmit={submit} noValidate>
           {!location.state?.email && (

@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { AuthShell, MailIcon, Spinner } from "./Login";
+import { AuthShell, MailIcon, Spinner, MobBackIcon } from "./Login";
+import { LockIllustration } from "./MobileWelcome";
 import { useAuth } from "../../context/AuthContext";
 
 const LEN = 6;
@@ -91,8 +92,11 @@ export default function ForgotPassword() {
   }
 
   return (
-    <AuthShell topRight={<>Remembered it? <Link to="/login">Log in</Link></>}>
+    <AuthShell topRight={<>Remembered it? <Link to="/login">Log in</Link></>}
+      mobileBack={<Link to="/login" className="mob-back-link"><MobBackIcon /> Back to Login</Link>}
+    >
       <div className="lock-badge"><LockBadge /></div>
+      <div className="mob-auth-illus"><LockIllustration /></div>
       <h2>Forgot Password?</h2>
 
       {step === "email" ? (

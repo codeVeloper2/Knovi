@@ -8,6 +8,7 @@ import Signup from "./pages/auth/Signup";
 import VerifyEmail from "./pages/auth/VerifyEmail";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
+import MobileWelcome from "./pages/auth/MobileWelcome";
 import Onboarding from "./pages/onboarding/Onboarding";
 import DashboardLayout from "./components/DashboardLayout";
 import Home from "./pages/dashboard/Home";
@@ -37,7 +38,8 @@ function AppRoutes() {
   return (
     <>
       <Routes>
-        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/" element={<Navigate to="/welcome" replace />} />
+        <Route path="/welcome" element={<GuestRoute><MobileWelcome /></GuestRoute>} />
         <Route
           path="/login"
           element={

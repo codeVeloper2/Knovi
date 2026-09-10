@@ -9458,3 +9458,397 @@ kbd {
   .fr-btn { justify-content: center; }
   .fr-btn-accept { margin-left: 0; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   MOBILE AUTH REDESIGN  (max-width: 767px only)
+   Splash, Welcome, and all auth pages match the reference design.
+   Desktop layout is completely untouched.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Shared mobile tokens ─────────────────────────────────────── */
+.mob-accent { color: #60a5fa; }
+
+/* ── Splash screen ───────────────────────────────────────────── */
+.mob-splash {
+  display: none; /* hidden on desktop */
+}
+
+/* ── Welcome screen ──────────────────────────────────────────── */
+.mob-welcome {
+  display: none; /* hidden on desktop */
+}
+
+/* ── Mobile-only back button in AuthShell ─────────────────────── */
+.mob-auth-back-row { display: none; }
+
+/* ── Mobile-only illustration wrappers ──────────────────────── */
+.mob-auth-illus { display: none; }
+
+/* ── Mobile-only success state ───────────────────────────────── */
+.mob-success-state { display: none; }
+
+/* ══════════════════════════════════════════════════════════════
+   MOBILE BREAKPOINT  ≤767px
+   ══════════════════════════════════════════════════════════════ */
+@media (max-width: 767px) {
+
+  /* ── Splash ─────────────────────────────────────────────────── */
+  .mob-splash {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100svh;
+    background: radial-gradient(ellipse 120% 80% at 50% 110%, rgba(37,99,235,0.3) 0%, transparent 60%),
+                linear-gradient(180deg, #060e1e 0%, #0a1428 50%, #0d1833 100%);
+    padding: 40px 20px env(safe-area-inset-bottom, 20px);
+  }
+  .mob-splash-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    width: 100%;
+    max-width: 360px;
+    text-align: center;
+  }
+  .mob-splash-logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 6px;
+  }
+  .mob-splash-wordmark {
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.03em;
+  }
+  .mob-splash-tags {
+    font-size: 0.85rem;
+    color: #60a5fa;
+    letter-spacing: 0.15em;
+    font-weight: 600;
+    margin-bottom: 32px;
+  }
+  .mob-splash-illus {
+    margin-bottom: 28px;
+    animation: mobFadeUp 0.6s ease 0.3s both;
+  }
+  .mob-splash-tagline {
+    font-size: 1rem;
+    color: var(--text-soft);
+    line-height: 1.55;
+    margin-bottom: 28px;
+    animation: mobFadeUp 0.5s ease 0.5s both;
+  }
+  .mob-splash-dots {
+    display: flex;
+    gap: 7px;
+    animation: mobFadeUp 0.4s ease 0.7s both;
+  }
+  .mob-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.25);
+  }
+  .mob-dot--active { background: #60a5fa; width: 20px; border-radius: 4px; }
+
+  @keyframes mobFadeUp {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Welcome ─────────────────────────────────────────────────── */
+  .mob-welcome {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    min-height: 100svh;
+    background: radial-gradient(ellipse 120% 70% at 50% 100%, rgba(37,99,235,0.22) 0%, transparent 60%),
+                linear-gradient(180deg, #060e1e 0%, #0a1428 60%, #0e1b34 100%);
+    padding: 0 0 env(safe-area-inset-bottom, 24px);
+    overflow-y: auto;
+  }
+  .mob-welcome-inner {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 420px;
+    padding: 56px 28px 40px;
+    min-height: 100svh;
+  }
+  .mob-auth-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 36px;
+  }
+  .mob-auth-wordmark {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.02em;
+  }
+  .mob-welcome-hero { margin-bottom: 28px; }
+  .mob-welcome-title {
+    font-size: 2.1rem;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1.15;
+    letter-spacing: -0.03em;
+    margin-bottom: 12px;
+  }
+  .mob-welcome-sub {
+    font-size: 0.93rem;
+    color: var(--text-soft);
+    line-height: 1.6;
+  }
+  .mob-feature-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 36px;
+    flex: 1;
+  }
+  .mob-feature-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.93rem;
+    color: var(--text-soft);
+    font-weight: 500;
+  }
+  .mob-feature-check {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(52,211,153,0.15);
+    border: 1.5px solid #34d399;
+    color: #34d399;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .mob-welcome-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* ── Shared mobile button styles ─────────────────────────────── */
+  .mob-btn-primary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 16px;
+    background: linear-gradient(135deg, #2563eb, #5b6ef5);
+    color: #fff;
+    border: none;
+    border-radius: 14px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    letter-spacing: -0.01em;
+  }
+  .mob-btn-primary:hover { opacity: 0.9; }
+  .mob-btn-primary:active { opacity: 0.85; }
+  .mob-arrow { font-size: 1.15rem; }
+  .mob-btn-ghost {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 15px;
+    background: transparent;
+    color: var(--text-soft);
+    border: 1.5px solid var(--navy-line);
+    border-radius: 14px;
+    font-size: 0.93rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .mob-btn-ghost:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+
+  /* ── AuthShell on mobile ─────────────────────────────────────── */
+  .auth-shell {
+    display: flex;
+    flex-direction: column;
+    min-height: 100svh;
+    background: radial-gradient(ellipse 120% 60% at 50% 100%, rgba(37,99,235,0.18) 0%, transparent 60%),
+                linear-gradient(180deg, #060e1e 0%, #0a1428 55%, #0e1b34 100%);
+  }
+  .auth-brand { display: none !important; }
+  .auth-panel {
+    width: 100%;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 0;
+    background: transparent !important;
+  }
+  .panel-top-link { display: none !important; }
+  .auth-card {
+    width: 100%;
+    max-width: 100%;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    padding: 0 24px env(safe-area-inset-bottom, 40px);
+    padding-top: 0;
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Mobile back button row */
+  .mob-auth-back-row {
+    display: flex;
+    align-items: center;
+    padding: 20px 0 8px;
+  }
+  .mob-back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text-soft);
+    text-decoration: none;
+    padding: 8px 0;
+  }
+  .mob-back-link:hover { color: #fff; text-decoration: none; }
+  .mob-back-link svg { flex-shrink: 0; }
+
+  /* Mobile logo — show it */
+  .logo-mobile {
+    display: flex !important;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.4rem;
+    margin-bottom: 32px;
+    margin-top: 12px;
+  }
+
+  /* Mobile illustration */
+  .mob-auth-illus {
+    display: flex;
+    justify-content: center;
+    margin: 8px 0 24px;
+  }
+
+  /* Auth headings on mobile */
+  .auth-card h2 {
+    font-size: 1.75rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: #fff;
+    margin-bottom: 6px;
+  }
+  .card-subtitle {
+    font-size: 0.88rem;
+    margin-bottom: 28px;
+  }
+
+  /* Fields on mobile — bigger touch targets */
+  .field { margin-bottom: 18px; }
+  .field label { font-size: 0.88rem; }
+  .input-wrap input,
+  .input-wrap select {
+    height: 54px;
+    font-size: 1rem;
+    border-radius: 12px;
+    padding: 0 16px 0 46px;
+  }
+  .input-wrap input:not(.input-wrap .password-wrap input) {
+    padding-left: 46px;
+  }
+  .password-wrap input { padding-left: 46px; }
+  .input-icon { left: 16px; }
+  .toggle-pass { right: 14px; }
+
+  /* Primary button on mobile — full width, taller */
+  .btn.btn-primary {
+    width: 100%;
+    justify-content: center;
+    padding: 16px;
+    font-size: 1rem;
+    border-radius: 14px;
+    margin-top: 6px;
+  }
+
+  /* Social button on mobile */
+  .btn-social {
+    width: 100%;
+    justify-content: center;
+    padding: 15px;
+    font-size: 0.95rem;
+    border-radius: 14px;
+  }
+
+  /* Remember me / forgot row */
+  .row-between { margin: -4px 0 18px; }
+
+  /* Divider */
+  .auth-divider { margin: 20px 0; }
+
+  /* Footer links */
+  .auth-footer { text-align: center; font-size: 0.88rem; margin-top: 20px; }
+  .terms-note  { font-size: 0.78rem; text-align: center; margin-top: 14px; }
+
+  /* Code boxes (verify email) */
+  .code-row { gap: 8px; }
+  .code-box {
+    width: 44px;
+    height: 54px;
+    font-size: 1.4rem;
+    border-radius: 10px;
+  }
+
+  /* Alerts */
+  .alert { border-radius: 10px; font-size: 0.88rem; padding: 12px 14px; }
+
+  /* Lock badge — hide desktop version, show mobile illustration instead */
+  .lock-badge { display: none; }
+
+  /* ── Success state on mobile ──────────────────────────────── */
+  .mob-success-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding: 32px 0 0;
+    flex: 1;
+  }
+  .mob-success-title {
+    font-size: 1.7rem;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.03em;
+    margin: 16px 0 10px;
+  }
+  .mob-success-sub {
+    font-size: 0.9rem;
+    color: var(--text-soft);
+    line-height: 1.6;
+    max-width: 28ch;
+  }
+
+  /* ── ForgotPassword: hide desktop LockBadge  ─────────────── */
+  .mob-auth-illus { display: flex; justify-content: center; }
+
+  /* ── Strength bar on mobile ───────────────────────────────── */
+  .strength-row { margin: 8px 0 4px; }
+
+} /* end @media (max-width: 767px) */

@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import {
   AuthShell, MailIcon, LockIcon, UserIcon, Eye, EyeOff,
-  Arrow, Spinner, GoogleIcon,
+  Arrow, Spinner, GoogleIcon, MobBackIcon,
 } from "./Login";
 
 /* password scoring — inline (no extra files) */
@@ -75,6 +75,7 @@ export default function Signup() {
   return (
     <AuthShell
       topRight={<>Already have an account? <Link to="/login">Log in <Arrow small /></Link></>}
+      mobileBack={<Link to="/welcome" className="mob-back-link"><MobBackIcon /> Back</Link>}
     >
       <h2>Create Your Account</h2>
       <p className="card-subtitle">Join our community of learners and start your journey today.</p>

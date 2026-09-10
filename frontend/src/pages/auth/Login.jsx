@@ -13,7 +13,7 @@ const FEATURES = [
   { icon: "chart",  color: "purple", title: "Track your progress", body: "Earn XP, unlock badges, reach your goals" },
 ];
 
-export function AuthShell({ topRight, children }) {
+export function AuthShell({ topRight, mobileBack, children }) {
   return (
     <div className="auth-shell">
       <section className="auth-brand">
@@ -46,6 +46,13 @@ export function AuthShell({ topRight, children }) {
       <section className="auth-panel">
         {topRight ? <div className="panel-top-link">{topRight}</div> : null}
         <div className="auth-card">
+          {/* Mobile: back button row */}
+          {mobileBack && (
+            <div className="mob-auth-back-row">
+              {mobileBack}
+            </div>
+          )}
+          {/* Mobile: logo */}
           <div className="logo logo-mobile">
             <span className="logo-mark logo-mark--img"><LogoMark size={26} /></span>
             <span className="logo-text">Peer<span className="logo-accent">Up</span></span>
@@ -98,6 +105,7 @@ export default function Login() {
   return (
     <AuthShell
       topRight={<>Don't have an account? <Link to="/signup">Sign up <Arrow small /></Link></>}
+      mobileBack={<Link to="/welcome" className="mob-back-link"><MobBackIcon /> Back</Link>}
     >
       <h2>Welcome Back!</h2>
       <p className="card-subtitle">Log in to your PeerUp account</p>
@@ -192,6 +200,9 @@ export function Arrow({ small }) {
 }
 export function Spinner() {
   return <svg className="spinner" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeDasharray="30 70" /></svg>;
+}
+export function MobBackIcon() {
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>;
 }
 export function GoogleIcon() {
   return (
