@@ -692,7 +692,7 @@ function StudentPickerModal({ onClose, onSelectStudent }) {
           {loading && <p className="study-empty-text">Loading…</p>}
           {!loading && filtered.length === 0 && (
             <p className="study-empty-text">
-              {partners.length === 0 ? "No accepted match partners yet. Accept a match request first." : "No partners match your search."}
+              {partners.length === 0 ? "No connections yet. Accept a friend request first." : "No partners match your search."}
             </p>
           )}
           {!loading && filtered.map(partner => (

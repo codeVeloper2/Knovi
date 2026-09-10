@@ -149,7 +149,7 @@ export default function StudentProfilePanel({ student, currentUser, onClose, onS
             ) : canMatch ? (
               <button type="button" className="btn btn-primary btn-full" onClick={onSendRequest}>
                 <SendIcon />
-                Send Match Request
+                Send Friend Request
               </button>
             ) : (
               <button type="button" className="btn btn-ghost btn-full" disabled>

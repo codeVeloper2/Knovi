@@ -136,6 +136,21 @@ async def respond_to_match_request(
         raise HTTPException(400, f"Request is already {req.status}.")
 
     req.status = "accepted" if body.action == "accept" else "declined"
+
+    # Auto-create a Conversation when a request is accepted.
+    if req.status == "accepted":
+        from app.models.chat import Conversation
+        from app.services.chat_service import _pair
+        a_id, b_id = _pair(user.id, req.sender_id)
+        existing_conv = (await session.execute(
+            select(Conversation).where(
+                Conversation.user_a_id == a_id,
+                Conversation.user_b_id == b_id,
+            )
+        )).scalar_one_or_none()
+        if not existing_conv:
+            session.add(Conversation(user_a_id=a_id, user_b_id=b_id, subject=req.subject))
+
     await session.commit()
     await session.refresh(req)
     return req.serialize(user.id)

@@ -374,40 +374,35 @@ const SUBJECTS = [
 
 function NewChatModal({ onClose, onStart }) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState([]);
+  const [connections, setConnections] = useState([]);
   const [selected, setSelected] = useState(null);
   const [subject, setSubject] = useState("");
   const [goal, setGoal] = useState("");
-  const [searching, setSearching] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
-  const debounce = useRef(null);
 
-  function search(q) {
-    setQuery(q);
-    clearTimeout(debounce.current);
-    if (!q.trim()) { setResults([]); return; }
-    debounce.current = setTimeout(async () => {
-      setSearching(true);
-      try { setResults(await api.searchChatUsers(q)); }
-      catch { setResults([]); }
-      finally { setSearching(false); }
-    }, 300);
-  }
+  useEffect(() => {
+    api.getAcceptedMatchPartners()
+      .then(setConnections)
+      .catch(() => setConnections([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = connections.filter(u =>
+    !query.trim() || u.displayName.toLowerCase().includes(query.toLowerCase())
+  );
 
   async function start() {
     if (!selected || !subject) return;
     setStarting(true);
     try {
-      const conv = await api.startConversation(selected.id, subject, goal.trim() || null);
+      const conv = await api.startConversation(selected.partnerId, subject, goal.trim() || null);
       onStart(conv);
     } catch (err) {
-      // Surface privacy-blocked message clearly
-      const msg = err?.message || "";
-      if (msg.includes("does not accept direct messages")) {
-        alert(`${selected.displayName} does not accept direct messages.\n\nSend them a match request from the Discover page instead.`);
-      }
+      alert(err?.message || "Could not start chat.");
+    } finally {
+      setStarting(false);
     }
-    finally { setStarting(false); }
   }
 
   return (
@@ -419,28 +414,30 @@ function NewChatModal({ onClose, onStart }) {
         </div>
         {!selected ? (
           <>
-            <p className="chat-new-hint">Search for a student to chat with</p>
+            <p className="chat-new-hint">Choose a connection to chat with</p>
             <div className="chat-search-wrap">
               <SearchIcon />
-              <input autoFocus value={query} onChange={e => search(e.target.value)} placeholder="Search by name or email…" />
+              <input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Filter connections…" />
             </div>
-            {searching && <p className="chat-new-hint">Searching…</p>}
+            {loading && <p className="chat-new-hint">Loading connections…</p>}
             <div className="chat-user-list">
-              {results.map(u => (
-                <button key={u.id} type="button" className="chat-user-item" onClick={() => setSelected(u)}>
+              {filtered.map(u => (
+                <button key={u.partnerId} type="button" className="chat-user-item" onClick={() => setSelected(u)}>
                   <Avatar url={u.photoURL} name={u.displayName} size={38} />
                   <div style={{ flex: 1 }}>
                     <div className="chat-user-name">{u.displayName}</div>
-                    <div className="chat-user-grade">{u.grade}</div>
+                    <div className="chat-user-grade">{u.grade || u.subject}</div>
                   </div>
-                  {u.allowDirectMessage === false && (
-                    <span className="chat-dm-locked" title="Does not accept direct messages">
-                      🔒
-                    </span>
-                  )}
+                  {u.isOnline && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--green, #22c55e)", flexShrink: 0 }} />}
                 </button>
               ))}
-              {!searching && query && results.length === 0 && <p className="chat-new-hint">No students found.</p>}
+              {!loading && filtered.length === 0 && (
+                <p className="chat-new-hint">
+                  {connections.length === 0
+                    ? "No connections yet. Accept a friend request to start chatting."
+                    : "No connections match your filter."}
+                </p>
+              )}
             </div>
           </>
         ) : (
@@ -449,7 +446,7 @@ function NewChatModal({ onClose, onStart }) {
               <Avatar url={selected.photoURL} name={selected.displayName} size={42} />
               <div>
                 <div className="chat-user-name">{selected.displayName}</div>
-                <div className="chat-user-grade">{selected.grade}</div>
+                <div className="chat-user-grade">{selected.grade || selected.subject}</div>
               </div>
               <button type="button" className="btn-ghost chat-deselect" onClick={() => setSelected(null)}>Change</button>
             </div>

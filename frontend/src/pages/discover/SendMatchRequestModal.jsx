@@ -82,7 +82,7 @@ export default function SendMatchRequestModal({ student, currentUser, onClose, o
       );
       onSuccess();
     } catch (err) {
-      toast.error(err.message || "Failed to send match request.");
+      toast.error(err.message || "Failed to send friend request.");
     } finally {
       setSending(false);
     }
@@ -100,7 +100,7 @@ export default function SendMatchRequestModal({ student, currentUser, onClose, o
             <SendIcon />
           </div>
           <div style={{ flex: 1 }}>
-            <h2 className="match-modal-title">Send Match Request</h2>
+            <h2 className="match-modal-title">Send Friend Request</h2>
             <p className="match-modal-subtitle">Connect with {student.displayName} and learn together.</p>
           </div>
           <button type="button" className="match-modal-close" onClick={onClose}>

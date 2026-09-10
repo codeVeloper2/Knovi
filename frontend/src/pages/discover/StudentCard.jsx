@@ -130,7 +130,7 @@ export default function StudentCard({ student, currentUser, onViewProfile, onSen
         {canMatch ? (
           <button type="button" className="btn btn-primary btn-sm" onClick={onSendRequest}>
             <SendIcon />
-            Send Match Request
+            Send Friend Request
           </button>
         ) : (
           <button type="button" className="btn btn-ghost btn-sm" disabled title="No matching subjects">
