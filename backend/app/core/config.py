@@ -126,15 +126,21 @@ settings.validate()
 def _init_firebase() -> None:
     if firebase_admin._apps:
         return
-    cred_path = settings.GOOGLE_APPLICATION_CREDENTIALS
-    if cred_path and Path(cred_path).exists():
-        cred = credentials.Certificate(cred_path)
+    # 1. Inline JSON env var (production / Railway)
+    json_str = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    if json_str:
+        import json
+        cred = credentials.Certificate(json.loads(json_str))
+    # 2. Path to a file (local dev via GOOGLE_APPLICATION_CREDENTIALS)
+    elif settings.GOOGLE_APPLICATION_CREDENTIALS and Path(settings.GOOGLE_APPLICATION_CREDENTIALS).exists():
+        cred = credentials.Certificate(settings.GOOGLE_APPLICATION_CREDENTIALS)
+    # 3. serviceAccountKey.json next to this package (local dev fallback)
     elif settings.SERVICE_ACCOUNT_KEY.exists():
         cred = credentials.Certificate(str(settings.SERVICE_ACCOUNT_KEY))
     else:
         raise RuntimeError(
-            "Firebase Admin credentials missing. Set GOOGLE_APPLICATION_CREDENTIALS "
-            "or add backend/serviceAccountKey.json"
+            "Firebase Admin credentials missing. Set GOOGLE_APPLICATION_CREDENTIALS_JSON "
+            "or GOOGLE_APPLICATION_CREDENTIALS or add backend/serviceAccountKey.json"
         )
     options = {}
     if settings.FIREBASE_STORAGE_BUCKET:
