@@ -1,0 +1,31 @@
+# ── Python / backend ─────────────────────────────
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Firebase service account (secret — never commit)
+serviceAccountKey.json
+backend/serviceAccountKey.json
+backend/_key.txt
+_key.txt
+
+# ── Node / frontend ──────────────────────────────
+node_modules/
+dist/
+.vite/
+*.local
+
+# ── Environment files (secrets) ──────────────────
+.env
+*.env
+!.env.example
+
+# ── Editor / OS ──────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log

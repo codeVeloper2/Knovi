@@ -1,0 +1,18 @@
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+firebase-admin==7.5.0
+pydantic==2.13.5
+email-validator==2.2.0
+python-dotenv==1.2.3
+python-multipart==0.0.32
+slowapi==0.1.10
+
+# Database (PostgreSQL via async SQLAlchemy)
+# psycopg (v3) ships prebuilt binary wheels — no C compiler needed, unlike asyncpg.
+sqlalchemy[asyncio]==2.0.44
+psycopg[binary]==3.2.13
+alembic==1.16.4
+
+# Auth (password hashing + JWT)
+bcrypt==4.2.1
+PyJWT==2.10.1
