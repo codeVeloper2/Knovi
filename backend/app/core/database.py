@@ -20,7 +20,12 @@ class Base(DeclarativeBase):
 # Engine is created lazily-safe: if DATABASE_URL is empty we still let the app
 # import, but any DB use will raise a clear error.
 engine = (
-    create_async_engine(settings.DATABASE_URL, pool_pre_ping=True, future=True)
+    create_async_engine(
+        settings.DATABASE_URL,
+        pool_pre_ping=True,
+        future=True,
+        connect_args={"prepare_threshold": None},  # disable prepared stmts for PgBouncer
+    )
     if settings.DATABASE_URL
     else None
 )
