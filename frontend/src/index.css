@@ -8433,3 +8433,149 @@ kbd {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   GLOBAL MOBILE RESPONSIVE  (≤ 768px / ≤ 480px)
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+
+  /* ── Reduce default content padding so pages breathe on small screens ── */
+  .dash-content { padding: 16px 14px 40px; }
+
+  /* ── Auth pages ── */
+  .auth-shell { flex-direction: column; min-height: 100svh; }
+  .auth-brand { display: none; }
+  .auth-panel { width: 100%; min-height: 100svh; padding: 32px 20px 48px; justify-content: flex-start; }
+  .auth-card  { max-width: 100%; padding: 28px 20px; }
+
+  /* ── Onboarding ── */
+  .wizard { grid-template-columns: 1fr; }
+
+  /* ── Dashboard topbar search ── */
+  .dash-search { max-width: 100%; }
+  .dash-topbar { gap: 10px; padding: 0 14px; }
+
+  /* ── Home page ── */
+  .stat-cards  { grid-template-columns: 1fr 1fr; }
+  .home-grid   { grid-template-columns: 1fr; }
+  .home-section-title { font-size: 1rem; }
+
+  /* ── Discover ── */
+  .discover-shell   { flex-direction: column; gap: 0; }
+  .discover-sidebar { display: none; }
+  .discover-grid    { grid-template-columns: 1fr; padding: 16px 14px; }
+  .student-card     { flex-direction: row; gap: 12px; padding: 14px; }
+  .student-profile-panel { width: 100%; position: fixed; inset: 0; z-index: 200; overflow-y: auto; border-radius: 0; }
+
+  /* ── Match Requests ── */
+  .match-grid { grid-template-columns: 1fr; }
+  .match-card { flex-direction: column; gap: 10px; }
+  .match-arrow { display: none; }
+
+  /* ── Chat — full-screen panel switching on mobile ── */
+  .chat-shell {
+    margin: -16px -14px -40px;
+    height: calc(100svh - 60px);
+    position: relative;
+    overflow: hidden;
+  }
+  .chat-left {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    transition: transform 0.22s ease;
+  }
+  .chat-right {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    width: 100%;
+    transform: translateX(100%);
+    transition: transform 0.22s ease;
+  }
+  /* When a conversation is active: slide left panel out, slide right panel in */
+  .chat-shell--has-active .chat-left  { transform: translateX(-100%); }
+  .chat-shell--has-active .chat-right { transform: translateX(0); }
+  /* Back button — only visible on mobile */
+  .chat-back-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px; height: 36px;
+    border: 0;
+    background: transparent;
+    color: var(--text-soft);
+    border-radius: 8px;
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-right: 4px;
+  }
+  .chat-back-btn:hover { background: rgba(255,255,255,0.07); color: #fff; }
+  /* Simplify chat header on mobile */
+  .chat-header-goal { display: none; }
+  .chat-room-title  { font-size: 0.95rem; }
+  .chat-room-header { padding: 10px 12px; gap: 6px; }
+  .chat-room-header-actions { gap: 4px; }
+  .chat-icon-btn { width: 32px; height: 32px; }
+  .chat-messages { padding: 12px 14px; }
+  .chat-input-row { padding: 8px 10px; }
+
+  /* ── Study Rooms list ── */
+  .study-recent-list { grid-template-columns: 1fr; }
+  .study-recent-rooms { padding: 20px 14px; }
+
+  /* ── Progress ── */
+  .prog-grid { grid-template-columns: 1fr; }
+  .seg-tabs  { overflow-x: auto; white-space: nowrap; }
+
+  /* ── Settings ── */
+  .settings-grid  { grid-template-columns: 1fr; }
+  .settings-card  { padding: 20px 16px; }
+
+  /* ── Learn section subnav ── */
+  .ll-subnav-inner { padding: 0 14px; }
+  .ll-upload-btn   { display: none; }
+  .lh-page { padding: 20px 14px 60px; }
+
+  /* ── Discover filters — show as bottom drawer trigger ── */
+  .filters-panel { display: none; }
+
+}
+
+@media (max-width: 480px) {
+
+  /* ── Auth ── */
+  .auth-card { padding: 24px 16px; border-radius: 14px; }
+  .auth-card h2 { font-size: 1.4rem; }
+
+  /* ── Dashboard ── */
+  .stat-cards { grid-template-columns: 1fr; }
+  .dash-topbar { height: 56px; }
+  .dash-content { padding: 12px 12px 40px; }
+
+  /* ── Chat shell margin correction ── */
+  .chat-shell { margin: -12px -12px -40px; }
+
+  /* ── Home ── */
+  .home-welcome h2 { font-size: 1.3rem; }
+  .home-welcome p  { font-size: 0.85rem; }
+
+  /* ── Study room cards ── */
+  .study-recent-card { padding: 14px; }
+
+  /* ── Learn cards ── */
+  .lh-course-card,
+  .lh-tutorial-card { border-radius: 10px; }
+
+  /* ── Progress rings ── */
+  .ring-wrap { flex-direction: column; align-items: center; }
+}
+
+/* ── Back button hidden on desktop ── */
+@media (min-width: 769px) {
+  .chat-back-btn { display: none; }
+}

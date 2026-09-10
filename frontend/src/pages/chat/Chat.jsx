@@ -721,7 +721,7 @@ function MessageBubble({ msg, myId, senderName, senderUrl, onReport, onFileClick
 }
 
 // ── Chat Room ─────────────────────────────────────────────────────
-function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate }) {
+function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
   const toast = useToast();
   const navigate = useNavigate();
   const [messages, setMessages] = useState([]);
@@ -1026,6 +1026,9 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate }) {
     <div className={`chat-right ${viewerFile ? "has-panel" : ""}`}>
       {/* ── Header ── */}
       <div className="chat-room-header">
+        <button type="button" className="chat-back-btn" onClick={onBack} aria-label="Back to chats">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
         <div className="chat-room-header-info">
           <Avatar url={partner.photoURL} name={partner.displayName} size={40} online={partner.isOnline} />
           <div className="chat-room-header-text">
@@ -1225,7 +1228,7 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate }) {
       )}
 
       {/* ── Image lightbox ── */}
-      {lightbox && <ImageLightbox url={lightbox.url} name={lightbox.name} onClose={() => setLightbox(null)} />}}
+      {lightbox && <ImageLightbox url={lightbox.url} name={lightbox.name} onClose={() => setLightbox(null)} />}
 
       {/* ── Document viewer modal ── */}
       {docViewer && <DocViewerModal url={docViewer.url} name={docViewer.name} onClose={() => setDocViewer(null)} />}
@@ -1328,7 +1331,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="chat-shell">
+    <div className={`chat-shell${activeConv ? " chat-shell--has-active" : ""}`}>
       <ConversationList convs={convs} activeId={activeConv?.id} onSelect={handleSelect} onNew={() => setShowNew(true)} />
 
       {activeConv
@@ -1338,6 +1341,7 @@ export default function ChatPage() {
             myId={myId}
             onGoalUpdate={handleGoalUpdate}
             onConvUpdate={handleConvUpdate}
+            onBack={() => setActiveConv(null)}
           />
         : <EmptyState onNew={() => setShowNew(true)} />
       }
