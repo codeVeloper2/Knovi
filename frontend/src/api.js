@@ -428,3 +428,8 @@ export function getProgressBadges() {
 export function getProgressCertificates() {
   return request("/api/progress/certificates", { auth: true });
 }
+
+// ── Notifications ─────────────────────────────────────────────────────────
+export function getNotifications() {
+  return request("/api/notifications", { auth: true });
+}

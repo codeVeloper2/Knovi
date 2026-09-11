@@ -6,6 +6,7 @@ import { NAV_SHORTCUTS, SETTINGS_SHORTCUTS, BACK_SHORTCUT, displayKey } from "..
 import { LogoMark } from "./Logo";
 import ShortcutsModal from "./ShortcutsModal";
 import ConfirmDialog from "./ConfirmDialog";
+import NotificationsBell from "./NotificationsPanel";
 import * as api from "../api";
 import {
   HomeIcon, DiscoverIcon, ChatIcon, RoomsIcon, LearnIcon,
@@ -21,8 +22,16 @@ const MAIN_NAV = [
   { to: "/app/rooms",          label: "Study Rooms",    Icon: RoomsIcon },
   { to: "/app/learn",          label: "Learn",          Icon: LearnIcon },
   { to: "/app/progress",       label: "Progress",       Icon: ProgressIcon },
-  { to: "/app/settings",       label: "Settings",       Icon: SettingsIcon },
 ];
+
+// Desktop main nav includes Settings (it swaps to subnav when in settings)
+const DESKTOP_MAIN_NAV = [
+  ...MAIN_NAV,
+  { to: "/app/settings", label: "Settings", Icon: SettingsIcon },
+];
+
+// Mobile main nav does NOT include Settings (handled by dropdown below)
+const MOBILE_MAIN_NAV = MAIN_NAV;
 
 const SETTINGS_NAV = [
   { to: "/app/settings",               label: "Profile",       Icon: ProfileIcon,  end: true },
@@ -78,10 +87,10 @@ export default function DashboardLayout() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // Desktop: use the original subnav swap
-  // Mobile: always show main nav (settings dropdown inline)
-  const desktopNav = inSettings ? SETTINGS_NAV : MAIN_NAV;
-  const mobileNav  = MAIN_NAV; // always main nav on mobile
+  // Desktop: use the original subnav swap (Settings in main nav → swaps to subnav when in settings)
+  // Mobile: always show main nav WITHOUT settings (handled by separate dropdown)
+  const desktopNav = inSettings ? SETTINGS_NAV : DESKTOP_MAIN_NAV;
+  const mobileNav  = MOBILE_MAIN_NAV;
 
   // Listen for hamburger events from child pages
   useEffect(() => {
@@ -278,6 +287,7 @@ export default function DashboardLayout() {
           <button className="dash-help" type="button" onClick={() => setScOpen(true)} title="Keyboard shortcuts ( ? )" aria-label="Keyboard shortcuts">
             <kbd>?</kbd>
           </button>
+          <NotificationsBell className="dash-bell notif-bell-btn" />
           <button className="dash-avatar" type="button" title={`${name} — open profile`}
             aria-label="Open your profile settings" onClick={() => navigate("/app/settings")}>
             {photo ? <img src={photo} alt={name} referrerPolicy="no-referrer" /> : <span>{initial}</span>}

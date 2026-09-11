@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import * as api from "../../api";
 import { ChevronRight } from "../../components/DashIcons";
+import NotificationsBell from "../../components/NotificationsPanel";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -116,9 +117,7 @@ function MobileHome({ profile, user, connections, learning, learnHome, recentRoo
           <span className="mdash-logo-text">Peer<span className="mdash-logo-accent">Up</span></span>
         </div>
         <div className="mdash-header-right">
-          <button className="mdash-bell-btn" aria-label="Notifications" onClick={() => navigate("/app/settings/notifications")}>
-            <BellSvg />
-          </button>
+          <NotificationsBell className="mdash-bell-btn notif-bell-btn" />
           <button className="mdash-avatar-btn" onClick={() => navigate("/app/settings")} aria-label="Profile">
             <Avatar name={name} photo={photo} size={36} />
           </button>
