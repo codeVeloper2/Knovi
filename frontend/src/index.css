@@ -9931,12 +9931,15 @@ kbd {
     background: #0a1020;
     overflow-x: hidden;
     padding-bottom: 32px;
+    padding-top: 56px; /* offset for fixed header */
   }
 
   /* ── Header ─────────────────────────────────────────────────────── */
   .mdash-header {
-    position: sticky;
+    position: fixed;
     top: 0;
+    left: 0;
+    right: 0;
     z-index: 10;
     display: flex;
     align-items: center;
@@ -10687,12 +10690,15 @@ kbd {
     background: #0a1020;
     overflow-x: hidden;
     padding-bottom: 32px;
+    padding-top: 56px; /* offset for fixed header */
   }
 
   /* ── Header ──────────────────────────────────────────────────── */
   .disc-mobile-header {
-    position: sticky;
+    position: fixed;
     top: 0;
+    left: 0;
+    right: 0;
     z-index: 10;
     display: flex;
     align-items: center;
