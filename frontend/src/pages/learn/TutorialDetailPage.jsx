@@ -3,6 +3,11 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import * as api from "../../api";
+import VideoPlayer from "./VideoPlayer";
+
+function isYouTube(url) {
+  return url && (url.includes("youtube.com/embed") || url.includes("youtu.be") || url.includes("youtube.com/watch"));
+}
 
 // Inline Discussion component (same pattern as LessonPage)
 function Discussion({ contentType, contentId }) {
@@ -129,11 +134,9 @@ export default function TutorialDetailPage() {
         <div className="lp-main">
           <div className="lp-video-wrap">
             {tut.videoUrl ? (
-              tut.videoUrl.includes("youtube.com/embed") || tut.videoUrl.includes("youtu.be") ? (
+              isYouTube(tut.videoUrl) ? (
                 <iframe
-                  src={tut.videoUrl.includes("youtu.be")
-                    ? tut.videoUrl.replace("youtu.be/", "www.youtube.com/embed/").split("?")[0]
-                    : tut.videoUrl}
+                  src={tut.videoUrl}
                   className="lp-video"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
@@ -141,7 +144,12 @@ export default function TutorialDetailPage() {
                   style={{ border: "none" }}
                 />
               ) : (
-                <video ref={videoRef} src={tut.videoUrl} controls className="lp-video" poster={tut.thumbnailUrl || undefined} />
+                <VideoPlayer
+                  src={tut.videoUrl}
+                  poster={tut.thumbnailUrl || ""}
+                  startAt={tut.positionSeconds || 0}
+                  onProgress={(pos, dur) => api.saveVideoProgress(null, parseInt(tutorialId), pos, dur).catch(() => {})}
+                />
               )
             ) : (
               <div className="lp-video-placeholder"><span>▶</span><p>No video available.</p></div>

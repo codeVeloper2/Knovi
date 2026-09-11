@@ -1,108 +1,105 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import * as api from "../../api";
 
-function LessonRow({ lesson, index, onPlay, active }) {
-  const mins = Math.floor((lesson.durationSeconds || 0) / 60);
-  const secs = String((lesson.durationSeconds || 0) % 60).padStart(2, "0");
+const COLORS = {
+  Math:"#6366f1",English:"#3b82f6",Biology:"#22c55e",Chemistry:"#f59e0b",
+  Physics:"#eab308",History:"#a78bfa",Geography:"#34d399","Computer Science":"#06b6d4",
+  Spanish:"#ef4444",French:"#60a5fa",Art:"#f472b6",Music:"#818cf8",
+  Economics:"#f59e0b",Literature:"#a78bfa",Psychology:"#34d399",
+};
+const color = s => COLORS[s] || "#6366f1";
+
+function LessonRow({ lesson, index, active, onPlay }) {
+  const min = Math.floor((lesson.durationSeconds||0)/60);
+  const sec = String((lesson.durationSeconds||0)%60).padStart(2,"0");
   return (
-    <div
-      className={`cd-lesson-row ${active ? "active" : ""} ${lesson.completed ? "done" : ""}`}
+    <button
+      type="button"
+      className={`cd-row ${active ? "cd-row--active" : ""} ${lesson.completed ? "cd-row--done" : ""}`}
       onClick={onPlay}
-      role="button"
-      tabIndex={0}
-      onKeyDown={e => e.key === "Enter" && onPlay()}
     >
-      <div className="cd-lesson-num">
-        {lesson.completed
-          ? <span className="cd-check">✓</span>
-          : <span>{index + 1}</span>
-        }
+      <span className="cd-row-num">
+        {lesson.completed ? "✓" : index + 1}
+      </span>
+      <div className="cd-row-info">
+        <span className="cd-row-title">{lesson.title}</span>
+        {lesson.description && <span className="cd-row-desc">{lesson.description.slice(0,80)}</span>}
       </div>
-      <div className="cd-lesson-info">
-        <div className="cd-lesson-title">{lesson.title}</div>
-        {lesson.description && <div className="cd-lesson-desc">{lesson.description.slice(0, 80)}</div>}
-      </div>
-      <div className="cd-lesson-dur">{mins}:{secs}</div>
-      {lesson.progressPct > 0 && !lesson.completed && (
-        <div className="cd-lesson-bar"><div style={{ width: `${lesson.progressPct}%` }} /></div>
-      )}
-    </div>
+      <span className="cd-row-dur">{min}:{sec}</span>
+    </button>
   );
 }
 
 export default function CourseDetailPage() {
-  const { courseId }  = useParams();
-  const navigate      = useNavigate();
-  const toast         = useToast();
-  const { profile }   = useAuth();
+  const { courseId } = useParams();
+  const navigate     = useNavigate();
+  const toast        = useToast();
 
-  const [course,    setCourse]   = useState(null);
-  const [loading,   setLoading]  = useState(true);
-  const [enrolling, setEnrolling]= useState(false);
-  const [saved,     setSaved]    = useState(false);
+  const [course,    setCourse]    = useState(null);
+  const [loading,   setLoading]   = useState(true);
+  const [enrolling, setEnrolling] = useState(false);
+  const [saved,     setSaved]     = useState(false);
 
   useEffect(() => {
     api.getCourse(courseId)
-      .then(c => { setCourse(c); })
+      .then(setCourse)
       .catch(() => toast.error("Could not load course."))
       .finally(() => setLoading(false));
   }, [courseId]);
 
-  async function handleEnroll() {
-    setEnrolling(true);
-    try {
-      const updated = await api.enrollCourse(courseId);
-      setCourse(updated);
-      // Navigate to first lesson
-      if (updated.lessons?.[0]) {
-        navigate(`/app/learn/courses/${courseId}/lessons/${updated.lessons[0].id}`);
-      }
-    } catch (err) {
-      toast.error(err.message || "Enrolment failed.");
-    } finally {
-      setEnrolling(false);
+  async function handleStart() {
+    if (!course) return;
+    if (!course.enrolled) {
+      setEnrolling(true);
+      try {
+        const updated = await api.enrollCourse(courseId);
+        setCourse(updated);
+        const first = updated.lessons?.[0];
+        if (first) navigate(`/app/learn/courses/${courseId}/lessons/${first.id}`);
+      } catch (err) { toast.error(err.message || "Failed to start."); }
+      finally { setEnrolling(false); }
+    } else {
+      const next = course.lessons?.find(l => !l.completed) || course.lessons?.[0];
+      if (next) navigate(`/app/learn/courses/${courseId}/lessons/${next.id}`);
     }
   }
 
   async function handleSave() {
-    const { saved: s } = await api.toggleSaved("course", parseInt(courseId));
-    setSaved(s);
-    toast.success(s ? "Course saved!" : "Removed from saved.");
+    try {
+      const { saved: s } = await api.toggleSaved("course", parseInt(courseId));
+      setSaved(s);
+      toast.success(s ? "Course saved!" : "Removed from saved.");
+    } catch { toast.error("Could not save."); }
   }
 
-  function continueLesson() {
-    if (!course?.lessons) return;
-    // Find first incomplete lesson
-    const next = course.lessons.find(l => !l.completed) || course.lessons[0];
-    navigate(`/app/learn/courses/${courseId}/lessons/${next.id}`);
-  }
-
-  if (loading) return <div className="lh-loading"><span className="discover-spinner" /> Loading course…</div>;
+  if (loading) return <div className="ln-loading"><span className="discover-spinner"/> Loading course...</div>;
   if (!course) return null;
 
+  const c   = color(course.subject);
   const pct = course.progressPct || 0;
 
   return (
-    <div className="cd-page">
-      {/* Back */}
-      <button type="button" className="cd-back" onClick={() => navigate("/app/learn/courses")}>
-        ← Back to Courses
+    <div className="ln-page">
+      <button type="button" className="ct-back" onClick={() => navigate("/app/learn/courses")}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+          <path d="M19 12H5M12 5l-7 7 7 7"/>
+        </svg>
+        Courses
       </button>
 
       <div className="cd-layout">
-        {/* ── Left: details ── */}
+        {/* ── Left ── */}
         <div className="cd-main">
-          <div className="cd-thumb">
+          <div className="cd-hero-thumb">
             {course.thumbnailUrl
-              ? <img src={course.thumbnailUrl} alt={course.title} />
-              : <div className="cd-thumb-placeholder">📚</div>
+              ? <img src={course.thumbnailUrl} alt={course.title}/>
+              : <div className="cd-hero-empty" style={{ background:`${c}18` }}>📚</div>
             }
+            <span className="cd-hero-subject" style={{ background:c }}>{course.subject}</span>
           </div>
 
-          <div className="cd-subject-chip">{course.subject}</div>
           <h1 className="cd-title">{course.title}</h1>
 
           <div className="cd-meta-row">
@@ -113,18 +110,17 @@ export default function CourseDetailPage() {
           </div>
 
           {pct > 0 && (
-            <div className="cd-progress-wrap">
-              <div className="cd-progress-bar"><div style={{ width: `${pct}%` }} /></div>
-              <span>{pct}% complete</span>
+            <div className="cd-prog-wrap">
+              <div className="cd-prog-bar"><div style={{ width:`${pct}%`, background:c }}/></div>
+              <span style={{ color:c }}>{pct}%</span>
             </div>
           )}
 
-          <p className="cd-description">{course.description}</p>
+          {course.description && <p className="cd-desc">{course.description}</p>}
 
-          {/* Curriculum */}
-          <h2 className="cd-curriculum-title">Course Curriculum</h2>
+          <h2 className="cd-curriculum-label">Curriculum</h2>
           <div className="cd-lessons">
-            {(course.lessons || []).map((l, i) => (
+            {(course.lessons||[]).map((l,i) => (
               <LessonRow
                 key={l.id}
                 lesson={l}
@@ -136,37 +132,42 @@ export default function CourseDetailPage() {
           </div>
         </div>
 
-        {/* ── Right: sticky CTA ── */}
+        {/* ── Right sticky ── */}
         <div className="cd-sidebar">
-          <div className="cd-cta-card">
+          <div className="cd-cta-box">
             {pct > 0 && (
-              <div className="cd-cta-progress">
-                <div className="cd-progress-bar"><div style={{ width: `${pct}%` }} /></div>
-                <span>{pct}%</span>
+              <div className="cd-prog-wrap" style={{ marginBottom:16 }}>
+                <div className="cd-prog-bar"><div style={{ width:`${pct}%`, background:c }}/></div>
+                <span style={{ color:c }}>{pct}%</span>
               </div>
             )}
-            {course.enrolled ? (
-              <button type="button" className="lh-cta-btn btn-full" onClick={continueLesson}>
-                {pct > 0 ? "Continue Course" : "Start Course"}
-              </button>
-            ) : (
-              <button type="button" className="lh-cta-btn btn-full" onClick={handleEnroll} disabled={enrolling}>
-                {enrolling ? "Starting…" : "Start Course"}
-              </button>
-            )}
-            <button type="button" className={`cd-save-btn ${saved ? "saved" : ""}`} onClick={handleSave}>
-              {saved ? "✓ Saved" : "🔖 Save"}
+            <button
+              type="button"
+              className="ln-btn-primary ln-btn-full"
+              onClick={handleStart}
+              disabled={enrolling}
+            >
+              {enrolling ? "Starting..." : course.enrolled
+                ? (pct > 0 ? "Continue Course" : "Start Course")
+                : "Start Course"
+              }
             </button>
-            <div className="cd-cta-meta">
-              <div>{course.lessonsCount} lessons</div>
-              <div>{course.durationMinutes} min</div>
-              {course.rating > 0 && <div>⭐ {course.rating}</div>}
+            <button
+              type="button"
+              className={`cd-save-btn ${saved ? "saved" : ""}`}
+              onClick={handleSave}
+            >
+              {saved ? "✓ Saved" : "🔖 Save Course"}
+            </button>
+            <div className="cd-info-list">
+              <div><span>📖</span> {course.lessonsCount} lessons</div>
+              <div><span>⏱</span> {course.durationMinutes} min</div>
+              {course.rating > 0 && <div><span>⭐</span> {course.rating} rating</div>}
             </div>
           </div>
 
-          {/* Study with peer CTA */}
-          <div className="cd-peer-cta">
-            <p>Still need help with <strong>{course.subject}</strong>?</p>
+          <div className="cd-peer-box">
+            <p>Need help with <strong>{course.subject}</strong>?</p>
             <button
               type="button"
               className="cd-peer-btn"

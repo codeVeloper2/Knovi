@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import * as api from "../../api";
+import VideoPlayer from "./VideoPlayer";
 
 // ── Discussion ────────────────────────────────────────────────────────────
 function Discussion({ contentType, contentId }) {
@@ -230,33 +231,16 @@ export default function LessonPage() {
         <div className="lp-main">
           {/* Video player */}
           <div className="lp-video-wrap">
-            {lesson.videoUrl ? (
-              lesson.videoUrl.includes("youtube.com/embed") || lesson.videoUrl.includes("youtube.com/watch") || lesson.videoUrl.includes("youtu.be") ? (
-                <iframe
-                  src={lesson.videoUrl.includes("youtu.be")
-                    ? lesson.videoUrl.replace("youtu.be/", "www.youtube.com/embed/").split("?")[0]
-                    : lesson.videoUrl}
-                  className="lp-video"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                  title={lesson.title}
-                  style={{ border: "none" }}
-                />
-              ) : (
-                <video
-                  ref={videoRef}
-                  src={lesson.videoUrl}
-                  controls
-                  className="lp-video"
-                  poster={lesson.thumbnailUrl || undefined}
-                />
-              )
-            ) : (
-              <div className="lp-video-placeholder">
-                <span>▶</span>
-                <p>No video available for this lesson.</p>
-              </div>
-            )}
+            <VideoPlayer
+              src={lesson.videoUrl || ""}
+              poster={lesson.thumbnailUrl || ""}
+              startAt={lesson.positionSeconds || 0}
+              onProgress={(pos, dur) => api.saveVideoProgress(parseInt(lessonId), null, pos, dur).catch(() => {})}
+              onEnded={() => {
+                setCompleted(true);
+                toast.success("Lesson finished!");
+              }}
+            />
           </div>
 
           {/* Title row */}

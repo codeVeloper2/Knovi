@@ -40,6 +40,13 @@ export default function DashboardLayout() {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(STORAGE_KEY) === "1");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scOpen, setScOpen] = useState(false);
+
+  // Listen for the mobile-home hamburger custom event
+  useEffect(() => {
+    const handler = () => setMobileOpen(true);
+    window.addEventListener("peerup:open-nav", handler);
+    return () => window.removeEventListener("peerup:open-nav", handler);
+  }, []);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [pendingMatchCount, setPendingMatchCount] = useState(0);
@@ -214,25 +221,6 @@ export default function DashboardLayout() {
           <Outlet />
         </main>
       </div>
-
-      {/* ── Mobile bottom nav (≤768px only) ── */}
-      <nav className="mob-bottom-nav" aria-label="Main navigation">
-        <NavLink to="/app" end className={({ isActive }) => `mob-nav-item${isActive ? " mob-nav-item--active" : ""}`}>
-          <HomeIcon /><span>Home</span>
-        </NavLink>
-        <NavLink to="/app/discover" className={({ isActive }) => `mob-nav-item${isActive ? " mob-nav-item--active" : ""}`}>
-          <DiscoverIcon /><span>Discover</span>
-        </NavLink>
-        <NavLink to="/app/chat" className={({ isActive }) => `mob-nav-item${isActive ? " mob-nav-item--active" : ""}`}>
-          <ChatIcon /><span>Chat</span>
-        </NavLink>
-        <NavLink to="/app/rooms" className={({ isActive }) => `mob-nav-item${isActive ? " mob-nav-item--active" : ""}`}>
-          <RoomsIcon /><span>Study</span>
-        </NavLink>
-        <NavLink to="/app/learn" className={({ isActive }) => `mob-nav-item${isActive ? " mob-nav-item--active" : ""}`}>
-          <LearnIcon /><span>Learn</span>
-        </NavLink>
-      </nav>
 
       <ShortcutsModal open={scOpen} onClose={() => setScOpen(false)} />
 

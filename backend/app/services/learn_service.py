@@ -267,7 +267,7 @@ async def create_tutorial(
         description=description,
         video_url=video_url,
         thumbnail_url=thumbnail_url,
-        status="pending",
+        status="approved",  # auto-approved — add manual moderation later if needed
     )
     session.add(tut)
     await session.commit()

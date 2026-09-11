@@ -3,160 +3,171 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "../../context/ToastContext";
 import * as api from "../../api";
 
-function CourseProgressCard({ course, onClick }) {
+const COLORS = {
+  Math:"#6366f1",English:"#3b82f6",Biology:"#22c55e",Chemistry:"#f59e0b",
+  Physics:"#eab308",History:"#a78bfa",Geography:"#34d399","Computer Science":"#06b6d4",
+  Spanish:"#ef4444",French:"#60a5fa",Art:"#f472b6",Music:"#818cf8",
+  Economics:"#f59e0b",Literature:"#a78bfa",Psychology:"#34d399",
+};
+const color = s => COLORS[s] || "#6366f1";
+
+function ProgressCard({ course, onClick }) {
+  const c   = color(course.subject);
   const pct = course.progressPct || 0;
   return (
-    <div className="ml-card" onClick={onClick} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && onClick()}>
-      <div className="ml-card-thumb">
+    <button type="button" className="ml-card" onClick={onClick}>
+      <div className="ml-thumb">
         {course.thumbnailUrl
-          ? <img src={course.thumbnailUrl} alt={course.title} />
-          : <div className="lh-card-thumb-placeholder">📚</div>
+          ? <img src={course.thumbnailUrl} alt={course.title}/>
+          : <div className="ml-thumb-empty" style={{ background:`${c}18` }}>📚</div>
         }
       </div>
-      <div className="ml-card-body">
-        <div className="lh-card-subject">{course.subject}</div>
-        <div className="lh-card-title">{course.title}</div>
-        <div className="ml-progress-wrap">
-          <div className="ml-progress-bar"><div style={{ width: `${pct}%` }} /></div>
-          <span className="ml-pct">{pct}%</span>
+      <div className="ml-body">
+        <span className="ln-card-subject" style={{ color:c }}>{course.subject}</span>
+        <p className="ln-card-title">{course.title}</p>
+        <div className="ml-prog-wrap">
+          <div className="ml-prog-bar"><div style={{ width:`${pct}%`, background:c }}/></div>
+          <span style={{ color:c }}>{pct}%</span>
         </div>
-        <div className="lh-card-meta">{course.lessonsCount} lessons · {course.durationMinutes} min</div>
+        <span className="ln-card-meta">{course.lessonsCount} lessons · {course.durationMinutes} min</span>
       </div>
-    </div>
+    </button>
   );
 }
 
-function HistoryItem({ item, onClick }) {
-  const mins = Math.floor((item.durationSeconds || 0) / 60);
+function HistoryRow({ item, onClick }) {
+  const c   = color(item.subject);
+  const min = Math.floor((item.durationSeconds||0)/60);
+  const date = new Date(item.lastWatchedAt).toLocaleDateString("en-US",{month:"short",day:"numeric"});
   return (
-    <div className="ml-history-item" onClick={onClick} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && onClick()}>
-      <div className="ml-history-thumb">
+    <button type="button" className="ml-history-row" onClick={onClick}>
+      <div className="ml-hist-thumb">
         {item.thumbnailUrl
-          ? <img src={item.thumbnailUrl} alt={item.title} />
-          : <div className="lh-tut-thumb-placeholder">{item.type === "tutorial" ? "🎥" : "▶"}</div>
+          ? <img src={item.thumbnailUrl} alt={item.title}/>
+          : <div className="ml-hist-thumb-empty">▶</div>
         }
       </div>
-      <div className="ml-history-body">
-        <div className="lh-card-title" style={{ fontSize: "0.9rem" }}>{item.title}</div>
-        {item.subject && <div className="lh-card-subject">{item.subject}</div>}
-        <div className="ml-progress-wrap">
-          <div className="ml-progress-bar"><div style={{ width: `${item.percentage}%` }} /></div>
-          <span className="ml-pct">{item.percentage}%</span>
+      <div className="ml-hist-body">
+        <p className="ml-hist-title">{item.title}</p>
+        {item.subject && <span className="ln-card-subject" style={{ color:c }}>{item.subject}</span>}
+        <div className="ml-prog-wrap" style={{ marginTop:6 }}>
+          <div className="ml-prog-bar"><div style={{ width:`${item.percentage}%`, background:c }}/></div>
+          <span style={{ color:c }}>{item.percentage}%</span>
         </div>
-        <div className="lh-card-meta">
-          {mins > 0 && <span>{mins} min</span>}
-          <span>·</span>
-          <span>{new Date(item.lastWatchedAt).toLocaleDateString()}</span>
-          {item.completed && <span className="ml-completed-badge">✓ Complete</span>}
-        </div>
+        <span className="ln-card-meta">{min > 0 ? `${min} min · ` : ""}{date}</span>
       </div>
-    </div>
+      {item.completed && <span className="ml-done-badge">✓ Done</span>}
+    </button>
   );
 }
 
 const TABS = [
-  { id: "inProgress",  label: "In Progress"       },
-  { id: "completed",   label: "Completed"          },
-  { id: "history",     label: "Watch History"      },
+  { id:"inProgress", label:"In Progress"   },
+  { id:"completed",  label:"Completed"     },
+  { id:"history",    label:"Watch History" },
 ];
 
 export default function MyLearningPage() {
   const navigate = useNavigate();
   const toast    = useToast();
+
   const [tab,     setTab]    = useState("inProgress");
-  const [data,    setData]   = useState({ inProgress: [], completed: [], history: [] });
+  const [data,    setData]   = useState({ inProgress:[], completed:[], history:[] });
   const [loading, setLoading]= useState(true);
 
   useEffect(() => {
     api.getMyLearning()
       .then(setData)
-      .catch(() => toast.error("Failed to load learning data."))
+      .catch(() => toast.error("Failed to load."))
       .finally(() => setLoading(false));
   }, []);
 
-  function goToCourse(id) { navigate(`/app/learn/courses/${id}`); }
-  function goToHistory(item) {
-    if (item.type === "lesson")   navigate(`/app/learn/courses/${item.courseId}/lessons/${item.id}`);
-    else                          navigate(`/app/learn/tutorials/${item.id}`);
-  }
-
-  const inProgress = data.inProgress  || [];
-  const completed  = data.completed   || [];
-  const history    = data.history     || [];
+  const inP  = data.inProgress || [];
+  const comp = data.completed  || [];
+  const hist = data.history    || [];
 
   return (
-    <div className="lh-page">
-      <h1 className="cp-title">My Learning</h1>
+    <div className="ln-page">
+      <div className="ln-page-header">
+        <button type="button" className="ct-back" onClick={() => navigate("/app/learn")}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <path d="M19 12H5M12 5l-7 7 7 7"/>
+          </svg>
+          Learn
+        </button>
+        <h1 className="ln-page-title">My Learning</h1>
+      </div>
 
-      <div className="lh-tabs">
+      <div className="ln-tabs">
         {TABS.map(t => (
           <button key={t.id} type="button"
-            className={`lh-tab ${tab === t.id ? "active" : ""}`}
+            className={`ln-tab ${tab === t.id ? "active" : ""}`}
             onClick={() => setTab(t.id)}
           >
             {t.label}
-            {t.id === "inProgress" && inProgress.length > 0 && ` (${inProgress.length})`}
-            {t.id === "completed"  && completed.length  > 0 && ` (${completed.length})`}
+            {t.id === "inProgress" && inP.length  > 0 && <span className="ln-tab-badge">{inP.length}</span>}
+            {t.id === "completed"  && comp.length > 0 && <span className="ln-tab-badge">{comp.length}</span>}
           </button>
         ))}
       </div>
 
       {loading ? (
-        <div className="lh-loading"><span className="discover-spinner" /> Loading…</div>
+        <div className="ln-loading"><span className="discover-spinner"/> Loading...</div>
       ) : (
         <>
           {tab === "inProgress" && (
-            inProgress.length === 0 ? (
-              <div className="lh-empty">
-                <div className="lh-empty-icon">📖</div>
+            inP.length === 0 ? (
+              <div className="ln-empty">
+                <span>📖</span>
                 <h3>No courses in progress</h3>
-                <p>Start a course and it will appear here.</p>
-                <button type="button" className="lh-cta-btn" onClick={() => navigate("/app/learn/courses")}>Browse Courses</button>
+                <p>Start a course and it will show up here.</p>
+                <button type="button" className="ln-btn-primary" onClick={() => navigate("/app/learn/courses")}>Browse Courses</button>
               </div>
             ) : (
-              <div className="ml-grid">
-                {inProgress.map(c => <CourseProgressCard key={c.id} course={c} onClick={() => goToCourse(c.id)} />)}
-              </div>
+              <div className="ln-grid">{inP.map(c => <ProgressCard key={c.id} course={c} onClick={() => navigate(`/app/learn/courses/${c.id}`)}/>)}</div>
             )
           )}
 
           {tab === "completed" && (
-            completed.length === 0 ? (
-              <div className="lh-empty">
-                <div className="lh-empty-icon">🏆</div>
+            comp.length === 0 ? (
+              <div className="ln-empty">
+                <span>🏆</span>
                 <h3>No completed courses yet</h3>
-                <p>Complete all lessons in a course to mark it done.</p>
+                <p>Complete all lessons in a course to see it here.</p>
               </div>
             ) : (
-              <div className="ml-grid">
-                {completed.map(c => (
-                  <div key={c.id} className="ml-card ml-card--done" onClick={() => goToCourse(c.id)} role="button" tabIndex={0}>
-                    <div className="ml-card-thumb">
-                      {c.thumbnailUrl ? <img src={c.thumbnailUrl} alt={c.title} /> : <div className="lh-card-thumb-placeholder">📚</div>}
+              <div className="ln-grid">
+                {comp.map(c => (
+                  <button key={c.id} type="button" className="ml-card ml-card--done" onClick={() => navigate(`/app/learn/courses/${c.id}`)}>
+                    <div className="ml-thumb">
+                      {c.thumbnailUrl ? <img src={c.thumbnailUrl} alt={c.title}/> : <div className="ml-thumb-empty">📚</div>}
                     </div>
-                    <div className="ml-card-body">
-                      <div className="lh-card-subject">{c.subject}</div>
-                      <div className="lh-card-title">{c.title}</div>
-                      <div className="ml-completed-badge large">✓ Completed</div>
+                    <div className="ml-body">
+                      <span className="ln-card-subject" style={{ color: color(c.subject) }}>{c.subject}</span>
+                      <p className="ln-card-title">{c.title}</p>
+                      <span className="ml-done-badge" style={{ marginTop:8 }}>✓ Completed</span>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             )
           )}
 
           {tab === "history" && (
-            history.length === 0 ? (
-              <div className="lh-empty">
-                <div className="lh-empty-icon">🕐</div>
+            hist.length === 0 ? (
+              <div className="ln-empty">
+                <span>🕐</span>
                 <h3>No watch history yet</h3>
-                <p>Start watching lessons or tutorials to track your progress.</p>
-                <button type="button" className="lh-cta-btn" onClick={() => navigate("/app/learn")}>Go to Learn</button>
+                <p>Watch lessons and tutorials to build your history.</p>
+                <button type="button" className="ln-btn-primary" onClick={() => navigate("/app/learn")}>Start Learning</button>
               </div>
             ) : (
               <div className="ml-history-list">
-                {history.map((item, i) => (
-                  <HistoryItem key={i} item={item} onClick={() => goToHistory(item)} />
+                {hist.map((item,i) => (
+                  <HistoryRow key={i} item={item} onClick={() => {
+                    if (item.type === "lesson") navigate(`/app/learn/courses/${item.courseId}/lessons/${item.id}`);
+                    else navigate(`/app/learn/tutorials/${item.id}`);
+                  }}/>
                 ))}
               </div>
             )

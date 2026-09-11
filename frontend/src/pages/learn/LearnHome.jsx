@@ -1,259 +1,272 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { useToast } from "../../context/ToastContext";
 import * as api from "../../api";
 import { SUBJECTS } from "../../subjects";
 
-// ── Shared components ─────────────────────────────────────────────────────
+// ── per-subject accent colour ─────────────────────────────────────────────
+const COLORS = {
+  Math: "#6366f1", English: "#3b82f6", Biology: "#22c55e",
+  Chemistry: "#f59e0b", Physics: "#eab308", History: "#a78bfa",
+  Geography: "#34d399", "Computer Science": "#06b6d4", Spanish: "#ef4444",
+  French: "#60a5fa", Art: "#f472b6", Music: "#818cf8",
+  Economics: "#f59e0b", Literature: "#a78bfa", Psychology: "#34d399",
+};
+const color = s => COLORS[s] || "#6366f1";
 
-function SubjectFilter({ value, onChange }) {
-  return (
-    <div className="lh-filters">
-      {["All", ...SUBJECTS].map(s => (
-        <button
-          key={s}
-          type="button"
-          className={`lh-filter-chip ${value === s ? "active" : ""}`}
-          onClick={() => onChange(s)}
-        >
-          {s}
-        </button>
-      ))}
-    </div>
-  );
+function fmtDur(sec) {
+  if (!sec) return "";
+  const m = Math.floor(sec / 60);
+  const s = String(sec % 60).padStart(2, "0");
+  return `${m}:${s}`;
 }
 
-function CourseCard({ course, onClick }) {
-  const pct = course.progressPct || 0;
+// ── small shared card ─────────────────────────────────────────────────────
+function Card({ title, subject, meta, thumb, badge, progress, onClick }) {
+  const c = color(subject);
   return (
-    <div className="lh-course-card" onClick={onClick} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && onClick()}>
-      <div className="lh-card-thumb" style={{ background: course.thumbnailUrl ? "none" : "var(--navy-700)" }}>
-        {course.thumbnailUrl
-          ? <img src={course.thumbnailUrl} alt={course.title} />
-          : <div className="lh-card-thumb-placeholder">📚</div>
+    <button type="button" className="ln-card" onClick={onClick}>
+      <div className="ln-card-thumb">
+        {thumb
+          ? <img src={thumb} alt={title} />
+          : <div className="ln-card-thumb-empty" style={{ background: `${c}18` }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill={c} opacity=".5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            </div>
         }
-        {course.enrolled && pct > 0 && (
-          <div className="lh-card-progress-bar">
-            <div style={{ width: `${pct}%` }} />
-          </div>
+        {badge && <span className="ln-card-badge">{badge}</span>}
+        {progress > 0 && (
+          <div className="ln-card-bar"><div style={{ width: `${progress}%`, background: c }} /></div>
         )}
       </div>
-      <div className="lh-card-body">
-        <div className="lh-card-subject">{course.subject}</div>
-        <div className="lh-card-title">{course.title}</div>
-        <div className="lh-card-meta">
-          <span>{course.lessonsCount} lessons</span>
-          <span>·</span>
-          <span>{course.durationMinutes} min</span>
-          {course.rating > 0 && <><span>·</span><span>⭐ {course.rating}</span></>}
-        </div>
-        <div className="lh-card-creator">by {course.creatorName}</div>
-        {course.enrolled && pct > 0 && (
-          <div className="lh-card-pct">{pct}% complete</div>
-        )}
+      <div className="ln-card-body">
+        <span className="ln-card-subject" style={{ color: c }}>{subject}</span>
+        <p className="ln-card-title">{title}</p>
+        {meta && <span className="ln-card-meta">{meta}</span>}
+        {progress > 0 && <span className="ln-card-pct" style={{ color: c }}>{progress}%</span>}
       </div>
-    </div>
+    </button>
   );
 }
 
-function TutorialCard({ tut, onClick }) {
-  const mins = Math.floor((tut.durationSeconds || 0) / 60);
+// ── continue-watching pill ────────────────────────────────────────────────
+function ContinuePill({ item, onClick }) {
+  const c = color(item.subject);
   return (
-    <div className="lh-tut-card" onClick={onClick} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && onClick()}>
-      <div className="lh-tut-thumb">
-        {tut.thumbnailUrl
-          ? <img src={tut.thumbnailUrl} alt={tut.title} />
-          : <div className="lh-tut-thumb-placeholder">🎥</div>
-        }
-        {mins > 0 && <span className="lh-tut-duration">{mins}:{String((tut.durationSeconds || 0) % 60).padStart(2,"0")}</span>}
-        {tut.progressPct > 0 && !tut.completed && (
-          <div className="lh-card-progress-bar">
-            <div style={{ width: `${tut.progressPct}%` }} />
-          </div>
-        )}
-      </div>
-      <div className="lh-tut-body">
-        <div className="lh-card-subject">{tut.subject}</div>
-        <div className="lh-tut-title">{tut.title}</div>
-        <div className="lh-tut-creator">{tut.creatorName}</div>
-        <div className="lh-card-meta">
-          {tut.views > 0 && <><span>{tut.views} views</span><span>·</span></>}
-          {tut.rating > 0 && <span>⭐ {tut.rating}</span>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ContinueCard({ item, onClick }) {
-  const mins = Math.floor((item.durationSeconds || 0) / 60);
-  return (
-    <div className="lh-continue-card" onClick={onClick} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && onClick()}>
-      <div className="lh-continue-thumb">
+    <button type="button" className="ln-pill" onClick={onClick}>
+      <div className="ln-pill-thumb">
         {item.thumbnailUrl
           ? <img src={item.thumbnailUrl} alt={item.title} />
-          : <div className="lh-tut-thumb-placeholder">▶</div>
+          : <div className="ln-pill-thumb-empty" style={{ background: `${c}18` }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill={c}><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            </div>
         }
-      </div>
-      <div className="lh-continue-body">
-        <div className="lh-continue-title">{item.title}</div>
-        {item.subject && <div className="lh-card-subject">{item.subject}</div>}
-        <div className="lh-continue-bar-wrap">
-          <div className="lh-continue-bar">
-            <div className="lh-continue-fill" style={{ width: `${item.percentage}%` }} />
-          </div>
-          <span className="lh-continue-pct">{item.percentage}%</span>
+        <div className="ln-pill-play">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="white"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         </div>
-        <div className="lh-card-meta">{mins} min</div>
       </div>
-    </div>
+      <div className="ln-pill-body">
+        <p className="ln-pill-title">{item.title}</p>
+        <div className="ln-pill-bar-row">
+          <div className="ln-pill-track"><div className="ln-pill-fill" style={{ width: `${item.percentage}%`, background: c }} /></div>
+          <span className="ln-pill-pct" style={{ color: c }}>{item.percentage}%</span>
+        </div>
+      </div>
+    </button>
   );
 }
 
-function Section({ title, action, actionLabel, children }) {
+// ── section wrapper ───────────────────────────────────────────────────────
+function Sec({ title, onAll, children }) {
   return (
-    <section className="lh-section">
-      <div className="lh-section-head">
-        <h2 className="lh-section-title">{title}</h2>
-        {action && <button type="button" className="lh-see-all" onClick={action}>{actionLabel || "See all →"}</button>}
+    <section className="ln-sec">
+      <div className="ln-sec-head">
+        <h2 className="ln-sec-title">{title}</h2>
+        {onAll && <button type="button" className="ln-sec-all" onClick={onAll}>See all →</button>}
       </div>
       {children}
     </section>
   );
 }
 
-// ── Learn Home Page ───────────────────────────────────────────────────────
+// ── main page ─────────────────────────────────────────────────────────────
 export default function LearnHome() {
   const { profile } = useAuth();
-  const navigate    = useNavigate();
-  const toast       = useToast();
+  const navigate = useNavigate();
 
-  const [search,    setSearch]   = useState("");
-  const [subject,   setSubject]  = useState("All");
-  const [feed,      setFeed]     = useState(null);
-  const [loading,   setLoading]  = useState(true);
+  const [search,  setSearch]  = useState("");
+  const [feed,    setFeed]    = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.getLearnHome()
-      .then(setFeed)
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    api.getLearnHome().then(setFeed).catch(() => {}).finally(() => setLoading(false));
   }, []);
+
+  const first = profile?.displayName?.split(" ")[0] || "there";
 
   function handleSearch(e) {
     e.preventDefault();
     if (search.trim()) navigate(`/app/learn/courses?search=${encodeURIComponent(search.trim())}`);
   }
 
-  function goToCourse(id) { navigate(`/app/learn/courses/${id}`); }
-  function goToTutorial(id) { navigate(`/app/learn/tutorials/${id}`); }
-  function goToContinue(item) {
+  function goCourse(id)   { navigate(`/app/learn/courses/${id}`); }
+  function goTutorial(id) { navigate(`/app/learn/tutorials/${id}`); }
+  function goContinue(item) {
     if (item.type === "lesson") navigate(`/app/learn/courses/${item.courseId}/lessons/${item.id}`);
     else navigate(`/app/learn/tutorials/${item.id}`);
   }
 
   return (
-    <div className="lh-page">
-      {/* ── Hero ── */}
-      <div className="lh-hero">
-        <div className="lh-hero-text">
-          <h1>Learn Smarter Together</h1>
-          <p>Watch tutorials, take courses, and learn from your peers.</p>
-        </div>
-        <form className="lh-search-form" onSubmit={handleSearch}>
-          <div className="lh-search-wrap">
+    <div className="ln-page">
+
+      {/* ── Hero ─────────────────────────────────────────────────── */}
+      <div className="ln-hero">
+        <div className="ln-hero-text">
+          <p className="ln-hero-greet">Welcome back, {first} 👋</p>
+          <h1 className="ln-hero-h1">Learn smarter,<br />together.</h1>
+          <p className="ln-hero-sub">Courses, tutorials and study tools — all in one place.</p>
+
+          <form className="ln-search" onSubmit={handleSearch}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
             </svg>
             <input
-              type="text"
-              placeholder="Search courses, topics, or tutorials…"
               value={search}
               onChange={e => setSearch(e.target.value)}
+              placeholder="Search courses, topics or tutorials..."
             />
-            <button type="submit" className="lh-search-btn">Search</button>
-          </div>
-        </form>
+            <button type="submit">Search</button>
+          </form>
+        </div>
+
+        {/* Quick nav tiles */}
+        <div className="ln-tiles">
+          {[
+            { icon: "📚", label: "Courses",     path: "/app/learn/courses"     },
+            { icon: "🎥", label: "Tutorials",   path: "/app/learn/tutorials"   },
+            { icon: "📈", label: "My Learning", path: "/app/learn/my-learning" },
+            { icon: "🔖", label: "Saved",       path: "/app/learn/saved"       },
+            { icon: "➕", label: "Upload",      path: "/app/learn/create", accent: true },
+          ].map(t => (
+            <button
+              key={t.label}
+              type="button"
+              className={`ln-tile ${t.accent ? "ln-tile--accent" : ""}`}
+              onClick={() => navigate(t.path)}
+            >
+              <span className="ln-tile-icon">{t.icon}</span>
+              <span className="ln-tile-label">{t.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* ── Subject filter ── */}
-      <SubjectFilter value={subject} onChange={s => {
-        setSubject(s);
-        navigate(`/app/learn/courses?subject=${encodeURIComponent(s)}`);
-      }} />
+      {/* ── Subject chips ─────────────────────────────────────────── */}
+      <div className="ln-chips">
+        {SUBJECTS.map(s => (
+          <button
+            key={s}
+            type="button"
+            className="ln-chip"
+            style={{ "--c": color(s) }}
+            onClick={() => navigate(`/app/learn/courses?subject=${encodeURIComponent(s)}`)}
+          >
+            {s}
+          </button>
+        ))}
+      </div>
 
-      {loading && (
-        <div className="lh-loading">
-          <span className="discover-spinner" /> Loading…
-        </div>
-      )}
+      {loading && <div className="ln-loading"><span className="discover-spinner" /> Loading...</div>}
 
       {!loading && feed && (
         <>
           {/* Continue Watching */}
           {feed.continueWatching?.length > 0 && (
-            <Section title="Continue Watching">
-              <div className="lh-continue-row">
+            <Sec title="Continue Watching">
+              <div className="ln-pills-row">
                 {feed.continueWatching.map(item => (
-                  <ContinueCard key={`${item.type}-${item.id}`} item={item} onClick={() => goToContinue(item)} />
+                  <ContinuePill key={`${item.type}-${item.id}`} item={item} onClick={() => goContinue(item)} />
                 ))}
               </div>
-            </Section>
+            </Sec>
           )}
 
           {/* Recommended */}
           {feed.recommended?.length > 0 && (
-            <Section title="Recommended for You" action={() => navigate("/app/learn/courses")} actionLabel="Browse all →">
-              <div className="lh-grid">
+            <Sec title="Recommended for You" onAll={() => navigate("/app/learn/courses")}>
+              <div className="ln-grid">
                 {feed.recommended.slice(0, 4).map(c => (
-                  <CourseCard key={c.id} course={c} onClick={() => goToCourse(c.id)} />
+                  <Card
+                    key={c.id}
+                    title={c.title}
+                    subject={c.subject}
+                    thumb={c.thumbnailUrl}
+                    meta={`${c.lessonsCount} lessons · ${c.durationMinutes} min${c.rating > 0 ? ` · ⭐ ${c.rating}` : ""}`}
+                    progress={c.progressPct}
+                    onClick={() => goCourse(c.id)}
+                  />
                 ))}
               </div>
-            </Section>
+            </Sec>
           )}
 
           {/* Popular Courses */}
           {feed.popular?.length > 0 && (
-            <Section title="Popular Courses" action={() => navigate("/app/learn/courses")} actionLabel="See all →">
-              <div className="lh-grid">
+            <Sec title="Popular Courses" onAll={() => navigate("/app/learn/courses")}>
+              <div className="ln-grid">
                 {feed.popular.slice(0, 4).map(c => (
-                  <CourseCard key={c.id} course={c} onClick={() => goToCourse(c.id)} />
+                  <Card
+                    key={c.id}
+                    title={c.title}
+                    subject={c.subject}
+                    thumb={c.thumbnailUrl}
+                    meta={`${c.lessonsCount} lessons · ${c.durationMinutes} min${c.rating > 0 ? ` · ⭐ ${c.rating}` : ""}`}
+                    progress={c.progressPct}
+                    onClick={() => goCourse(c.id)}
+                  />
                 ))}
               </div>
-            </Section>
+            </Sec>
           )}
 
           {/* Student Tutorials */}
           {feed.latestTutorials?.length > 0 && (
-            <Section title="Student Tutorials" action={() => navigate("/app/learn/tutorials")} actionLabel="See all →">
-              <div className="lh-tut-grid">
+            <Sec title="Student Tutorials" onAll={() => navigate("/app/learn/tutorials")}>
+              <div className="ln-grid">
                 {feed.latestTutorials.slice(0, 4).map(t => (
-                  <TutorialCard key={t.id} tut={t} onClick={() => goToTutorial(t.id)} />
+                  <Card
+                    key={t.id}
+                    title={t.title}
+                    subject={t.subject}
+                    thumb={t.thumbnailUrl}
+                    badge={fmtDur(t.durationSeconds)}
+                    meta={`${t.views > 0 ? `${t.views} views` : ""}${t.rating > 0 ? ` · ⭐ ${t.rating}` : ""}`}
+                    progress={t.progressPct}
+                    onClick={() => goTutorial(t.id)}
+                  />
                 ))}
               </div>
-            </Section>
+            </Sec>
           )}
 
           {/* Empty state */}
           {!feed.recommended?.length && !feed.popular?.length && !feed.latestTutorials?.length && (
-            <div className="lh-empty">
-              <div className="lh-empty-icon">🎓</div>
+            <div className="ln-empty">
+              <span>🎓</span>
               <h3>No content yet</h3>
-              <p>Be the first to upload a tutorial and help your peers!</p>
-              <button type="button" className="lh-cta-btn" onClick={() => navigate("/app/learn/create")}>
-                + Upload Tutorial
+              <p>Be the first to upload a tutorial!</p>
+              <button type="button" className="ln-btn-primary" onClick={() => navigate("/app/learn/create")}>
+                Upload Tutorial
               </button>
             </div>
           )}
 
-          {/* Become a creator CTA */}
-          <div className="lh-creator-cta">
-            <div className="lh-creator-cta-text">
+          {/* Creator CTA */}
+          <div className="ln-cta-banner">
+            <div>
               <h3>Share your knowledge</h3>
-              <p>Upload a tutorial and help other students learn.</p>
+              <p>Upload a tutorial and help fellow students learn.</p>
             </div>
-            <button type="button" className="lh-cta-btn" onClick={() => navigate("/app/learn/create")}>
+            <button type="button" className="ln-btn-primary" onClick={() => navigate("/app/learn/create")}>
               Become a Creator
             </button>
           </div>
