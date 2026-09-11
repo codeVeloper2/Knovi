@@ -12021,6 +12021,103 @@ kbd {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   MOBILE FRIEND REQUESTS HEADER  (max-width: 768px)
+   Same fixed hamburger/logo/avatar bar as Home, Discover & Chat
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Hidden on desktop — only shows on mobile */
+.fr-mob-header { display: none; }
+
+@media (max-width: 768px) {
+  .fr-mob-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 52;
+    height: 56px;
+    padding: 0 16px;
+    background: #0a1020;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .fr-mob-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .fr-mob-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: #e2e8f0;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 8px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .fr-mob-menu-btn:active { background: rgba(255,255,255,0.08); }
+
+  .fr-mob-logo {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.02em;
+  }
+  .fr-mob-accent { color: #5b6ef5; }
+
+  .fr-mob-header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .fr-mob-bell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 8px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .fr-mob-bell:active { background: rgba(255,255,255,0.08); }
+
+  .fr-mob-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #1e3a8a, #0ea5e9);
+    border: 2px solid rgba(255,255,255,0.15);
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    padding: 0;
+  }
+  .fr-mob-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Add padding to fr-page to account for fixed header */
+  .fr-page {
+    padding-top: 56px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
    MOBILE DISCOVER PAGE  (max-width: 768px)
    Namespace: disc-*
    Desktop discover layout is completely untouched.
