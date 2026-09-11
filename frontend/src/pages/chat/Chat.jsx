@@ -6,9 +6,10 @@ import { useToast } from "../../context/ToastContext";
 import * as api from "../../api";
 
 // ─────────────────────────────────────────────────────────────────
-// Shared mobile header — same hamburger/logo/avatar bar as Home & Discover
+// Shared mobile header — hamburger/notification/profile ONLY (no back button)
+// Always shows Peer Up logo, never partner name
 // ─────────────────────────────────────────────────────────────────
-function ChatMobileHeader({ title, showBack, onBack }) {
+function ChatMobileHeader() {
   const { profile, user } = useAuth();
   const navigate = useNavigate();
   const name  = profile?.displayName || user?.displayName || "";
@@ -18,24 +19,16 @@ function ChatMobileHeader({ title, showBack, onBack }) {
   return (
     <div className="chat-mob-header">
       <div className="chat-mob-header-left">
-        {showBack ? (
-          <button className="chat-mob-back-btn" onClick={onBack} aria-label="Back">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 12H5M12 19l-7-7 7-7"/>
-            </svg>
-          </button>
-        ) : (
-          <button className="chat-mob-menu-btn" aria-label="Open menu"
-            onClick={() => window.dispatchEvent(new CustomEvent("peerup:open-nav"))}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <line x1="3" y1="6"  x2="21" y2="6"/>
-              <line x1="3" y1="12" x2="21" y2="12"/>
-              <line x1="3" y1="18" x2="21" y2="18"/>
-            </svg>
-          </button>
-        )}
+        <button className="chat-mob-menu-btn" aria-label="Open menu"
+          onClick={() => window.dispatchEvent(new CustomEvent("peerup:open-nav"))}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <line x1="3" y1="6"  x2="21" y2="6"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
         <span className="chat-mob-logo">
-          {showBack ? title : <>Peer<span className="chat-mob-accent">Up</span></>}
+          Peer<span className="chat-mob-accent">Up</span>
         </span>
       </div>
       <div className="chat-mob-header-right">
@@ -692,8 +685,8 @@ function ConversationList({ convs, activeId, onSelect, onNew }) {
 
   return (
     <div className="cl">
-      {/* Mobile-only header with hamburger */}
-      <ChatMobileHeader title="Chats" showBack={false} />
+      {/* Mobile-only top header with hamburger + notification + profile */}
+      <ChatMobileHeader />
 
       {/* Header */}
       <div className="cl-head">
@@ -1007,14 +1000,10 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
 
   return (
     <div className="cr">
-      {/* Mobile-only header — shows partner name as title with back arrow */}
-      <ChatMobileHeader
-        title={partner.displayName}
-        showBack={true}
-        onBack={onBack}
-      />
+      {/* Mobile-only top header — hamburger + notification + profile (ALWAYS shows) */}
+      <ChatMobileHeader />
 
-      {/* ── Desktop/tablet header ── */}
+      {/* ── Chat header (desktop + mobile second header) — back + partner + video/voice/menu ── */}
       <div className="cr-header">
         <button type="button" className="cr-back" onClick={onBack} aria-label="Back">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
