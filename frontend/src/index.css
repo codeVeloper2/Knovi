@@ -11944,18 +11944,42 @@ kbd {
   /* ── Hide the desktop cr-header on mobile (we use chat-mob-header instead) ── */
   .cr-header { display: none; }
 
-  /* ── cr-header only used on desktop, so messages/input can start at top ── */
+  /* ── Chat room structure: fixed header, scrollable messages, fixed input ── */
+  .cr {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    width: 100%;
+    transform: translateX(100%);
+    transition: transform 0.22s ease;
+    display: flex;
+    flex-direction: column;
+    /* NO padding-top — header is fixed outside */
+  }
+
   .cr-messages {
-    padding-top: 56px; /* space for fixed chat-mob-header */
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 14px;
+    padding-bottom: 90px; /* space for fixed input bar at bottom */
+    /* NO padding-top — messages start at natural top */
+  }
+
+  /* ── Input bar FIXED at bottom ── */
+  .cr-input-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    background: #0f1923;
+    border-top: 1px solid var(--navy-line);
+    padding: 10px 14px;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
   }
 
   /* ── Bubble max-width wider on mobile ── */
   .cb-wrap { max-width: 80%; }
-
-  /* ── Input bar stays pinned to bottom ── */
-  .cr-input-bar {
-    flex-shrink: 0;
-  }
 
   /* ── Conversation list items bigger touch targets ── */
   .cl-item { padding: 14px 16px; }
