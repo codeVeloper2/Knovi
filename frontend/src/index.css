@@ -4897,7 +4897,7 @@ kbd {
 
 .cr-date-pill {
   text-align: center;
-  margin: 12px 0 8px;
+  margin: 8px 0 6px; /* reduced from 12px 0 8px */
 }
 .cr-date-pill span {
   background: rgba(255,255,255,0.05);
@@ -11977,10 +11977,18 @@ kbd {
   .cr-messages {
     flex: 1;
     overflow-y: auto;
-    padding: 16px 14px;
+    padding: 0 14px; /* NO vertical padding */
     margin-top: 50px; /* space for fixed cr-header (second header) */
-    padding-bottom: 90px; /* space for fixed input bar at bottom */
+    padding-bottom: 70px; /* space for fixed input bar at bottom */
     -webkit-overflow-scrolling: touch;
+  }
+
+  /* Add spacing to first and last items instead of container padding */
+  .cr-messages > :first-child {
+    margin-top: 12px;
+  }
+  .cr-messages > :last-child {
+    margin-bottom: 12px;
   }
 
   /* ── Input bar FIXED at bottom ── */
