@@ -122,3 +122,19 @@ async def init_models() -> None:
         await conn.execute(text(
             "CREATE INDEX IF NOT EXISTS idx_room_materials_room ON room_materials(room_id)"
         ))
+
+        # ── Streak columns on users (added after initial table creation) ──
+        await conn.execute(text(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS streak_days INTEGER NOT NULL DEFAULT 0"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity_date TIMESTAMPTZ"
+        ))
+
+        # ── Progress tables (created by create_all; these guard indexes) ──
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_earned_badges_user ON earned_badges(user_id)"
+        ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_certificates_user ON certificates(user_id)"
+        ))

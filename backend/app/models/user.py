@@ -65,6 +65,10 @@ class User(Base):
     session_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     xp: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
+    # ── Streak tracking ──
+    streak_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_activity_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     # ── Privacy ──
     is_public: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     allow_direct_message: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -101,6 +105,7 @@ class User(Base):
             "sessionCount": self.session_count,
             "xp": self.xp or 0,
             "level": _xp_level(self.xp or 0),
+            "streak": self.streak_days or 0,
             "isPublic": self.is_public,
             "allowDirectMessage": self.allow_direct_message,
             "emailVerified": self.email_verified,

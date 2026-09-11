@@ -7,9 +7,11 @@ from app.models.learn import (
     Course, Lesson, Tutorial, VideoProgress,
     CourseEnrollment, SavedContent, LearnComment,
 )
+from app.models.progress import EarnedBadge, Certificate
 
 __all__ = [
     "User", "Conversation", "Message", "MatchRequest", "StudyRoom", "RoomMaterial",
     "Course", "Lesson", "Tutorial", "VideoProgress",
     "CourseEnrollment", "SavedContent", "LearnComment",
+    "EarnedBadge", "Certificate",
 ]

@@ -185,11 +185,13 @@ async def update_video_progress(
     completed = pct >= 90
 
     if prog:
+        was_already_completed = prog.completed
         prog.position_seconds = position_seconds
         prog.percentage = pct
         prog.completed = completed
         prog.last_watched_at = _now()
     else:
+        was_already_completed = False
         prog = VideoProgress(
             user_id=user_id,
             lesson_id=lesson_id,
@@ -202,6 +204,20 @@ async def update_video_progress(
 
     await session.commit()
     await session.refresh(prog)
+
+    # ── Trigger streak + badge evaluation when a lesson/tutorial is completed ──
+    if completed and not was_already_completed:
+        from app.services import progress_service
+        await progress_service.record_activity(session, user_id)
+        await progress_service.evaluate_badges(session, user_id)
+        # Check if this lesson's course is now fully complete → certificate
+        if lesson_id:
+            lesson = (await session.execute(
+                select(Lesson).where(Lesson.id == lesson_id)
+            )).scalar_one_or_none()
+            if lesson:
+                await progress_service.maybe_award_certificate(session, user_id, lesson.course_id)
+
     return prog
 
 

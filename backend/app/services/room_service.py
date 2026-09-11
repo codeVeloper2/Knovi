@@ -173,6 +173,13 @@ async def end_room(
     if rating is not None:
         await _update_user_rating(session, room, user_id)
 
+    # ── Trigger streak + badge evaluation for both participants ──
+    if conv:
+        from app.services import progress_service
+        for uid in (conv.user_a_id, conv.user_b_id):
+            await progress_service.record_activity(session, uid)
+            await progress_service.evaluate_badges(session, uid)
+
     return room
 
 

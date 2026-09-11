@@ -1,44 +1,157 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import * as api from "../../api";
 
-/* Placeholder gamification data — wire to a real backend later. */
-const PROGRESS = {
-  level: 1,
-  title: "Rising Learner",
-  xp: 0,
-  xpForNext: 100,
-  dayStreak: 0,
-  badgesEarned: 0,
-  certificates: 0,
-};
+// ─────────────────────────────────────────────────────────────────────────────
+// Mobile header (hamburger + PeerUp + notification + profile)
+// Same pattern as Home, Discover, Chat, Friend Requests
+// ─────────────────────────────────────────────────────────────────────────────
+function MobileHeader() {
+  const { profile, user } = useAuth();
+  const navigate = useNavigate();
+  const name    = profile?.displayName || user?.displayName || "";
+  const photo   = profile?.photoURL    || user?.photoURL    || "";
+  const initial = name.trim()[0]?.toUpperCase() || "?";
 
-const RECENT_BADGES = [
-  { id: 1, name: "First Steps", emoji: "🎯", earned: false },
-  { id: 2, name: "Team Player", emoji: "🤝", earned: false },
-  { id: 3, name: "Quick Learner", emoji: "⚡", earned: false },
-  { id: 4, name: "Top Helper", emoji: "🏅", earned: false },
-];
+  return (
+    <div className="prog-mob-header">
+      <div className="prog-mob-header-left">
+        <button
+          className="prog-mob-menu-btn"
+          aria-label="Open menu"
+          onClick={() => window.dispatchEvent(new CustomEvent("peerup:open-nav"))}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <line x1="3" y1="6"  x2="21" y2="6"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+        <span className="prog-mob-logo">
+          Peer<span className="prog-mob-accent">Up</span>
+        </span>
+      </div>
+      <div className="prog-mob-header-right">
+        <button
+          className="prog-mob-bell"
+          aria-label="Notifications"
+          onClick={() => navigate("/app/settings/notifications")}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+          </svg>
+        </button>
+        <button
+          className="prog-mob-avatar"
+          onClick={() => navigate("/app/settings")}
+          aria-label="Profile"
+        >
+          {photo
+            ? <img src={photo} alt={name} referrerPolicy="no-referrer" />
+            : <span>{initial}</span>
+          }
+        </button>
+      </div>
+    </div>
+  );
+}
 
-const ALL_BADGES = [
-  { id: 1, name: "First Steps", emoji: "🎯", desc: "Complete your first study session", earned: false },
-  { id: 2, name: "Team Player", emoji: "🤝", desc: "Help 5 classmates", earned: false },
-  { id: 3, name: "Quick Learner", emoji: "⚡", desc: "Finish 10 sessions", earned: false },
-  { id: 4, name: "Top Helper", emoji: "🏅", desc: "Reach a 4.5+ rating", earned: false },
-  { id: 5, name: "Streak Master", emoji: "🔥", desc: "Maintain a 7-day streak", earned: false },
-  { id: 6, name: "Scholar", emoji: "🎓", desc: "Earn your first certificate", earned: false },
-];
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+function fmtDate(iso) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
+}
 
 const TABS = ["Overview", "Badges", "Certificates"];
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Main component
+// ─────────────────────────────────────────────────────────────────────────────
 export default function Progress() {
-  const [tab, setTab] = useState("Overview");
-  const pct = Math.min(100, Math.round((PROGRESS.xp / PROGRESS.xpForNext) * 100));
-  // ring math: circumference for r=52
-  const R = 52;
-  const C = 2 * Math.PI * R;
-  const dash = (pct / 100) * C;
+  const [tab, setTab]       = useState("Overview");
+  const [data, setData]     = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]   = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(null);
+    api.getProgress()
+      .then(d => { if (active) setData(d); })
+      .catch(() => { if (active) setError("Couldn't load progress. Please try again."); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  // ── Loading ──
+  if (loading) {
+    return (
+      <div className="home">
+        <MobileHeader />
+        <div className="home-head">
+          <h1>Your Progress</h1>
+          <p>Track your level, badges, and certificates as you learn.</p>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "60px 0", gap: 12, color: "var(--text-dim)" }}>
+          <span className="discover-spinner" />
+          Loading your progress…
+        </div>
+      </div>
+    );
+  }
+
+  // ── Error ──
+  if (error || !data) {
+    return (
+      <div className="home">
+        <MobileHeader />
+        <div className="home-head">
+          <h1>Your Progress</h1>
+        </div>
+        <div className="placeholder-card">
+          <div className="placeholder-emoji">😕</div>
+          <h3>Something went wrong</h3>
+          <p>{error || "Unable to load progress data."}</p>
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ marginTop: 12 }}
+            onClick={() => { setLoading(true); setError(null); api.getProgress().then(setData).catch(() => setError("Couldn't load progress. Please try again.")).finally(() => setLoading(false)); }}
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Computed values from real data ──
+  const xp         = data.xp ?? 0;
+  const level      = data.level ?? 1;
+  const levelName  = data.levelName ?? "Beginner";
+  const xpForNext  = data.xpForNext ?? 100;
+  const dayStreak  = data.dayStreak ?? 0;
+  const badgesEarned    = data.badgesEarned ?? 0;
+  const certsEarned     = data.certificatesEarned ?? 0;
+  const allBadges       = data.allBadges ?? [];
+  const recentBadges    = data.recentBadges ?? [];
+  const certificates    = data.certificates ?? [];
+
+  const pct   = xpForNext > 0 ? Math.min(100, Math.round((xp / xpForNext) * 100)) : 100;
+  const R     = 52;
+  const C     = 2 * Math.PI * R;
+  const dash  = (pct / 100) * C;
 
   return (
     <div className="home">
+      {/* Mobile-only header */}
+      <MobileHeader />
+
       <div className="home-head">
         <h1>Your Progress</h1>
         <p>Track your level, badges, and certificates as you learn.</p>
@@ -58,6 +171,7 @@ export default function Progress() {
         ))}
       </div>
 
+      {/* ── Overview tab ── */}
       {tab === "Overview" && (
         <>
           <div className="prog-grid">
@@ -74,17 +188,17 @@ export default function Progress() {
                   />
                 </svg>
                 <div className="ring-label">
-                  <span className="ring-lv">Lv {PROGRESS.level}</span>
+                  <span className="ring-lv">Lv {level}</span>
                 </div>
               </div>
               <div className="prog-level-info">
-                <h2>Level {PROGRESS.level}</h2>
-                <p className="prog-level-title">{PROGRESS.title}</p>
+                <h2>Level {level}</h2>
+                <p className="prog-level-title">{levelName}</p>
                 <div className="prog-xp">
                   <div className="prog-xp-bar"><span style={{ width: `${pct}%` }} /></div>
                   <div className="prog-xp-nums">
-                    <span>{PROGRESS.xp} / {PROGRESS.xpForNext} XP</span>
-                    <span>{PROGRESS.xpForNext - PROGRESS.xp} XP to next</span>
+                    <span>{xp} / {xpForNext} XP</span>
+                    <span>{Math.max(0, xpForNext - xp)} XP to next</span>
                   </div>
                 </div>
               </div>
@@ -94,15 +208,24 @@ export default function Progress() {
             <div className="prog-side">
               <div className="prog-stat">
                 <span className="prog-stat-ic gold">🔥</span>
-                <div><strong>{PROGRESS.dayStreak}</strong><span>Day streak</span></div>
+                <div>
+                  <strong>{dayStreak}</strong>
+                  <span>{dayStreak === 1 ? "Day streak" : "Day streak"}</span>
+                </div>
               </div>
               <div className="prog-stat">
                 <span className="prog-stat-ic blue">🏆</span>
-                <div><strong>{PROGRESS.badgesEarned}</strong><span>Badges earned</span></div>
+                <div>
+                  <strong>{badgesEarned}</strong>
+                  <span>Badge{badgesEarned !== 1 ? "s" : ""} earned</span>
+                </div>
               </div>
               <div className="prog-stat">
                 <span className="prog-stat-ic purple">📜</span>
-                <div><strong>{PROGRESS.certificates}</strong><span>Certificates</span></div>
+                <div>
+                  <strong>{certsEarned}</strong>
+                  <span>Certificate{certsEarned !== 1 ? "s" : ""}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -111,39 +234,84 @@ export default function Progress() {
           <section className="home-block" style={{ marginTop: 20 }}>
             <div className="home-block-head">
               <h2>Recent Badges</h2>
-              <button className="link-btn" type="button" onClick={() => setTab("Badges")}>View all →</button>
+              <button className="link-btn" type="button" onClick={() => setTab("Badges")}>
+                View all →
+              </button>
             </div>
-            <div className="badge-row">
-              {RECENT_BADGES.map((b) => (
-                <div key={b.id} className={`badge-chip ${b.earned ? "earned" : "locked"}`} title={b.name}>
-                  <span className="badge-emoji">{b.emoji}</span>
-                  <span className="badge-name">{b.name}</span>
-                </div>
-              ))}
-            </div>
+            {recentBadges.length === 0 ? (
+              <p style={{ color: "var(--text-dim)", fontSize: "0.88rem", padding: "8px 0" }}>
+                Complete a learning activity or study session to earn your first badge!
+              </p>
+            ) : (
+              <div className="badge-row">
+                {recentBadges.map((b) => (
+                  <div key={b.id} className={`badge-chip ${b.earned ? "earned" : "locked"}`} title={b.name}>
+                    <span className="badge-emoji">{b.emoji}</span>
+                    <span className="badge-name">{b.name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
         </>
       )}
 
+      {/* ── Badges tab ── */}
       {tab === "Badges" && (
         <div className="badge-grid">
-          {ALL_BADGES.map((b) => (
-            <div key={b.id} className={`badge-card ${b.earned ? "earned" : "locked"}`}>
-              <span className="badge-card-ic">{b.emoji}</span>
-              <strong>{b.name}</strong>
-              <span className="badge-card-desc">{b.desc}</span>
-              <span className={`badge-status ${b.earned ? "on" : ""}`}>{b.earned ? "Earned" : "Locked"}</span>
+          {allBadges.length === 0 ? (
+            <div className="placeholder-card">
+              <div className="placeholder-emoji">🏆</div>
+              <h3>No badges yet</h3>
+              <p>Complete lessons, study sessions, and streaks to unlock badges.</p>
             </div>
-          ))}
+          ) : (
+            allBadges.map((b) => (
+              <div key={b.id} className={`badge-card ${b.earned ? "earned" : "locked"}`}>
+                <span className="badge-card-ic">{b.emoji}</span>
+                <strong>{b.name}</strong>
+                <span className="badge-card-desc">{b.desc}</span>
+                {b.earned ? (
+                  <span className="badge-status on">
+                    Earned · {fmtDate(b.earnedAt)}
+                  </span>
+                ) : (
+                  <span className="badge-status">Locked</span>
+                )}
+              </div>
+            ))
+          )}
         </div>
       )}
 
+      {/* ── Certificates tab ── */}
       {tab === "Certificates" && (
-        <div className="placeholder-card">
-          <div className="placeholder-emoji">📜</div>
-          <h3>No certificates yet</h3>
-          <p>Complete courses and study milestones to earn certificates. They'll appear here.</p>
-        </div>
+        <>
+          {certificates.length === 0 ? (
+            <div className="placeholder-card">
+              <div className="placeholder-emoji">📜</div>
+              <h3>No certificates yet</h3>
+              <p>Complete all lessons in a course to earn a certificate. It'll appear here automatically.</p>
+            </div>
+          ) : (
+            <div className="cert-list">
+              {certificates.map((c) => (
+                <div key={c.id} className="cert-card">
+                  <div className="cert-card-icon">📜</div>
+                  <div className="cert-card-body">
+                    <h3 className="cert-card-title">{c.courseName}</h3>
+                    {c.subject && (
+                      <span className="cert-card-subject">{c.subject}</span>
+                    )}
+                    <p className="cert-card-student">{c.studentName}</p>
+                    <p className="cert-card-date">Issued {fmtDate(c.issuedAt)}</p>
+                    <p className="cert-card-uid">Certificate ID: {c.certUid}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

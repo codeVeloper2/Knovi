@@ -417,3 +417,14 @@ export function likeLearnComment(commentId) {
 export function getMyLearning() {
   return request("/api/learn/my-learning", { auth: true });
 }
+
+// ── Progress ──────────────────────────────────────────────────────────────
+export function getProgress() {
+  return request("/api/progress", { auth: true });
+}
+export function getProgressBadges() {
+  return request("/api/progress/badges", { auth: true });
+}
+export function getProgressCertificates() {
+  return request("/api/progress/certificates", { auth: true });
+}
