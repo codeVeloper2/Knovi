@@ -1138,6 +1138,7 @@ body:has(.dash) { background: var(--navy-900); }
   display: grid;
   grid-template-columns: 1.4fr 1fr;
   gap: 20px;
+  align-items: start;
 }
 .home-block {
   background: var(--navy-panel);
@@ -10478,6 +10479,10 @@ kbd {
     font-weight: 800;
     color: #fff;
     line-height: 1.2;
+  }
+  .mdash-event-day-icon {
+    font-size: 1.2rem;
+    line-height: 1;
   }
   .mdash-event-info {
     flex: 1;

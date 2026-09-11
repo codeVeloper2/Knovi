@@ -4,6 +4,8 @@ import { useAuth } from "../../context/AuthContext";
 import * as api from "../../api";
 import { ChevronRight } from "../../components/DashIcons";
 
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
 function greeting() {
   const h = new Date().getHours();
   if (h < 12) return "Good morning";
@@ -37,6 +39,15 @@ function nextLevelXp(xp) {
   return 100;
 }
 
+function levelNumber(xp) {
+  if (xp >= 1000) return 6;
+  if (xp >= 600) return 5;
+  if (xp >= 300) return 4;
+  if (xp >= 100) return 3;
+  if (xp >= 50) return 2;
+  return 1;
+}
+
 function avatarColor(str) {
   const colors = ["#f59e0b", "#34d399", "#a78bfa", "#60a5fa", "#f472b6", "#fb923c"];
   let h = 0;
@@ -47,7 +58,12 @@ function avatarColor(str) {
 function Avatar({ name, photo, size = 36 }) {
   const initials = (name || "?")[0].toUpperCase();
   if (photo) {
-    return <img src={photo} alt={name} referrerPolicy="no-referrer" style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover" }} />;
+    return (
+      <img
+        src={photo} alt={name} referrerPolicy="no-referrer"
+        style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
+      />
+    );
   }
   return (
     <span style={{
@@ -59,47 +75,38 @@ function Avatar({ name, photo, size = 36 }) {
   );
 }
 
-function ProgressBar({ pct }) {
+function ProgressBar({ pct, className = "mdash-progress-bar" }) {
   return (
-    <div className="mdash-progress-bar">
+    <div className={className}>
       <div className="mdash-progress-fill" style={{ width: `${Math.min(100, pct || 0)}%` }} />
     </div>
   );
 }
 
-// ── Mobile Home ────────────────────────────────────────────────────────────
+// ── Mobile Home ──────────────────────────────────────────────────────────────
 
-function MobileHome({ profile, user, connections, learning, learnHome, loading, navigate, onOpenMenu }) {
+function MobileHome({ profile, user, connections, learning, learnHome, recentRooms, loading, navigate, onOpenMenu }) {
   const name = profile?.displayName || user?.displayName || "";
   const firstName = name.split(" ")[0] || "there";
   const photo = profile?.photoURL || user?.photoURL || "";
   const xp = profile?.xp || 0;
   const level = profile?.level?.name || levelLabel(xp);
+  const lvNum = levelNumber(xp);
   const nextXp = nextLevelXp(xp);
   const xpPct = nextXp ? Math.min(100, Math.round((xp / nextXp) * 100)) : 100;
-  const rating = profile?.rating ? profile.rating.toFixed(1) : "0.0";
-  const subjectCount = ((profile?.subjectsGoodAt || []).length + (profile?.subjectsNeedHelp || []).length);
-  const sessionCount = profile?.sessionCount || 0;
+  const rating = profile?.rating ? profile.rating.toFixed(1) : "—";
+  const subjectCount = (profile?.subjectsGoodAt || []).length + (profile?.subjectsNeedHelp || []).length;
   const streak = profile?.streak || 0;
 
   const inProgress = learning?.inProgress || [];
   const history = learning?.history || [];
   const recommended = learnHome?.recommended || learnHome?.popularCourses || [];
   const continueWatching = learnHome?.continueWatching || [];
-
-  const continueLearning = continueWatching.length > 0 ? continueWatching : inProgress.slice(0, 3);
-
-  // Build mock-style "recent activity" messages from history
-  const recentActivity = history.slice(0, 4).map((item, i) => ({
-    icon: item.type === "tutorial" ? "▶" : item.type === "message" ? "💬" : item.type === "room" ? "👥" : "⭐",
-    iconClass: item.type === "tutorial" ? "mdash-act-ic--play" : item.type === "message" ? "mdash-act-ic--msg" : item.type === "room" ? "mdash-act-ic--room" : "mdash-act-ic--star",
-    text: item.activityText || `You studied ${item.title}`,
-    time: item.timeAgo || "",
-    key: item.id ?? i,
-  }));
+  const continueLearning = continueWatching.length > 0 ? continueWatching : inProgress;
 
   return (
     <div className="mdash-wrap">
+
       {/* ── Header ── */}
       <div className="mdash-header">
         <div className="mdash-header-left">
@@ -120,26 +127,26 @@ function MobileHome({ profile, user, connections, learning, learnHome, loading, 
 
       {/* ── Greeting ── */}
       <div className="mdash-greeting">
-        <h1 className="mdash-greeting-title">{greeting()}, <span className="mdash-greeting-name">{firstName}!</span> 👋</h1>
+        <h1 className="mdash-greeting-title">
+          {greeting()}, <span className="mdash-greeting-name">{firstName}!</span> 👋
+        </h1>
         <p className="mdash-greeting-sub">Keep going — your goals are within reach.</p>
       </div>
 
       {/* ── Profile / Level card ── */}
       <div className="mdash-profile-card">
         <div className="mdash-profile-left">
-          <div className="mdash-profile-avatar">
-            <Avatar name={name} photo={photo} size={60} />
-          </div>
+          <Avatar name={name} photo={photo} size={60} />
           <div className="mdash-profile-meta">
             <div className="mdash-profile-level-row">
               <span className="mdash-profile-level-ic">⚙</span>
-              <span className="mdash-profile-level">Level {Math.max(1, Math.floor(xp / 100) + 1)}</span>
+              <span className="mdash-profile-level">Level {lvNum}</span>
             </div>
             <span className="mdash-profile-label">{level}</span>
-            <div className="mdash-profile-xp-row">
-              <ProgressBar pct={xpPct} />
-            </div>
-            <span className="mdash-profile-xp-text">{xp} / {nextXp ?? xp} XP <span className="mdash-profile-xp-pct">{xpPct}%</span></span>
+            <ProgressBar pct={xpPct} />
+            <span className="mdash-profile-xp-text">
+              {xp} / {nextXp ?? xp} XP <span className="mdash-profile-xp-pct">{xpPct}%</span>
+            </span>
           </div>
         </div>
         <div className="mdash-profile-stats">
@@ -161,7 +168,7 @@ function MobileHome({ profile, user, connections, learning, learnHome, loading, 
         </div>
       </div>
 
-      {/* ── Quick Actions (5 in a row) ── */}
+      {/* ── Quick Actions ── */}
       <div className="mdash-quick-actions">
         <button className="mdash-qa-btn" onClick={() => navigate("/app/discover")}>
           <span className="mdash-qa-icon mdash-qa-icon--blue"><DiscoverSvg /></span>
@@ -206,7 +213,9 @@ function MobileHome({ profile, user, connections, learning, learnHome, loading, 
               const pct = Math.round(item.percentage ?? item.progressPct ?? 0);
               return (
                 <button key={item.id ?? i} className="mdash-learn-card"
-                  onClick={() => navigate(item.type === "tutorial" ? `/app/learn/tutorials/${item.id}` : `/app/learn/courses/${item.courseId ?? item.id}`)}>
+                  onClick={() => navigate(item.type === "tutorial"
+                    ? `/app/learn/tutorials/${item.id}`
+                    : `/app/learn/courses/${item.courseId ?? item.id}`)}>
                   <div className="mdash-learn-thumb">
                     {item.thumbnailUrl
                       ? <img src={item.thumbnailUrl} alt={item.title} />
@@ -221,8 +230,8 @@ function MobileHome({ profile, user, connections, learning, learnHome, loading, 
                         <span className="mdash-learn-subject">{item.subject}</span>
                       </span>
                     )}
-                    {item.rating && (
-                      <span className="mdash-learn-rating">⭐ {item.rating} ({item.ratingCount ?? 0})</span>
+                    {item.rating != null && (
+                      <span className="mdash-learn-rating">⭐ {item.rating} {item.ratingCount != null && `(${item.ratingCount})`}</span>
                     )}
                     <div className="mdash-learn-bar-row">
                       <ProgressBar pct={pct} />
@@ -253,7 +262,7 @@ function MobileHome({ profile, user, connections, learning, learnHome, loading, 
               {recommended.slice(0, 3).map((course, i) => (
                 <button key={course.id ?? i} className="mdash-learn-card"
                   onClick={() => navigate(`/app/learn/courses/${course.id}`)}>
-                  <div className="mdash-learn-thumb mdash-learn-thumb--rec">
+                  <div className="mdash-learn-thumb">
                     {course.thumbnailUrl
                       ? <img src={course.thumbnailUrl} alt={course.title} />
                       : <span className="mdash-learn-thumb-fallback">🎓</span>}
@@ -289,7 +298,7 @@ function MobileHome({ profile, user, connections, learning, learnHome, loading, 
           </div>
         ) : connections.length === 0 ? (
           <div className="mdash-empty">
-            <p>No connections yet. Accept a friend request to start chatting!</p>
+            <p>No connections yet. Find a peer to get started!</p>
             <button className="mdash-empty-btn" onClick={() => navigate("/app/discover")}>Find peers</button>
           </div>
         ) : (
@@ -303,11 +312,15 @@ function MobileHome({ profile, user, connections, learning, learnHome, loading, 
                     {[conn.subject, conn.grade].filter(Boolean).join(" · ") || "Peer"}
                   </span>
                   {conn.isOnline && (
-                    <span className="mdash-match-online"><span className="mdash-online-dot" />Online</span>
+                    <span className="mdash-match-online">
+                      <span className="mdash-online-dot" />Online
+                    </span>
                   )}
                 </div>
                 <button className="mdash-match-chat-btn"
-                  onClick={() => conn.conversationId ? navigate(`/app/chat/${conn.conversationId}`) : navigate("/app/chat")}>
+                  onClick={() => conn.conversationId
+                    ? navigate(`/app/chat/${conn.conversationId}`)
+                    : navigate("/app/chat")}>
                   <ChatSvg /> Chat
                 </button>
                 <ChevronRight width={14} height={14} className="mdash-match-arrow" />
@@ -322,7 +335,8 @@ function MobileHome({ profile, user, connections, learning, learnHome, loading, 
         <div className="mdash-journey-text">
           <strong>Continue your learning journey</strong>
           <span>Take a course, watch a tutorial, or find a study partner.</span>
-          <button className="mdash-journey-btn" onClick={(e) => { e.stopPropagation(); navigate("/app/learn"); }}>
+          <button className="mdash-journey-btn"
+            onClick={(e) => { e.stopPropagation(); navigate("/app/learn"); }}>
             Explore Now →
           </button>
         </div>
@@ -347,53 +361,76 @@ function MobileHome({ profile, user, connections, learning, learnHome, loading, 
             </div>
           ) : (
             <div className="mdash-activity-list">
-              {history.slice(0, 4).map((item, i) => (
-                <div key={item.id ?? i} className="mdash-activity-item">
-                  <span className={`mdash-act-ic mdash-act-ic--${item.type === "tutorial" ? "play" : item.type === "message" ? "msg" : item.type === "room" ? "room" : "star"}`}>
-                    {item.type === "tutorial" ? <PlaySvg /> : item.type === "message" ? <ChatSvg /> : item.type === "room" ? <RoomSvg /> : <StarSvg />}
-                  </span>
-                  <div className="mdash-activity-info">
-                    <strong>{item.activityText || `You studied ${item.title}`}</strong>
-                    {item.timeAgo && <span className="mdash-activity-time">{item.timeAgo}</span>}
+              {history.slice(0, 4).map((item, i) => {
+                const type = item.type === "tutorial" ? "play"
+                  : item.type === "message" ? "msg"
+                  : item.type === "room" ? "room"
+                  : "star";
+                return (
+                  <div key={item.id ?? i} className="mdash-activity-item">
+                    <span className={`mdash-act-ic mdash-act-ic--${type}`}>
+                      {type === "play" ? <PlaySvg />
+                        : type === "msg" ? <ChatSvg />
+                        : type === "room" ? <RoomSvg />
+                        : <StarSvg />}
+                    </span>
+                    <div className="mdash-activity-info">
+                      <strong>{item.activityText || `You studied ${item.title}`}</strong>
+                      {item.timeAgo && <span className="mdash-activity-time">{item.timeAgo}</span>}
+                    </div>
+                    <ChevronRight width={14} height={14} className="mdash-activity-arrow" />
                   </div>
-                  <ChevronRight width={14} height={14} className="mdash-activity-arrow" />
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
       )}
 
-      {/* ── Upcoming Events ── */}
+      {/* ── Recent Study Rooms ── */}
       <section className="mdash-section">
         <div className="mdash-section-head">
-          <h2 className="mdash-section-title">Upcoming Events</h2>
+          <h2 className="mdash-section-title">Recent Study Rooms</h2>
           <Link to="/app/rooms" className="mdash-see-all">See all →</Link>
         </div>
-        <div className="mdash-events-list">
-          {connections.slice(0, 2).map((conn, i) => (
-            <div key={conn.partnerId ?? i} className="mdash-event-row">
-              <div className="mdash-event-date">
-                <span className="mdash-event-month">APR</span>
-                <span className="mdash-event-day">{25 + i}</span>
+        {loading ? (
+          <div className="mdash-shimmer-list">
+            <div className="mdash-shimmer-row" /><div className="mdash-shimmer-row" />
+          </div>
+        ) : recentRooms.length === 0 ? (
+          <div className="mdash-empty">
+            <p>No recent study rooms.</p>
+            <button className="mdash-empty-btn" onClick={() => navigate("/app/rooms")}>Browse rooms</button>
+          </div>
+        ) : (
+          <div className="mdash-events-list">
+            {recentRooms.slice(0, 3).map((room) => (
+              <div key={room.id} className="mdash-event-row"
+                onClick={() => navigate(`/app/rooms`)}>
+                <div className="mdash-event-date">
+                  <span className="mdash-event-month">
+                    {room.subject?.slice(0, 3).toUpperCase() || "STD"}
+                  </span>
+                  <span className="mdash-event-day-icon">🏠</span>
+                </div>
+                <div className="mdash-event-info">
+                  <strong className="mdash-event-title">
+                    {room.subject || "Study Room"} {room.goal ? `— ${room.goal}` : ""}
+                  </strong>
+                  <span className="mdash-event-meta">
+                    {room.partnerName ? `With ${room.partnerName}` : ""}
+                    {room.role ? ` · ${room.role}` : ""}
+                  </span>
+                </div>
+                <button className="mdash-event-join-btn"
+                  onClick={(e) => { e.stopPropagation(); navigate("/app/rooms"); }}>
+                  Open
+                </button>
+                <ChevronRight width={14} height={14} className="mdash-event-arrow" />
               </div>
-              <div className="mdash-event-info">
-                <strong className="mdash-event-title">{conn.subject || "Study"} Study Group</strong>
-                <span className="mdash-event-meta">Hosted by {conn.displayName} · 6:00 PM – 7:30 PM</span>
-              </div>
-              <button className="mdash-event-join-btn" onClick={() => navigate("/app/rooms")}>
-                Join
-              </button>
-              <ChevronRight width={14} height={14} className="mdash-event-arrow" />
-            </div>
-          ))}
-          {connections.length === 0 && (
-            <div className="mdash-empty">
-              <p>No upcoming events.</p>
-              <button className="mdash-empty-btn" onClick={() => navigate("/app/rooms")}>Browse rooms</button>
-            </div>
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* ── Become a Creator CTA ── */}
@@ -403,50 +440,63 @@ function MobileHome({ profile, user, connections, learning, learnHome, loading, 
           <strong>Become a Creator</strong>
           <span>Share your knowledge. Help other students. Earn XP.</span>
         </div>
-        <button className="mdash-creator-btn" onClick={(e) => { e.stopPropagation(); navigate("/app/learn"); }}>
+        <button className="mdash-creator-btn"
+          onClick={(e) => { e.stopPropagation(); navigate("/app/learn"); }}>
           Upload Tutorial →
         </button>
       </div>
 
-      {/* Bottom padding */}
       <div style={{ height: 32 }} />
     </div>
   );
 }
 
-// ── Desktop Home ────────────────────────────────────────────────────────────
+// ── Desktop Home ─────────────────────────────────────────────────────────────
 
-function DesktopHome({ profile, user, connections, learning, loading }) {
+function DesktopHome({ profile, user, connections, learning, learnHome, recentRooms, loading }) {
   const navigate = useNavigate();
-  const firstName = (profile?.displayName || user?.displayName || "there").split(" ")[0];
+  const name = profile?.displayName || user?.displayName || "there";
+  const firstName = name.split(" ")[0];
   const xp = profile?.xp || 0;
   const level = profile?.level?.name || levelLabel(xp);
+  const lvNum = levelNumber(xp);
   const nextXp = nextLevelXp(xp);
+  const xpPct = nextXp ? Math.min(100, Math.round((xp / nextXp) * 100)) : 100;
+  const rating = profile?.rating ? profile.rating.toFixed(1) : "—";
+  const subjectCount = (profile?.subjectsGoodAt || []).length + (profile?.subjectsNeedHelp || []).length;
+  const streak = profile?.streak || 0;
   const sessionCount = profile?.sessionCount || 0;
 
   const inProgress = learning?.inProgress || [];
+  const history = learning?.history || [];
+  const recommended = learnHome?.recommended || learnHome?.popularCourses || [];
+  const continueWatching = learnHome?.continueWatching || [];
+  const continueLearning = continueWatching.length > 0 ? continueWatching : inProgress;
 
   return (
     <div className="home">
+
+      {/* Greeting */}
       <div className="home-head">
         <h1>{greeting()}, {firstName}! 👋</h1>
         <p>Keep going — your goals are within reach.</p>
       </div>
 
+      {/* Stat cards */}
       <div className="stat-cards">
         <div className="stat-card stat-card--teal">
           <div className="stat-ic">🎯</div>
           <div className="stat-info">
-            <strong>{level}</strong>
-            <span>{xp} XP</span>
+            <strong>Level {lvNum} — {level}</strong>
+            <span>{xp} / {nextXp ?? xp} XP ({xpPct}%)</span>
           </div>
           <ChevronRight width={16} height={16} className="stat-arrow" />
         </div>
         <div className="stat-card stat-card--gold">
           <div className="stat-ic">🔥</div>
           <div className="stat-info">
-            <strong>{xp.toLocaleString()} XP</strong>
-            <span>{nextXp ? `Next level: ${nextXp} XP` : "Max level reached!"}</span>
+            <strong>{streak} Day Streak</strong>
+            <span>{subjectCount} subject{subjectCount !== 1 ? "s" : ""} · {rating} avg rating</span>
           </div>
           <ChevronRight width={16} height={16} className="stat-arrow" />
         </div>
@@ -461,6 +511,8 @@ function DesktopHome({ profile, user, connections, learning, loading }) {
       </div>
 
       <div className="home-grid">
+
+        {/* ── Continue Learning ── */}
         <section className="home-block">
           <div className="home-block-head">
             <h2>Continue Learning</h2>
@@ -468,33 +520,43 @@ function DesktopHome({ profile, user, connections, learning, loading }) {
           </div>
           {loading ? (
             <div className="learn-empty">Loading…</div>
-          ) : inProgress.length === 0 ? (
+          ) : continueLearning.length === 0 ? (
             <>
               <div className="learn-card">
                 <div className="learn-icon">📘</div>
                 <div className="learn-info">
                   <strong>Get started</strong>
-                  <span>Find a study partner to begin your first session</span>
+                  <span>Browse courses and track your progress here</span>
                 </div>
               </div>
-              <div className="learn-empty">
-                Your sessions and courses will show up here once you start learning.
-              </div>
+              <div className="learn-empty">Your courses will appear here once you start learning.</div>
             </>
           ) : (
-            inProgress.slice(0, 3).map((course, i) => (
-              <button key={course.id ?? i} className="learn-card" style={{ textAlign: "left", cursor: "pointer", border: "none", background: "none", width: "100%", padding: 0 }}
-                onClick={() => navigate(`/app/learn/courses/${course.id}`)}>
-                <div className="learn-icon">📘</div>
-                <div className="learn-info">
-                  <strong>{course.title}</strong>
-                  <span>{course.subject} · {Math.round(course.progressPct || 0)}% complete</span>
-                </div>
-              </button>
-            ))
+            continueLearning.slice(0, 3).map((item, i) => {
+              const pct = Math.round(item.percentage ?? item.progressPct ?? 0);
+              return (
+                <button key={item.id ?? i} className="learn-card"
+                  style={{ textAlign: "left", cursor: "pointer", border: "none", background: "none", width: "100%", padding: 0 }}
+                  onClick={() => navigate(item.type === "tutorial"
+                    ? `/app/learn/tutorials/${item.id}`
+                    : `/app/learn/courses/${item.courseId ?? item.id}`)}>
+                  <div className="learn-icon">
+                    {item.thumbnailUrl
+                      ? <img src={item.thumbnailUrl} alt={item.title}
+                          style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 8 }} />
+                      : "📘"}
+                  </div>
+                  <div className="learn-info">
+                    <strong>{item.title}</strong>
+                    <span>{item.subject}{item.subject && " · "}{pct}% complete</span>
+                  </div>
+                </button>
+              );
+            })
           )}
         </section>
 
+        {/* ── Your Connections ── */}
         <section className="home-block">
           <div className="home-block-head">
             <h2>Your Connections</h2>
@@ -503,17 +565,18 @@ function DesktopHome({ profile, user, connections, learning, loading }) {
           {loading ? (
             <div className="learn-empty">Loading…</div>
           ) : connections.length === 0 ? (
-            <div className="learn-empty">
-              No connections yet. Accept a friend request to start chatting!
-            </div>
+            <div className="learn-empty">No connections yet. Accept a friend request to start chatting!</div>
           ) : (
             <ul className="match-list">
               {connections.slice(0, 5).map((conn) => (
                 <li key={conn.partnerId} className="match-row" style={{ cursor: "pointer" }}
-                  onClick={() => conn.conversationId ? navigate(`/app/chat/${conn.conversationId}`) : navigate("/app/chat")}>
+                  onClick={() => conn.conversationId
+                    ? navigate(`/app/chat/${conn.conversationId}`)
+                    : navigate("/app/chat")}>
                   <span className="match-av" style={{ background: avatarColor(conn.displayName) }}>
                     {conn.photoURL
-                      ? <img src={conn.photoURL} alt={conn.displayName} style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} referrerPolicy="no-referrer" />
+                      ? <img src={conn.photoURL} alt={conn.displayName} referrerPolicy="no-referrer"
+                          style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
                       : (conn.displayName || "?")[0]}
                   </span>
                   <div className="match-info">
@@ -527,12 +590,107 @@ function DesktopHome({ profile, user, connections, learning, loading }) {
             </ul>
           )}
         </section>
+
+        {/* ── Recommended for You ── */}
+        {(loading || recommended.length > 0) && (
+          <section className="home-block">
+            <div className="home-block-head">
+              <h2>Recommended for You</h2>
+              <Link to="/app/learn" className="link-btn">View all</Link>
+            </div>
+            {loading ? (
+              <div className="learn-empty">Loading…</div>
+            ) : (
+              recommended.slice(0, 3).map((course, i) => (
+                <button key={course.id ?? i} className="learn-card"
+                  style={{ textAlign: "left", cursor: "pointer", border: "none", background: "none", width: "100%", padding: 0 }}
+                  onClick={() => navigate(`/app/learn/courses/${course.id}`)}>
+                  <div className="learn-icon">
+                    {course.thumbnailUrl
+                      ? <img src={course.thumbnailUrl} alt={course.title}
+                          style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 8 }} />
+                      : "🎓"}
+                  </div>
+                  <div className="learn-info">
+                    <strong>{course.title}</strong>
+                    <span>
+                      {course.subject}
+                      {course.trending ? " · 🔥 Trending" : ""}
+                      {course.isNew ? " · ✨ New" : ""}
+                    </span>
+                  </div>
+                </button>
+              ))
+            )}
+          </section>
+        )}
+
+        {/* ── Recent Activity ── */}
+        {(loading || history.length > 0) && (
+          <section className="home-block">
+            <div className="home-block-head">
+              <h2>Recent Activity</h2>
+              <Link to="/app/progress" className="link-btn">View all</Link>
+            </div>
+            {loading ? (
+              <div className="learn-empty">Loading…</div>
+            ) : (
+              <ul className="match-list">
+                {history.slice(0, 4).map((item, i) => (
+                  <li key={item.id ?? i} className="match-row">
+                    <span className="match-av" style={{ background: "#1e3a5f", fontSize: "1.1rem" }}>
+                      {item.type === "tutorial" ? "🎬" : "📖"}
+                    </span>
+                    <div className="match-info">
+                      <strong>{item.activityText || item.title}</strong>
+                      <span>
+                        {item.subject}
+                        {item.timeAgo ? ` · ${item.timeAgo}` : ""}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+
+        {/* ── Recent Study Rooms ── */}
+        <section className="home-block">
+          <div className="home-block-head">
+            <h2>Recent Study Rooms</h2>
+            <Link to="/app/rooms" className="link-btn">View all</Link>
+          </div>
+          {loading ? (
+            <div className="learn-empty">Loading…</div>
+          ) : recentRooms.length === 0 ? (
+            <div className="learn-empty">No recent study rooms. Join or create one!</div>
+          ) : (
+            <ul className="match-list">
+              {recentRooms.slice(0, 4).map((room) => (
+                <li key={room.id} className="match-row" style={{ cursor: "pointer" }}
+                  onClick={() => navigate("/app/rooms")}>
+                  <span className="match-av" style={{ background: "#1e3a5f", fontSize: "1.1rem" }}>🏠</span>
+                  <div className="match-info">
+                    <strong>{room.subject || "Study Room"}{room.goal ? ` — ${room.goal}` : ""}</strong>
+                    <span>
+                      {room.partnerName ? `With ${room.partnerName}` : ""}
+                      {room.role ? ` · ${room.role}` : ""}
+                    </span>
+                  </div>
+                  <ChevronRight width={16} height={16} className="match-arrow" />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
       </div>
     </div>
   );
 }
 
-// ── Main export ─────────────────────────────────────────────────────────────
+// ── Main export ──────────────────────────────────────────────────────────────
 
 export default function Home() {
   const { user, profile } = useAuth();
@@ -542,52 +700,59 @@ export default function Home() {
   const [connections, setConnections] = useState([]);
   const [learning, setLearning] = useState(null);
   const [learnHome, setLearnHome] = useState(null);
+  const [recentRooms, setRecentRooms] = useState([]);
   const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
     async function load() {
-      const [connRes, learningRes, homeRes] = await Promise.allSettled([
+      const [connRes, learningRes, homeRes, roomsRes] = await Promise.allSettled([
         api.getAcceptedMatchPartners(),
         api.getMyLearning(),
         api.getLearnHome(),
+        api.getRecentRooms(),
       ]);
       if (!active) return;
-      if (connRes.status === "fulfilled") setConnections(connRes.value || []);
+      if (connRes.status    === "fulfilled") setConnections(connRes.value || []);
       if (learningRes.status === "fulfilled") setLearning(learningRes.value);
-      if (homeRes.status === "fulfilled") setLearnHome(homeRes.value);
+      if (homeRes.status    === "fulfilled") setLearnHome(homeRes.value);
+      if (roomsRes.status   === "fulfilled") setRecentRooms(roomsRes.value || []);
       setDataLoading(false);
     }
     load();
     return () => { active = false; };
   }, []);
 
+  const sharedProps = {
+    profile, user,
+    connections,
+    learning,
+    learnHome,
+    recentRooms,
+    loading: dataLoading,
+  };
+
   if (isMobile) {
     return (
       <MobileHome
-        profile={profile} user={user}
-        connections={connections} learning={learning} learnHome={learnHome}
-        loading={dataLoading} navigate={navigate}
+        {...sharedProps}
+        navigate={navigate}
         onOpenMenu={() => window.dispatchEvent(new CustomEvent("peerup:open-nav"))}
       />
     );
   }
 
-  return (
-    <DesktopHome
-      profile={profile} user={user}
-      connections={connections} learning={learning}
-      loading={dataLoading}
-    />
-  );
+  return <DesktopHome {...sharedProps} />;
 }
 
-// ── Inline SVG icons (mobile dashboard only) ────────────────────────────────
+// ── SVG Icons ────────────────────────────────────────────────────────────────
 
 function HamburgerSvg() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="18" x2="21" y2="18" />
     </svg>
   );
 }
@@ -602,7 +767,8 @@ function BellSvg() {
 function DiscoverSvg() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
     </svg>
   );
 }
