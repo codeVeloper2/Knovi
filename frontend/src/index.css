@@ -11902,17 +11902,21 @@ kbd {
     object-fit: cover;
   }
 
-  /* ── Push chat content below the fixed header ── */
+  /* ── Chat shell fills ENTIRE screen ── */
   .chat-shell {
-    margin: 0 -14px -40px;
-    /* 56px = fixed header height */
-    height: calc(100svh - 56px);
-    margin-top: 56px;
-    position: relative;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    height: 100svh;
     overflow: hidden;
   }
 
-  /* ── Conversation list fills full screen ── */
+  /* ── Conversation list fills full screen with padding for top header ── */
   .cl {
     width: 100%;
     min-width: 0;
@@ -11922,7 +11926,7 @@ kbd {
     z-index: 2;
     transition: transform 0.22s ease;
     overflow-y: auto;
-    /* no extra top padding needed — header is fixed outside .chat-shell */
+    padding-top: 56px; /* space for top header */
   }
 
   /* ── Chat room fills full screen ── */
@@ -11973,16 +11977,19 @@ kbd {
   }
   .cr-back:active { background: rgba(255,255,255,0.08); }
 
-  /* ── Chat room structure: NO duplicate definition ── */
+  /* ── Chat room structure: account for BOTH fixed headers ── */
   .cr-messages {
     flex: 1;
     overflow-y: auto;
-    padding: 0 14px; /* NO vertical padding */
-    margin-top: 50px; /* space for fixed cr-header (second header) */
-    padding-bottom: 70px; /* space for fixed input bar at bottom */
+    padding: 0 14px;
+    /* 56px (top header) + 50px (chat header) = 106px from top */
+    padding-top: 106px;
+    /* 70px for input bar at bottom */
+    padding-bottom: 70px;
     -webkit-overflow-scrolling: touch;
   }
 
+  /* Remove the margin-top since we use padding-top now */
   /* Add spacing to first and last items instead of container padding */
   .cr-messages > :first-child {
     margin-top: 12px;
