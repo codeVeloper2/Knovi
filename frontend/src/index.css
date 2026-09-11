@@ -4968,8 +4968,13 @@ kbd {
 }
 
 .cb-wrap {
-  max-width: 65%;
+  max-width: 75%;
   position: relative;
+}
+@media (min-width: 769px) {
+  .cb-wrap {
+    max-width: 55%;
+  }
 }
 
 .cb {

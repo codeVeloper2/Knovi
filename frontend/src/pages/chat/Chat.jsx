@@ -278,7 +278,7 @@ function NewChatModal({ onClose, onStart }) {
       const conv = await api.startConversation(selected.partnerId, subject, goal.trim() || null);
       onStart(conv);
     } catch (err) {
-      alert(err?.message || "Could not start chat.");
+      alert("Couldn't start the chat. Please try again.");
     } finally { setStarting(false); }
   }
 
@@ -585,7 +585,7 @@ function MessageBubble({ msg, myId, partnerName, partnerUrl, onDelete, onReport,
           <div className="cb-meta">
             <span className="cb-time">{fmtTime(msg.createdAt)}</span>
             {mine && (
-              msg.failed ? <span className="cb-tick" title="Failed">⚠️</span>
+              msg.failed ? <span className="cb-tick" title="Message not sent">⚠️</span>
               : msg.pending ? <span className="cb-tick"><ClockIcon /></span>
               : <span className="cb-tick">
                   {msg.isRead || msg.isDelivered
@@ -913,7 +913,7 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
         onConvUpdate(conv.id);
       } catch (err) {
         setMessages(prev => prev.map(m => m.id === tempId ? { ...m, failed: true } : m));
-        toast.error(err.message || "Upload failed.");
+        toast.error("Couldn't upload the file. Please try again.");
       } finally { setUploading(false); }
       return;
     }
@@ -944,7 +944,7 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
       onConvUpdate(conv.id);
     } catch (err) {
       setMessages(prev => prev.map(m => m.id === tempId ? { ...m, failed: true } : m));
-      toast.error(err.message);
+      toast.error("Couldn't send your message. Please try again.");
     } finally { setSending(false); }
   }
 
@@ -960,14 +960,14 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
     try {
       const { reactions } = await api.sendReaction(msgId, emoji);
       setMessages(prev => prev.map(m => m.id === msgId ? { ...m, reactions } : m));
-    } catch (err) { toast.error(err.message || "Couldn't react."); }
+    } catch (err) { toast.error("Couldn't add reaction. Please try again."); }
   }
 
   async function deleteForMe(msgId) {
     setPendingDelete(null);
     setMessages(prev => prev.filter(m => m.id !== msgId));
     try { await api.deleteMessage(msgId, "me"); }
-    catch (err) { toast.error(err.message || "Couldn't delete."); }
+    catch (err) { toast.error("Couldn't delete message. Please try again."); }
   }
 
   async function deleteForEveryone(msgId) {
@@ -975,14 +975,14 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
     setMessages(prev => prev.map(m => m.id === msgId ? { ...m, deleted: true, body: "", attachmentUrl: null } : m));
     try { await api.deleteMessage(msgId, "everyone"); }
     catch (err) {
-      toast.error(err.message || "Couldn't delete.");
+      toast.error("Couldn't delete message. Please try again.");
       setMessages(prev => prev.map(m => m.id === msgId ? { ...m, deleted: false } : m));
     }
   }
 
   async function reportMsg(msgId) {
     try { await api.reportMessage(msgId); toast.success("Message reported."); }
-    catch { toast.error("Couldn't report."); }
+    catch { toast.error("Couldn't report message. Please try again."); }
   }
 
   async function saveGoal() {
@@ -990,7 +990,7 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
       const res = await api.setGoal(conv.id, goalText);
       onGoalUpdate(conv.id, res.sessionGoal);
       setEditGoal(false);
-    } catch { toast.error("Couldn't update goal."); }
+    } catch { toast.error("Couldn't update goal. Please try again."); }
   }
 
   // Group messages by date

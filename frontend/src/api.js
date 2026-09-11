@@ -33,9 +33,9 @@ async function request(path, { method = "GET", body, auth = false, timeoutMs = 2
   } catch (err) {
     clearTimeout(timer);
     if (err.name === "AbortError") {
-      throw new Error("The server took too long to respond. Is the backend running?");
+      throw new Error("Connection timed out. Please check your internet and try again.");
     }
-    throw new Error("Can't reach the server. Make sure the backend is running.");
+    throw new Error("Can't connect right now. Please check your internet connection.");
   }
   clearTimeout(timer);
 
@@ -105,7 +105,7 @@ export async function uploadAvatar(file) {
     });
   } catch (err) {
     clearTimeout(timer);
-    throw new Error(err.name === "AbortError" ? "Photo upload timed out." : "Couldn't reach the server to upload the photo.");
+    throw new Error(err.name === "AbortError" ? "Photo upload timed out. Please try again." : "Couldn't upload your photo. Please check your connection.");
   }
   clearTimeout(timer);
   const data = await res.json().catch(() => ({}));
@@ -246,7 +246,7 @@ export async function uploadAttachment(convId, file) {
     });
   } catch (err) {
     clearTimeout(timer);
-    throw new Error(err.name === "AbortError" ? "Upload timed out." : "Couldn't reach the server.");
+    throw new Error(err.name === "AbortError" ? "Upload timed out. Please try again." : "Couldn't upload. Please check your connection.");
   }
   clearTimeout(timer);
   const data = await res.json().catch(() => ({}));
@@ -314,7 +314,7 @@ export async function uploadRoomMaterial(roomId, file) {
     });
   } catch (err) {
     clearTimeout(timer);
-    throw new Error(err.name === "AbortError" ? "Upload timed out." : "Couldn't reach the server.");
+    throw new Error(err.name === "AbortError" ? "Upload timed out. Please try again." : "Couldn't upload. Please check your connection.");
   }
   clearTimeout(timer);
   const data = await res.json().catch(() => ({}));
@@ -384,7 +384,7 @@ export async function uploadLearnVideo(file) {
     body: form,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail || "Video upload failed.");
+  if (!res.ok) throw new Error(data.detail || "Couldn't upload video. Please try again.");
   return data;
 }
 export async function uploadLearnThumbnail(file) {
@@ -396,7 +396,7 @@ export async function uploadLearnThumbnail(file) {
     body: form,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail || "Thumbnail upload failed.");
+  if (!res.ok) throw new Error(data.detail || "Couldn't upload thumbnail. Please try again.");
   return data;
 }
 export function toggleSaved(contentType, contentId) {
