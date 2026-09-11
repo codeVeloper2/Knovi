@@ -1046,7 +1046,7 @@ body:has(.dash) { background: var(--navy-900); }
 .dash-topbar {
   position: sticky;
   top: 0;
-  z-index: 5;
+  z-index: 50;
   display: flex;
   align-items: center;
   gap: 16px;
