@@ -2,7 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
-import { NAV_SHORTCUTS, SETTINGS_SHORTCUTS, BACK_SHORTCUT, displayKey } from "../shortcuts";
+import { NAV_SHORTCUTS, SETTINGS_SHORTCUTS, displayKey } from "../shortcuts";
 import { LogoMark } from "./Logo";
 import ShortcutsModal from "./ShortcutsModal";
 import ConfirmDialog from "./ConfirmDialog";
@@ -10,50 +10,77 @@ import * as api from "../api";
 import {
   HomeIcon, DiscoverIcon, ChatIcon, RoomsIcon, LearnIcon,
   ProgressIcon, SettingsIcon, SearchIcon, MenuIcon, LogoutIcon,
-  ChevronLeft, ChevronRight, ProfileIcon, SecurityIcon, BellIcon, BackIcon, MatchRequestsIcon,
+  ChevronLeft, ChevronRight, ProfileIcon, SecurityIcon, BellIcon, MatchRequestsIcon,
 } from "./DashIcons";
 
 const MAIN_NAV = [
-  { to: "/app", label: "Home", Icon: HomeIcon, end: true },
-  { to: "/app/discover", label: "Discover", Icon: DiscoverIcon },
-  { to: "/app/chat", label: "Chat", Icon: ChatIcon },
-  { to: "/app/match-requests", label: "Friend Requests", Icon: MatchRequestsIcon },
-  { to: "/app/rooms", label: "Study Rooms", Icon: RoomsIcon },
-  { to: "/app/learn", label: "Learn", Icon: LearnIcon },
-  { to: "/app/progress", label: "Progress", Icon: ProgressIcon },
-  { to: "/app/settings", label: "Settings", Icon: SettingsIcon },
+  { to: "/app",               label: "Home",           Icon: HomeIcon,           end: true },
+  { to: "/app/discover",      label: "Discover",        Icon: DiscoverIcon },
+  { to: "/app/chat",          label: "Chat",            Icon: ChatIcon },
+  { to: "/app/match-requests",label: "Friend Requests", Icon: MatchRequestsIcon },
+  { to: "/app/rooms",         label: "Study Rooms",     Icon: RoomsIcon },
+  { to: "/app/learn",         label: "Learn",           Icon: LearnIcon },
+  { to: "/app/progress",      label: "Progress",        Icon: ProgressIcon },
 ];
 
-const SETTINGS_NAV = [
-  { to: "/app/settings", label: "Profile", Icon: ProfileIcon, end: true },
-  { to: "/app/settings/subjects", label: "Subjects", Icon: LearnIcon },
-  { to: "/app/settings/security", label: "Security", Icon: SecurityIcon },
-  { to: "/app/settings/notifications", label: "Notifications", Icon: BellIcon },
+const SETTINGS_SUB = [
+  { to: "/app/settings",              label: "Profile",       Icon: ProfileIcon,  end: true },
+  { to: "/app/settings/subjects",     label: "Subjects",      Icon: LearnIcon },
+  { to: "/app/settings/security",     label: "Security",      Icon: SecurityIcon },
+  { to: "/app/settings/notifications",label: "Notifications", Icon: BellIcon },
 ];
 
 const STORAGE_KEY = "peerup_sidebar_collapsed";
+
+// Chevron down icon for the dropdown toggle
+function ChevronDown({ open }) {
+  return (
+    <svg
+      width="14" height="14" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
+      style={{
+        marginLeft: "auto",
+        flexShrink: 0,
+        transition: "transform 0.2s",
+        transform: open ? "rotate(180deg)" : "rotate(0deg)",
+      }}
+    >
+      <path d="m6 9 6 6 6-6"/>
+    </svg>
+  );
+}
 
 export default function DashboardLayout() {
   const { user, profile, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const inSettings = location.pathname.startsWith("/app/settings");
+
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(STORAGE_KEY) === "1");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [scOpen, setScOpen] = useState(false);
-
-  // Listen for the mobile-home hamburger custom event
-  useEffect(() => {
-    const handler = () => setMobileOpen(true);
-    window.addEventListener("peerup:open-nav", handler);
-    return () => window.removeEventListener("peerup:open-nav", handler);
-  }, []);
+  // Settings dropdown — auto-open if already on a settings route
+  const [settingsOpen, setSettingsOpen] = useState(inSettings);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [pendingMatchCount, setPendingMatchCount] = useState(0);
   const [pendingStudyCount, setPendingStudyCount] = useState(0);
   const searchRef = useRef(null);
 
-  // Poll for pending match request count and study room invitations every 30s
+  // Auto-open settings dropdown when navigating into settings
+  useEffect(() => {
+    if (inSettings) setSettingsOpen(true);
+  }, [inSettings]);
+
+  // Listen for the mobile hamburger custom event from child pages
+  useEffect(() => {
+    const handler = () => setMobileOpen(true);
+    window.addEventListener("peerup:open-nav", handler);
+    return () => window.removeEventListener("peerup:open-nav", handler);
+  }, []);
+
+  // Poll for badge counts every 30s
   useEffect(() => {
     let active = true;
     async function fetchCounts() {
@@ -70,10 +97,6 @@ export default function DashboardLayout() {
     return () => { active = false; clearInterval(interval); };
   }, []);
 
-  // Settings mode: sidebar shows the settings sub-nav.
-  const inSettings = location.pathname.startsWith("/app/settings");
-  const nav = inSettings ? SETTINGS_NAV : MAIN_NAV;
-
   function toggle() {
     setCollapsed((c) => {
       const next = !c;
@@ -82,23 +105,18 @@ export default function DashboardLayout() {
     });
   }
 
-  // ── Keyboard shortcuts (from the central registry) ──
+  // ── Keyboard shortcuts ──
   useKeyboardShortcuts([
-    // Main navigation: Ctrl/Cmd + letter -> route
     ...Object.entries(NAV_SHORTCUTS).map(([to, s]) => ({ combo: s.combo, run: () => navigate(to) })),
-    // Settings sub-nav (only meaningful in settings, but harmless elsewhere): Ctrl/Cmd + digit
     ...Object.entries(SETTINGS_SHORTCUTS).map(([to, s]) => ({ combo: s.combo, run: () => navigate(to) })),
-    // Back to main menu from settings
-    { combo: BACK_SHORTCUT.combo, run: () => navigate("/app") },
-    // Actions
     { combo: "mod+b", run: () => toggle() },
     { combo: "/", run: () => searchRef.current?.focus() },
     { combo: "?", run: () => setScOpen(true), allowInInputs: false },
   ]);
 
-  const name = profile?.displayName || user?.displayName || "peer";
+  const name    = profile?.displayName || user?.displayName || "peer";
   const initial = name.trim().slice(0, 1).toUpperCase();
-  const photo = profile?.photoURL || user?.photoURL || "";
+  const photo   = profile?.photoURL || user?.photoURL || "";
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -118,20 +136,11 @@ export default function DashboardLayout() {
       {/* ── Sidebar ── */}
       <aside className="dash-side">
         <div className="dash-side-top">
-          {inSettings ? (
-            <button className="dash-back" type="button" onClick={() => navigate("/app")} title="Back to menu (Ctrl+M)">
-              <BackIcon width={18} height={18} />
-              <span className="dash-back-label">Menu</span>
-              <span className="dash-kbd">
-                {BACK_SHORTCUT.keys.map((k, i) => <kbd key={i}>{displayKey(k)}</kbd>)}
-              </span>
-            </button>
-          ) : (
-            <div className="dash-side-brand">
-              <span className="dash-side-mark"><LogoMark size={26} /></span>
-              <span className="dash-side-name">Peer<span className="logo-accent">Up</span></span>
-            </div>
-          )}
+          <div className="dash-side-brand">
+            <span className="dash-side-mark"><LogoMark size={26} /></span>
+            <span className="dash-side-name">Peer<span className="logo-accent">Up</span></span>
+          </div>
+
           {/* Close button — mobile drawer only */}
           <button
             className="dash-side-close"
@@ -143,6 +152,7 @@ export default function DashboardLayout() {
               <path d="M18 6 6 18M6 6l12 12"/>
             </svg>
           </button>
+
           {/* Collapse button — desktop only */}
           <button
             className="dash-collapse"
@@ -155,14 +165,13 @@ export default function DashboardLayout() {
           </button>
         </div>
 
-        {inSettings && <div className="dash-side-heading">Settings</div>}
-
         <nav className="dash-nav">
-          {nav.map(({ to, label, Icon, end }) => {
-            const sc = inSettings ? SETTINGS_SHORTCUTS[to] : NAV_SHORTCUTS[to];
+          {/* ── Main nav items ── */}
+          {MAIN_NAV.map(({ to, label, Icon, end }) => {
+            const sc    = NAV_SHORTCUTS[to];
             const badge =
               (to === "/app/match-requests" && pendingMatchCount > 0) ? pendingMatchCount :
-              (to === "/app/rooms" && pendingStudyCount > 0) ? pendingStudyCount :
+              (to === "/app/rooms"           && pendingStudyCount > 0) ? pendingStudyCount :
               null;
             return (
               <NavLink
@@ -173,7 +182,6 @@ export default function DashboardLayout() {
                 onClick={() => setMobileOpen(false)}
                 title={label}
               >
-                {/* Icon wrapper — badge floats on top-right of the icon */}
                 <span className="dash-link-icon-wrap">
                   <Icon />
                   {badge != null && (
@@ -189,6 +197,57 @@ export default function DashboardLayout() {
               </NavLink>
             );
           })}
+
+          {/* ── Settings — dropdown trigger ── */}
+          <button
+            type="button"
+            className={`dash-link dash-settings-toggle ${inSettings ? "active" : ""}`}
+            onClick={() => {
+              if (collapsed) {
+                // When sidebar is collapsed, go straight to settings
+                navigate("/app/settings");
+                setMobileOpen(false);
+              } else {
+                setSettingsOpen((o) => !o);
+              }
+            }}
+            title="Settings"
+          >
+            <span className="dash-link-icon-wrap">
+              <SettingsIcon />
+            </span>
+            <span className="dash-link-label">Settings</span>
+            {!collapsed && <ChevronDown open={settingsOpen} />}
+          </button>
+
+          {/* ── Settings sub-items (dropdown) ── */}
+          {settingsOpen && !collapsed && (
+            <div className="dash-settings-dropdown">
+              {SETTINGS_SUB.map(({ to, label, Icon, end }) => {
+                const sc = SETTINGS_SHORTCUTS[to];
+                return (
+                  <NavLink
+                    key={to}
+                    to={to}
+                    end={end}
+                    className={({ isActive }) => `dash-link dash-sub-link ${isActive ? "active" : ""}`}
+                    onClick={() => setMobileOpen(false)}
+                    title={label}
+                  >
+                    <span className="dash-link-icon-wrap">
+                      <Icon />
+                    </span>
+                    <span className="dash-link-label">{label}</span>
+                    {sc && (
+                      <span className="dash-kbd">
+                        {sc.keys.map((k, i) => <kbd key={i}>{displayKey(k)}</kbd>)}
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              })}
+            </div>
+          )}
         </nav>
 
         <button className="dash-link dash-logout" type="button" onClick={() => setLogoutOpen(true)} title="Sign out">
@@ -197,7 +256,7 @@ export default function DashboardLayout() {
         </button>
       </aside>
 
-      {/* ── Main ── */}
+      {/* ── Main content ── */}
       <div className="dash-body">
         <header className="dash-topbar">
           <button className="dash-hamburger" type="button" onClick={() => setMobileOpen(true)} aria-label="Open menu">

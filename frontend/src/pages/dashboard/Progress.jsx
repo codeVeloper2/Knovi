@@ -81,10 +81,49 @@ export default function Progress() {
     let active = true;
     setLoading(true);
     setError(null);
+
+    // Try the new /api/progress endpoint first.
+    // Falls back to profile data if backend hasn't deployed yet.
     api.getProgress()
-      .then(d => { if (active) setData(d); })
-      .catch(() => { if (active) setError("Couldn't load progress. Please try again."); })
-      .finally(() => { if (active) setLoading(false); });
+      .then(d => { if (active) { setData(d); setLoading(false); } })
+      .catch(() => {
+        // Fallback: build progress from profile + existing APIs
+        import("../../api").then(async (apiModule) => {
+          try {
+            const me = await apiModule.fetchMe();
+            if (!active) return;
+            const xp        = me?.xp ?? 0;
+            const level     = me?.level;
+            const streak    = me?.streak ?? 0;
+            const sessions  = me?.sessionCount ?? 0;
+
+            // Map xp to level number
+            const levelNum = xp >= 1000 ? 5 : xp >= 600 ? 4 : xp >= 300 ? 3 : xp >= 100 ? 2 : 1;
+            const levelName = level?.name ?? (xp >= 1000 ? "Master" : xp >= 600 ? "Expert" : xp >= 300 ? "Scholar" : xp >= 100 ? "Explorer" : "Beginner");
+            const xpForNext = xp >= 1000 ? 1000 : xp >= 600 ? 1000 : xp >= 300 ? 600 : xp >= 100 ? 300 : 100;
+
+            setData({
+              xp,
+              level: levelNum,
+              levelName,
+              xpForNext,
+              dayStreak: streak,
+              badgesEarned: 0,
+              certificatesEarned: 0,
+              sessionCount: sessions,
+              allBadges: [],
+              recentBadges: [],
+              certificates: [],
+              _fallback: true,
+            });
+          } catch {
+            if (active) setError("Couldn't load progress. Please try again.");
+          } finally {
+            if (active) setLoading(false);
+          }
+        });
+      });
+
     return () => { active = false; };
   }, []);
 

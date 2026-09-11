@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../context/ToastContext";
 import { SKILL_LEVELS, SUBJECTS } from "../../../subjects";
+import SettingsMobileHeader from "./SettingsMobileHeader";
 
 const LANGUAGES = ["English", "Spanish", "French", "Arabic", "Mandarin", "Hindi", "Portuguese", "Other"];
 
@@ -57,6 +58,7 @@ export default function SettingsSubjects() {
 
   return (
     <div className="settings-page">
+      <SettingsMobileHeader />
       <h1>Subjects</h1>
       <p className="settings-sub">What you can teach and what you need help with.</p>
 

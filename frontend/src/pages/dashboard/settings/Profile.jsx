@@ -3,6 +3,7 @@ import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../context/ToastContext";
 import { GRADES } from "../../../subjects";
 import * as api from "../../../api";
+import SettingsMobileHeader from "./SettingsMobileHeader";
 
 export default function SettingsProfile() {
   const { user, profile, completeProfile, mapError } = useAuth();
@@ -86,6 +87,7 @@ export default function SettingsProfile() {
 
   return (
     <div className="settings-page">
+      <SettingsMobileHeader />
       <h1>Profile</h1>
       <p className="settings-sub">Update your name, photo, and details.</p>
 

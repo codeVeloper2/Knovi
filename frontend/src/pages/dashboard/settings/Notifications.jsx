@@ -1,4 +1,5 @@
 import { useState } from "react";
+import SettingsMobileHeader from "./SettingsMobileHeader";
 
 const OPTIONS = [
   { key: "matches", label: "New match suggestions", desc: "When we find a good study partner for you." },
@@ -38,6 +39,7 @@ export default function SettingsNotifications() {
 
   return (
     <div className="settings-page">
+      <SettingsMobileHeader />
       <h1>Notifications</h1>
       <p className="settings-sub">Choose what you want to be notified about.</p>
 

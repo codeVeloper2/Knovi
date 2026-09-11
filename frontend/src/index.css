@@ -1040,6 +1040,118 @@ body:has(.dash) { background: var(--navy-900); }
 .dash-logout { color: var(--text-dim); margin-top: auto; }
 .dash-logout:hover { color: #fca5a5; background: rgba(248,113,113,0.1); }
 
+/* ── Settings dropdown ── */
+.dash-settings-toggle {
+  width: 100%;
+  text-align: left;
+  border: none;
+  cursor: pointer;
+}
+.dash-settings-dropdown {
+  overflow: hidden;
+  animation: settingsDrop 0.18s ease-out;
+}
+@keyframes settingsDrop {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.dash-sub-link {
+  padding-left: 16px !important;
+  font-size: 0.85rem !important;
+}
+.dash-sub-link .dash-link-icon-wrap svg {
+  width: 16px;
+  height: 16px;
+}
+/* Collapsed sidebar — hide dropdown entirely */
+.dash--collapsed .dash-settings-dropdown { display: none; }
+
+/* ── Settings pages mobile header ── */
+.settings-mob-header { display: none; }
+
+@media (max-width: 768px) {
+  .settings-mob-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 52;
+    height: 56px;
+    padding: 0 16px;
+    background: #0a1020;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .settings-mob-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .settings-mob-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: #e2e8f0;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 8px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .settings-mob-menu-btn:active { background: rgba(255,255,255,0.08); }
+  .settings-mob-logo {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.02em;
+  }
+  .settings-mob-accent { color: #5b6ef5; }
+  .settings-mob-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .settings-mob-bell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 8px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .settings-mob-bell:active { background: rgba(255,255,255,0.08); }
+  .settings-mob-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #1e3a8a, #0ea5e9);
+    border: 2px solid rgba(255,255,255,0.15);
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    padding: 0;
+  }
+  .settings-mob-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  /* Push settings page content below fixed header */
+  .settings-page {
+    padding-top: 56px;
+  }
+}
+
 /* ── Body / topbar ── */
 .dash-body { display: flex; flex-direction: column; min-width: 0; }
 

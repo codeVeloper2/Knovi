@@ -4,6 +4,7 @@ import { useAuth } from "../../../context/AuthContext";
 import { useToast } from "../../../context/ToastContext";
 import { Eye, EyeOff } from "../../auth/Login";
 import ConfirmDialog from "../../../components/ConfirmDialog";
+import SettingsMobileHeader from "./SettingsMobileHeader";
 
 function PwField({ id, label, value, onChange, placeholder }) {
   const [show, setShow] = useState(false);
@@ -86,6 +87,7 @@ export default function SettingsSecurity() {
 
   return (
     <div className="settings-page">
+      <SettingsMobileHeader />
       <h1>Change Password</h1>
       <p className="settings-sub">Only available for email/password accounts.</p>
 
