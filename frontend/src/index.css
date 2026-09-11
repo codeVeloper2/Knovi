@@ -8618,10 +8618,10 @@ kbd {
   .match-card { flex-direction: column; gap: 10px; }
   .match-arrow { display: none; }
 
-  /* ── Chat — full-screen panel switching on mobile ── */
+  /* ── Chat — full-screen panel switching on mobile, but respect topbar ── */
   .chat-shell {
-    margin: -16px -14px -40px;
-    height: calc(100svh - 60px);
+    margin: 0 -14px -40px; /* Don't escape top - keep topbar visible */
+    height: calc(100svh - 56px - 40px); /* Account for topbar height + bottom padding */
     position: relative;
     overflow: hidden;
   }
