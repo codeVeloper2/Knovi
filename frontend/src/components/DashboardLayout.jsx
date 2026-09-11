@@ -132,6 +132,18 @@ export default function DashboardLayout() {
               <span className="dash-side-name">Peer<span className="logo-accent">Up</span></span>
             </div>
           )}
+          {/* Close button — mobile drawer only */}
+          <button
+            className="dash-side-close"
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            aria-label="Close menu"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M18 6 6 18M6 6l12 12"/>
+            </svg>
+          </button>
+          {/* Collapse button — desktop only */}
           <button
             className="dash-collapse"
             type="button"

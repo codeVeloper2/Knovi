@@ -907,6 +907,29 @@ body:has(.dash) { background: var(--navy-900); }
 .dash--collapsed .dash-side-top { justify-content: center; }
 .dash--collapsed .dash-side-brand { display: none; }
 
+/* Mobile sidebar close button — hidden on desktop, shown only in the mobile drawer */
+.dash-side-close {
+  display: none;
+}
+@media (max-width: 820px) {
+  .dash-side-close {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--navy-line);
+    background: var(--navy-input);
+    color: var(--text-soft);
+    border-radius: 9px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+  .dash-side-close:hover { color: #fff; border-color: var(--blue); }
+  /* Hide the desktop collapse chevron inside the drawer */
+  .dash-collapse { display: none; }
+}
+
 .dash-brand-text {
   font-size: 1.25rem;
   font-weight: 800;
@@ -8542,8 +8565,26 @@ kbd {
   .ll-upload-btn   { display: none; }
   .lh-page { padding: 20px 14px 60px; }
 
-  /* ── Discover filters — show as bottom drawer trigger ── */
-  .filters-panel { display: none; }
+  /* ── Discover filters — show as slide-up sheet on mobile ── */
+  .filters-panel {
+    position: fixed;
+    inset: 0;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-height: 92vh;
+    border-radius: 22px 22px 0 0;
+    z-index: 400;
+    overflow-y: auto;
+  }
+  .filters-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 399;
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(3px);
+  }
 
 }
 
