@@ -4447,6 +4447,91 @@ kbd {
   display: block;
 }
 
+/* ── Chat body: fixed mobile layout ── */
+.chat-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.chat-body .chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.chat-body .chat-input-bar {
+  flex-shrink: 0;
+  position: relative;
+  background: var(--navy-panel);
+  border-top: 1px solid var(--navy-line);
+}
+
+/* ── Mobile swipe-to-reply indicator ── */
+.chat-swipe-reply-icon {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(91,110,245,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  pointer-events: none;
+  z-index: 1;
+  transition: opacity 0.1s;
+}
+.chat-swipe-reply-icon.mine {
+  right: -38px;
+}
+.chat-swipe-reply-icon:not(.mine) {
+  left: -38px;
+}
+
+/* ── Mobile emoji picker bottom sheet ── */
+.chat-mobile-emoji-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--navy-bg);
+  border-top: 1px solid var(--navy-line);
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  padding: 20px 16px 28px;
+  z-index: 999;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+  animation: slideUp 0.18s ease-out;
+}
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+.chat-mobile-emoji-row {
+  display: flex;
+  justify-content: space-around;
+  gap: 8px;
+}
+.chat-mobile-emoji-btn {
+  background: transparent;
+  border: 0;
+  font-size: 2rem;
+  cursor: pointer;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, transform 0.12s;
+  -webkit-tap-highlight-color: transparent;
+}
+.chat-mobile-emoji-btn:active {
+  background: rgba(255,255,255,0.08);
+  transform: scale(0.92);
+}
+
 /* ── Right panel layout (file viewer) ── */
 .chat-shell {
   display: flex;
@@ -8547,6 +8632,15 @@ kbd {
   .chat-icon-btn { width: 32px; height: 32px; }
   .chat-messages { padding: 12px 14px; }
   .chat-input-row { padding: 8px 10px; }
+  
+  /* Mobile: ensure swipe-right icon is visible */
+  .chat-swipe-reply-icon.mine { right: -34px; }
+  .chat-swipe-reply-icon:not(.mine) { left: -34px; }
+  
+  /* Mobile: smaller emoji bottom sheet */
+  .chat-mobile-emoji-sheet { padding: 16px 12px 24px; }
+  .chat-mobile-emoji-btn { width: 48px; height: 48px; font-size: 1.8rem; }
+
 
   /* ── Study Rooms list ── */
   .study-recent-list { grid-template-columns: 1fr; }

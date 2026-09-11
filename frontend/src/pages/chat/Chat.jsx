@@ -542,15 +542,41 @@ function ConversationList({ convs, activeId, onSelect, onNew }) {
 // ── Message Bubble ────────────────────────────────────────────────
 const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "🙏", "🔥"];
 
+// Mobile emoji picker — full-width bottom sheet
+function MobileEmojiPicker({ msgId, mine, onReact, onClose }) {
+  useEffect(() => {
+    const handler = () => onClose();
+    const t = setTimeout(() => document.addEventListener("touchstart", handler), 100);
+    return () => { clearTimeout(t); document.removeEventListener("touchstart", handler); };
+  }, [onClose]);
+
+  return (
+    <div className="chat-mobile-emoji-sheet" onClick={e => e.stopPropagation()}>
+      <div className="chat-mobile-emoji-row">
+        {REACTION_EMOJIS.map(e => (
+          <button key={e} type="button" className="chat-mobile-emoji-btn"
+            onTouchEnd={ev => { ev.preventDefault(); onReact(msgId, e); onClose(); }}>
+            {e}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function MessageBubble({ msg, myId, senderName, senderUrl, onReport, onFileClick, onDelete, onReact, onReply }) {
   const mine = msg.senderId === myId;
-  const [menu, setMenu] = useState(false);       // context menu (delete/reply)
-  const [emojiBar, setEmojiBar] = useState(false); // reaction emoji bar
+  const [menu, setMenu] = useState(false);
+  const [emojiBar, setEmojiBar] = useState(false);
+  const [mobileEmoji, setMobileEmoji] = useState(false);
+  const [swipeX, setSwipeX] = useState(0);
   const fileType = getFileType(msg.attachmentName);
   const isImage = fileType === "image";
 
-  // Close menus when clicking outside
   const rowRef = useRef(null);
+  const bubbleRef = useRef(null);
+
+  // Close desktop menus when clicking outside
   useEffect(() => {
     if (!menu && !emojiBar) return;
     const handler = (e) => {
@@ -562,14 +588,71 @@ function MessageBubble({ msg, myId, senderName, senderUrl, onReport, onFileClick
     return () => document.removeEventListener("mousedown", handler);
   }, [menu, emojiBar]);
 
-  // Deleted message — show tombstone
+  // Double-tap to react (mobile)
+  const lastTapRef = useRef(0);
+  function handleTap(e) {
+    if (window.matchMedia("(hover: none)").matches) {
+      const now = Date.now();
+      if (now - lastTapRef.current < 300) {
+        e.preventDefault();
+        setMobileEmoji(v => !v);
+        setMenu(false);
+        lastTapRef.current = 0;
+      } else {
+        lastTapRef.current = now;
+      }
+    }
+  }
+
+  // Swipe-right to reply (mobile)
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const swipingRef = useRef(false);
+  const repliedRef = useRef(false);
+
+  function onTouchStart(e) {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    swipingRef.current = false;
+    repliedRef.current = false;
+  }
+
+  function onTouchMove(e) {
+    const dx = e.touches[0].clientX - touchStartX.current;
+    const dy = e.touches[0].clientY - touchStartY.current;
+    if (!swipingRef.current && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      swipingRef.current = true;
+    }
+    if (!swipingRef.current) return;
+    if (dx > 0) {
+      const capped = Math.min(Math.sqrt(dx * 18), 90);
+      setSwipeX(capped);
+      if (capped >= 60 && !repliedRef.current && navigator.vibrate) {
+        navigator.vibrate(30);
+      }
+    }
+  }
+
+  function onTouchEnd() {
+    if (swipeX >= 60 && !repliedRef.current) {
+      repliedRef.current = true;
+      onReply(msg);
+    }
+    setSwipeX(0);
+    swipingRef.current = false;
+  }
+
+  // Deleted tombstone
   if (msg.deleted) {
     return (
       <div className={`chat-msg-row ${mine ? "mine" : "theirs"}`}>
         {!mine && <Avatar url={senderUrl} name={senderName} size={32} />}
         <div className="chat-bubble-wrap">
           <div className="chat-bubble chat-bubble-deleted">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+              <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+            </svg>
             <span>This message was deleted</span>
           </div>
         </div>
@@ -577,30 +660,45 @@ function MessageBubble({ msg, myId, senderName, senderUrl, onReport, onFileClick
     );
   }
 
-  // Aggregate reactions for display: { emoji: count, myReacted: bool }
   const reactions = msg.reactions || {};
+  const showReplyHint = swipeX >= 40;
 
   return (
     <div className={`chat-msg-row ${mine ? "mine" : "theirs"}`} ref={rowRef}>
       {!mine && <Avatar url={senderUrl} name={senderName} size={32} />}
 
-      <div className="chat-bubble-wrap">
-        <div className={`chat-bubble ${mine ? "bubble-mine" : "bubble-theirs"}`}>
-          {/* ── Reply quote inside bubble ── */}
+      {showReplyHint && (
+        <div className={`chat-swipe-reply-icon ${mine ? "mine" : ""}`}
+          style={{ opacity: Math.min(1, (swipeX - 40) / 20) }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
+          </svg>
+        </div>
+      )}
+
+      <div className="chat-bubble-wrap" ref={bubbleRef}>
+        <div
+          className={`chat-bubble ${mine ? "bubble-mine" : "bubble-theirs"}`}
+          style={swipeX > 0 ? { transform: `translateX(${mine ? -swipeX : swipeX}px)`, transition: "none" } : {}}
+          onClick={handleTap}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+        >
           {msg.replyToSnapshot && (
             <div className="chat-reply-quote">
               <div className="chat-reply-quote-bar" />
               <div className="chat-reply-quote-content">
-                <span className="chat-reply-quote-name">
-                  {msg.replyToSenderName || senderName}
-                </span>
+                <span className="chat-reply-quote-name">{msg.replyToSenderName || senderName}</span>
                 <span className="chat-reply-quote-text">{msg.replyToSnapshot}</span>
               </div>
             </div>
           )}
+
           {msg.attachmentUrl ? (
             isImage ? (
-              <div className="chat-img-attachment" onClick={() => onFileClick({ url: msg.attachmentUrl, name: msg.attachmentName, type: "image" }, senderName)}>
+              <div className="chat-img-attachment"
+                onClick={() => onFileClick({ url: msg.attachmentUrl, name: msg.attachmentName, type: "image" }, senderName)}>
                 <img src={msg.attachmentUrl} alt={msg.attachmentName || "Image"} className="chat-bubble-img" />
                 <div className="chat-img-overlay">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round">
@@ -609,25 +707,29 @@ function MessageBubble({ msg, myId, senderName, senderUrl, onReport, onFileClick
                 </div>
               </div>
             ) : (
-              <div className="chat-file-card" onClick={() => onFileClick({ url: msg.attachmentUrl, name: msg.attachmentName, type: fileType }, senderName)}>
+              <div className="chat-file-card"
+                onClick={() => onFileClick({ url: msg.attachmentUrl, name: msg.attachmentName, type: fileType }, senderName)}>
                 <div className={`chat-file-card-icon ${fileType}`}><FileDocIcon /></div>
                 <div className="chat-file-card-info">
                   <div className="chat-file-card-name">{msg.attachmentName || "Attachment"}</div>
                   <div className="chat-file-card-ext">{(msg.attachmentName?.split(".").pop() || "FILE").toUpperCase()}</div>
                 </div>
                 <div className="chat-file-card-arrow">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <polyline points="9 18 15 12 9 6"/>
+                  </svg>
                 </div>
               </div>
             )
           ) : null}
+
           {msg.body ? <span className="chat-bubble-text">{msg.body}</span> : null}
 
           <div className="chat-bubble-meta">
             <span>{fmtTime(msg.createdAt)}</span>
             {mine && (
               msg.failed
-                ? <span className="chat-tick sent" title="Failed to send">⚠️</span>
+                ? <span className="chat-tick sent" title="Failed">⚠️</span>
                 : msg.pending
                   ? <span className="chat-tick pending"><ClockIcon /></span>
                   : <span className={`chat-tick ${msg.isRead ? "read" : msg.isDelivered ? "delivered" : "sent"}`}>
@@ -637,7 +739,6 @@ function MessageBubble({ msg, myId, senderName, senderUrl, onReport, onFileClick
           </div>
         </div>
 
-        {/* ── Reaction chips ── */}
         {Object.keys(reactions).length > 0 && (
           <div className={`chat-reactions ${mine ? "mine" : ""}`}>
             {Object.entries(reactions).map(([emoji, users]) => (
@@ -650,16 +751,14 @@ function MessageBubble({ msg, myId, senderName, senderUrl, onReport, onFileClick
           </div>
         )}
 
-        {/* ── Hover action bar ── */}
         <div className={`chat-msg-actions ${mine ? "mine" : "theirs"}`}>
-          {/* Emoji reaction button */}
           <button type="button" className="chat-action-btn" title="React"
             onClick={() => { setEmojiBar(v => !v); setMenu(false); }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <circle cx="12" cy="12" r="10"/><path d="M8 13s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>
+              <circle cx="12" cy="12" r="10"/><path d="M8 13s1.5 2 4 2 4-2 4-2"/>
+              <line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>
             </svg>
           </button>
-          {/* Reply button — only on partner's messages */}
           {!mine && (
             <button type="button" className="chat-action-btn" title="Reply"
               onClick={() => { onReply(msg); setMenu(false); setEmojiBar(false); }}>
@@ -668,7 +767,6 @@ function MessageBubble({ msg, myId, senderName, senderUrl, onReport, onFileClick
               </svg>
             </button>
           )}
-          {/* More (delete / report) */}
           <button type="button" className="chat-action-btn" title="More"
             onClick={() => { setMenu(v => !v); setEmojiBar(false); }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
@@ -677,7 +775,6 @@ function MessageBubble({ msg, myId, senderName, senderUrl, onReport, onFileClick
           </button>
         </div>
 
-        {/* ── Emoji picker bar ── */}
         {emojiBar && (
           <div className={`chat-emoji-bar ${mine ? "mine" : ""}`}>
             {REACTION_EMOJIS.map(e => (
@@ -689,30 +786,46 @@ function MessageBubble({ msg, myId, senderName, senderUrl, onReport, onFileClick
           </div>
         )}
 
-        {/* ── Context menu ── */}
         {menu && (
           <div className={`chat-msg-menu ${mine ? "mine" : ""}`}>
             {!mine && (
               <button type="button" onClick={() => { onReply(msg); setMenu(false); }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
+                </svg>
                 Reply
               </button>
             )}
             {mine && (
               <button type="button" className="danger" onClick={() => { onDelete(msg.id); setMenu(false); }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
+                  <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+                </svg>
                 Delete
               </button>
             )}
             {!mine && (
               <button type="button" className="danger" onClick={() => { onReport(msg.id); setMenu(false); }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+                  <line x1="4" y1="22" x2="4" y2="15"/>
+                </svg>
                 Report
               </button>
             )}
           </div>
         )}
       </div>
+
+      {mobileEmoji && (
+        <MobileEmojiPicker
+          msgId={msg.id}
+          mine={mine}
+          onReact={onReact}
+          onClose={() => setMobileEmoji(false)}
+        />
+      )}
     </div>
   );
 }
@@ -1101,8 +1214,10 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
         </div>
       )}
 
-      {/* ── Messages ── */}
-      <div className="chat-messages">
+      {/* ── Chat body: messages + input (fixed mobile layout) ── */}
+      <div className="chat-body">
+        {/* ── Messages ── */}
+        <div className="chat-messages">
         {loading && <div className="chat-msg-loading"><span className="discover-spinner" /> Loading messages…</div>}
         {groups.map((g, i) =>
           g.type === "date"
@@ -1207,6 +1322,8 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
           </button>
         </div>
       </form>
+      </div>
+      {/* ── End of chat-body ── */}
 
       {/* ── Coming soon modal ── */}
       {comingSoon && <ComingSoonModal feature={comingSoon} onClose={() => setComingSoon(null)} />}
