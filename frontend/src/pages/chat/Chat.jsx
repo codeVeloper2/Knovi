@@ -542,8 +542,22 @@ function ConversationList({ convs, activeId, onSelect, onNew }) {
 // ── Message Bubble ────────────────────────────────────────────────
 const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮", "🙏", "🔥"];
 
-// Mobile emoji picker — full-width bottom sheet
-function MobileEmojiPicker({ msgId, mine, onReact, onClose }) {
+// Telegram-style emoji picker — appears near message on double-tap
+function TelegramEmojiPicker({ msgId, mine, onReact, onClose, bubbleRef }) {
+  const [position, setPosition] = useState({ top: 0, left: 0, right: 0 });
+  
+  useEffect(() => {
+    if (bubbleRef?.current) {
+      const rect = bubbleRef.current.getBoundingClientRect();
+      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+      setPosition({
+        top: rect.bottom + scrollTop + 8,
+        left: mine ? 'auto' : rect.left,
+        right: mine ? window.innerWidth - rect.right : 'auto'
+      });
+    }
+  }, [bubbleRef, mine]);
+
   useEffect(() => {
     const handler = () => onClose();
     const t = setTimeout(() => document.addEventListener("touchstart", handler), 100);
@@ -551,15 +565,23 @@ function MobileEmojiPicker({ msgId, mine, onReact, onClose }) {
   }, [onClose]);
 
   return (
-    <div className="chat-mobile-emoji-sheet" onClick={e => e.stopPropagation()}>
-      <div className="chat-mobile-emoji-row">
-        {REACTION_EMOJIS.map(e => (
-          <button key={e} type="button" className="chat-mobile-emoji-btn"
-            onTouchEnd={ev => { ev.preventDefault(); onReact(msgId, e); onClose(); }}>
-            {e}
-          </button>
-        ))}
-      </div>
+    <div 
+      className="chat-telegram-emoji-bar" 
+      style={{ 
+        position: 'absolute',
+        top: `${position.top}px`,
+        left: position.left !== 'auto' ? `${position.left}px` : 'auto',
+        right: position.right !== 'auto' ? `${position.right}px` : 'auto',
+      }}
+      onClick={e => e.stopPropagation()}
+    >
+      {REACTION_EMOJIS.map(e => (
+        <button key={e} type="button" className="chat-telegram-emoji-btn"
+          onTouchEnd={ev => { ev.preventDefault(); onReact(msgId, e); onClose(); }}
+          onClick={() => { onReact(msgId, e); onClose(); }}>
+          {e}
+        </button>
+      ))}
     </div>
   );
 }
@@ -737,19 +759,20 @@ function MessageBubble({ msg, myId, senderName, senderUrl, onReport, onFileClick
                     </span>
             )}
           </div>
-        </div>
 
-        {Object.keys(reactions).length > 0 && (
-          <div className={`chat-reactions ${mine ? "mine" : ""}`}>
-            {Object.entries(reactions).map(([emoji, users]) => (
-              <button key={emoji} type="button"
-                className={`chat-reaction-chip ${users.includes(myId) ? "reacted" : ""}`}
-                onClick={() => onReact(msg.id, emoji)}>
-                {emoji} <span>{users.length}</span>
-              </button>
-            ))}
-          </div>
-        )}
+          {/* Telegram-style reaction chips at bottom of bubble */}
+          {Object.keys(reactions).length > 0 && (
+            <div className="chat-telegram-reactions">
+              {Object.entries(reactions).map(([emoji, users]) => (
+                <button key={emoji} type="button"
+                  className={`chat-telegram-reaction-chip ${users.includes(myId) ? "reacted" : ""}`}
+                  onClick={() => onReact(msg.id, emoji)}>
+                  {emoji} <span>{users.length}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className={`chat-msg-actions ${mine ? "mine" : "theirs"}`}>
           <button type="button" className="chat-action-btn" title="React"
@@ -818,12 +841,14 @@ function MessageBubble({ msg, myId, senderName, senderUrl, onReport, onFileClick
         )}
       </div>
 
+      {/* Telegram-style emoji picker positioned near message */}
       {mobileEmoji && (
-        <MobileEmojiPicker
+        <TelegramEmojiPicker
           msgId={msg.id}
           mine={mine}
           onReact={onReact}
           onClose={() => setMobileEmoji(false)}
+          bubbleRef={bubbleRef}
         />
       )}
     </div>

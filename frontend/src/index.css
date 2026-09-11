@@ -2232,9 +2232,9 @@ kbd {
   line-height: 1.5;
   word-break: break-word;
   position: relative;
-  /* Let bubble shrink to content */
   display: inline-block;
   max-width: 100%;
+  margin-bottom: 12px; /* Space for reactions at bottom */
 }
 .bubble-mine {
   background: #005c4b;
@@ -2431,7 +2431,86 @@ kbd {
 }
 .chat-emoji-pick:hover { transform: scale(1.3); background: rgba(255,255,255,0.07); }
 
-/* ── Reaction chips on bubble ── */
+/* ── Telegram-style reactions at bottom of bubble ── */
+.chat-telegram-reactions {
+  position: absolute;
+  bottom: -10px;
+  right: 8px;
+  display: flex;
+  gap: 3px;
+  z-index: 1;
+}
+.bubble-theirs + .chat-telegram-reactions {
+  right: auto;
+  left: 8px;
+}
+.chat-telegram-reaction-chip {
+  background: #202c33;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 1px 6px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-soft);
+  transition: all 0.15s;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+.chat-telegram-reaction-chip span { 
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+.chat-telegram-reaction-chip.reacted {
+  background: rgba(83,189,235,0.2);
+  border-color: #53bdeb;
+  color: #53bdeb;
+}
+.chat-telegram-reaction-chip:active {
+  transform: scale(0.94);
+}
+
+/* ── Telegram emoji picker bar (horizontal near message) ── */
+.chat-telegram-emoji-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: #2b3942;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 28px;
+  padding: 6px 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  z-index: 1000;
+  animation: scaleIn 0.15s ease-out;
+}
+@keyframes scaleIn {
+  from { transform: scale(0.85); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.chat-telegram-emoji-btn {
+  background: transparent;
+  border: 0;
+  font-size: 1.6rem;
+  cursor: pointer;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, transform 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.chat-telegram-emoji-btn:hover {
+  background: rgba(255,255,255,0.08);
+}
+.chat-telegram-emoji-btn:active {
+  background: rgba(255,255,255,0.12);
+  transform: scale(0.88);
+}
+
+/* ── Old reaction styles (still used outside bubble) ── */
 .chat-reactions {
   display: flex;
   flex-wrap: wrap;
@@ -4487,49 +4566,6 @@ kbd {
 }
 .chat-swipe-reply-icon:not(.mine) {
   left: -38px;
-}
-
-/* ── Mobile emoji picker bottom sheet ── */
-.chat-mobile-emoji-sheet {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: var(--navy-bg);
-  border-top: 1px solid var(--navy-line);
-  border-top-left-radius: 16px;
-  border-top-right-radius: 16px;
-  padding: 20px 16px 28px;
-  z-index: 999;
-  box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
-  animation: slideUp 0.18s ease-out;
-}
-@keyframes slideUp {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
-}
-.chat-mobile-emoji-row {
-  display: flex;
-  justify-content: space-around;
-  gap: 8px;
-}
-.chat-mobile-emoji-btn {
-  background: transparent;
-  border: 0;
-  font-size: 2rem;
-  cursor: pointer;
-  width: 52px;
-  height: 52px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.15s, transform 0.12s;
-  -webkit-tap-highlight-color: transparent;
-}
-.chat-mobile-emoji-btn:active {
-  background: rgba(255,255,255,0.08);
-  transform: scale(0.92);
 }
 
 /* ── Right panel layout (file viewer) ── */
@@ -8633,13 +8669,20 @@ kbd {
   .chat-messages { padding: 12px 14px; }
   .chat-input-row { padding: 8px 10px; }
   
+  /* Mobile: cleaner chat list like Telegram */
+  .chat-conv-item { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .chat-conv-item.active { background: rgba(91,110,245,0.12); border-bottom-color: rgba(91,110,245,0.2); }
+  .chat-conv-avatar { width: 52px; height: 52px; }
+  .chat-conv-name { font-size: 0.94rem; }
+  .chat-conv-preview { font-size: 0.84rem; margin-top: 3px; }
+  
   /* Mobile: ensure swipe-right icon is visible */
   .chat-swipe-reply-icon.mine { right: -34px; }
   .chat-swipe-reply-icon:not(.mine) { left: -34px; }
   
-  /* Mobile: smaller emoji bottom sheet */
-  .chat-mobile-emoji-sheet { padding: 16px 12px 24px; }
-  .chat-mobile-emoji-btn { width: 48px; height: 48px; font-size: 1.8rem; }
+  /* Mobile: Telegram emoji picker adjustments */
+  .chat-telegram-emoji-btn { width: 38px; height: 38px; font-size: 1.5rem; }
+  .chat-telegram-emoji-bar { padding: 5px 6px; }
 
 
   /* ── Study Rooms list ── */
