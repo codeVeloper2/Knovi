@@ -7,6 +7,7 @@ import StudentCard from "./StudentCard";
 import StudentProfilePanel from "./StudentProfilePanel";
 import FiltersPanel from "./FiltersPanel";
 import SendMatchRequestModal from "./SendMatchRequestModal";
+import NotificationsBell from "../../components/NotificationsPanel";
 
 // ── Hooks ──────────────────────────────────────────────────────────────────
 function useIsMobile() {
@@ -95,9 +96,7 @@ function MobileDiscover({
           <span className="disc-logo-text">Peer<span className="disc-logo-accent">Up</span></span>
         </div>
         <div className="disc-mobile-header-right">
-          <button className="disc-bell-btn" aria-label="Notifications">
-            <BellIcon />
-          </button>
+          <NotificationsBell className="disc-bell-btn notif-bell-btn" />
           <MobileAvatar name={name} photo={photo} size={34} />
         </div>
       </div>

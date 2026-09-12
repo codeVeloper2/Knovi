@@ -4,10 +4,10 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import * as api from "../../api";
+import NotificationsBell from "../../components/NotificationsPanel";
 
 // ─────────────────────────────────────────────────────────────────
-// Shared mobile header — hamburger/notification/profile ONLY (no back button)
-// Always shows Peer Up logo, never partner name
+// Shared mobile header — hamburger/notification/profile ONLY
 // ─────────────────────────────────────────────────────────────────
 function ChatMobileHeader() {
   const { profile, user } = useAuth();
@@ -32,13 +32,7 @@ function ChatMobileHeader() {
         </span>
       </div>
       <div className="chat-mob-header-right">
-        <button className="chat-mob-bell" aria-label="Notifications"
-          onClick={() => navigate("/app/settings/notifications")}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-          </svg>
-        </button>
+        <NotificationsBell className="chat-mob-bell notif-bell-btn" />
         <button className="chat-mob-avatar" onClick={() => navigate("/app/settings")} aria-label="Profile">
           {photo
             ? <img src={photo} alt={name} referrerPolicy="no-referrer" />
