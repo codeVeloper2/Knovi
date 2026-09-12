@@ -93,12 +93,16 @@ export default function DashboardLayout() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // Desktop: use the original subnav swap (Settings in main nav → swaps to subnav when in settings)
-  // Mobile: always show main nav WITHOUT settings (handled by separate dropdown)
-  const desktopNav = inSettings ? SETTINGS_NAV : DESKTOP_MAIN_NAV;
-  const mobileNav  = MOBILE_MAIN_NAV;
+  // Desktop: use the original subnav swap for Settings only
+  // Learn now uses dropdown on both desktop and mobile
+  const inLearn = location.pathname.startsWith("/app/learn");
+  const desktopNav = inSettings ? SETTINGS_NAV : DESKTOP_MAIN_NAV.filter(n => n.to !== "/app/learn");
+  const mobileNav  = MOBILE_MAIN_NAV.filter(n => n.to !== "/app/learn");
 
-  // Listen for hamburger events from child pages
+  // Auto-open learn dropdown when navigating into learn
+  useEffect(() => {
+    if (inLearn) setMobileLearnOpen(true);
+  }, [inLearn]);
   useEffect(() => {
     const handler = () => setMobileOpen(true);
     window.addEventListener("peerup:open-nav", handler);
@@ -218,10 +222,44 @@ export default function DashboardLayout() {
         {!isMobile && inSettings && <div className="dash-side-heading">Settings</div>}
 
         <nav className="dash-nav">
-          {/* ── DESKTOP: original subnav swap ── */}
-          {!isMobile && (desktopNav.map(({ to, label, Icon, end }) => (
-            <NavItem key={to} to={to} label={label} Icon={Icon} end={end} inSettingsNav={inSettings} />
-          )))}
+          {/* ── DESKTOP: subnav swap for Settings, dropdown for Learn ── */}
+          {!isMobile && (
+            <>
+              {desktopNav.map(({ to, label, Icon, end }) => (
+                <NavItem key={to} to={to} label={label} Icon={Icon} end={end} inSettingsNav={inSettings} />
+              ))}
+
+              {/* Learn dropdown — desktop (only shown when NOT in settings subnav) */}
+              {!inSettings && (
+                <>
+                  <button
+                    type="button"
+                    className={`dash-link dash-settings-toggle ${inLearn ? "active" : ""}`}
+                    onClick={() => setMobileLearnOpen(o => !o)}
+                    title="Learn"
+                  >
+                    <span className="dash-link-icon-wrap"><LearnIcon /></span>
+                    <span className="dash-link-label">Learn</span>
+                    {!collapsed && <ChevronDown open={mobileLearnOpen} />}
+                  </button>
+                  {mobileLearnOpen && !collapsed && (
+                    <div className="dash-settings-dropdown">
+                      {LEARN_SUB.map(({ to, label, Icon, end }) => (
+                        <NavLink
+                          key={to} to={to} end={end}
+                          className={({ isActive }) => `dash-link dash-sub-link ${isActive ? "active" : ""}`}
+                          title={label}
+                        >
+                          <span className="dash-link-icon-wrap"><Icon /></span>
+                          <span className="dash-link-label">{label}</span>
+                        </NavLink>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
 
           {/* ── MOBILE: main nav always + learn + settings dropdowns ── */}
           {isMobile && (
@@ -234,7 +272,7 @@ export default function DashboardLayout() {
               {/* Learn dropdown trigger */}
               <button
                 type="button"
-                className={`dash-link dash-settings-toggle ${location.pathname.startsWith("/app/learn") ? "active" : ""}`}
+                className={`dash-link dash-settings-toggle ${inLearn ? "active" : ""}`}
                 onClick={() => setMobileLearnOpen(o => !o)}
                 title="Learn"
               >
