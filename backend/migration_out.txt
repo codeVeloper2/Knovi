@@ -1,6 +1,0 @@
-Column does not exist yet, running migration...
-RPC failed: {"code":"PGRST202","details":"Searched for the function public.query with parameter query or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.","hint":null,"message":"Could not find the function public.query(query) in the schema cache"}
-
---- MANUAL MIGRATION NEEDED ---
-Run this SQL in your Supabase SQL editor:
-ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_delivered BOOLEAN NOT NULL DEFAULT FALSE;
