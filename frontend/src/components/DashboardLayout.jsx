@@ -14,6 +14,11 @@ import {
   ChevronLeft, ChevronRight, ProfileIcon, SecurityIcon, BellIcon, BackIcon, MatchRequestsIcon,
 } from "./DashIcons";
 
+const LEARN_SUB = [
+  { to: "/app/learn",              label: "Home",        Icon: HomeIcon,    end: true },
+  { to: "/app/learn/tutorials",    label: "Tutorials",   Icon: LearnIcon },
+];
+
 const MAIN_NAV = [
   { to: "/app",                label: "Home",           Icon: HomeIcon,           end: true },
   { to: "/app/discover",       label: "Discover",       Icon: DiscoverIcon },
@@ -72,6 +77,7 @@ export default function DashboardLayout() {
   const [loggingOut,  setLoggingOut]  = useState(false);
   // Mobile-only: settings dropdown open state
   const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
+  const [mobileLearnOpen,    setMobileLearnOpen]    = useState(false);
   const [pendingMatchCount, setPendingMatchCount] = useState(0);
   const [pendingStudyCount, setPendingStudyCount] = useState(0);
   const searchRef = useRef(null);
@@ -217,12 +223,42 @@ export default function DashboardLayout() {
             <NavItem key={to} to={to} label={label} Icon={Icon} end={end} inSettingsNav={inSettings} />
           )))}
 
-          {/* ── MOBILE: main nav always + settings dropdown ── */}
+          {/* ── MOBILE: main nav always + learn + settings dropdowns ── */}
           {isMobile && (
             <>
-              {mobileNav.map(({ to, label, Icon, end }) => (
+              {/* All main nav items except Learn (Learn gets its own dropdown) */}
+              {mobileNav.filter(n => n.to !== "/app/learn").map(({ to, label, Icon, end }) => (
                 <NavItem key={to} to={to} label={label} Icon={Icon} end={end} inSettingsNav={false} />
               ))}
+
+              {/* Learn dropdown trigger */}
+              <button
+                type="button"
+                className={`dash-link dash-settings-toggle ${location.pathname.startsWith("/app/learn") ? "active" : ""}`}
+                onClick={() => setMobileLearnOpen(o => !o)}
+                title="Learn"
+              >
+                <span className="dash-link-icon-wrap"><LearnIcon /></span>
+                <span className="dash-link-label">Learn</span>
+                <ChevronDown open={mobileLearnOpen} />
+              </button>
+
+              {/* Learn sub-items: Home + Tutorials */}
+              {mobileLearnOpen && (
+                <div className="dash-settings-dropdown">
+                  {LEARN_SUB.map(({ to, label, Icon, end }) => (
+                    <NavLink
+                      key={to} to={to} end={end}
+                      className={({ isActive }) => `dash-link dash-sub-link ${isActive ? "active" : ""}`}
+                      onClick={() => setMobileOpen(false)}
+                      title={label}
+                    >
+                      <span className="dash-link-icon-wrap"><Icon /></span>
+                      <span className="dash-link-label">{label}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              )}
 
               {/* Settings dropdown trigger */}
               <button

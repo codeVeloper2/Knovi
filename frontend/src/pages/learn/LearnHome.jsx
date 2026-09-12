@@ -3,14 +3,15 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import * as api from "../../api";
 import { SUBJECTS } from "../../subjects";
+import NotificationsBell from "../../components/NotificationsPanel";
 
-// ── per-subject accent colour ─────────────────────────────────────────────
+// ── Colour map ────────────────────────────────────────────────────────────
 const COLORS = {
-  Math: "#6366f1", English: "#3b82f6", Biology: "#22c55e",
-  Chemistry: "#f59e0b", Physics: "#eab308", History: "#a78bfa",
-  Geography: "#34d399", "Computer Science": "#06b6d4", Spanish: "#ef4444",
-  French: "#60a5fa", Art: "#f472b6", Music: "#818cf8",
-  Economics: "#f59e0b", Literature: "#a78bfa", Psychology: "#34d399",
+  Mathematics:"#6366f1",Math:"#6366f1",English:"#3b82f6",Biology:"#22c55e",
+  Chemistry:"#f59e0b",Physics:"#eab308",History:"#a78bfa",Geography:"#34d399",
+  "Computer Science":"#06b6d4",Spanish:"#ef4444",French:"#60a5fa",Art:"#f472b6",
+  Music:"#818cf8",Economics:"#f59e0b",Literature:"#a78bfa",Psychology:"#34d399",
+  Programming:"#06b6d4","Further Math":"#6366f1",Accounting:"#f59e0b",
 };
 const color = s => COLORS[s] || "#6366f1";
 
@@ -21,79 +22,152 @@ function fmtDur(sec) {
   return `${m}:${s}`;
 }
 
-// ── small shared card ─────────────────────────────────────────────────────
-function Card({ title, subject, meta, thumb, badge, progress, onClick }) {
-  const c = color(subject);
+// ── Mobile header ─────────────────────────────────────────────────────────
+function MobileHeader() {
+  const { profile, user } = useAuth();
+  const navigate = useNavigate();
+  const name    = profile?.displayName || user?.displayName || "";
+  const photo   = profile?.photoURL    || user?.photoURL    || "";
+  const initial = name.trim()[0]?.toUpperCase() || "?";
+  return (
+    <div className="ln-mob-header">
+      <div className="ln-mob-header-left">
+        <button className="ln-mob-menu-btn" aria-label="Open menu"
+          onClick={() => window.dispatchEvent(new CustomEvent("peerup:open-nav"))}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+        <span className="ln-mob-logo">Peer<span className="ln-mob-accent">Up</span></span>
+      </div>
+      <div className="ln-mob-header-right">
+        <NotificationsBell className="notif-bell-btn" />
+        <button className="ln-mob-avatar" onClick={() => navigate("/app/settings")} aria-label="Profile">
+          {photo ? <img src={photo} alt={name} referrerPolicy="no-referrer" /> : <span>{initial}</span>}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Tutorial card ─────────────────────────────────────────────────────────
+function TutCard({ t, onClick }) {
+  const c   = color(t.subject);
+  const dur = t.durationSeconds > 0
+    ? `${Math.floor(t.durationSeconds / 60)}:${String(t.durationSeconds % 60).padStart(2, "0")}`
+    : null;
   return (
     <button type="button" className="ln-card" onClick={onClick}>
       <div className="ln-card-thumb">
-        {thumb
-          ? <img src={thumb} alt={title} />
+        {t.thumbnailUrl
+          ? <img src={t.thumbnailUrl} alt={t.title} />
           : <div className="ln-card-thumb-empty" style={{ background: `${c}18` }}>
-              <svg width="28" height="28" viewBox="0 0 24 24" fill={c} opacity=".5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill={c} opacity=".4"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             </div>
         }
-        {badge && <span className="ln-card-badge">{badge}</span>}
-        {progress > 0 && (
-          <div className="ln-card-bar"><div style={{ width: `${progress}%`, background: c }} /></div>
+        <div className="play-overlay">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="white" opacity=".9"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        </div>
+        {dur && <span className="ln-card-dur">{dur}</span>}
+        {t.progressPct > 0 && !t.completed && (
+          <div className="ln-card-bar"><div style={{ width: `${t.progressPct}%`, background: c }} /></div>
         )}
       </div>
       <div className="ln-card-body">
-        <span className="ln-card-subject" style={{ color: c }}>{subject}</span>
-        <p className="ln-card-title">{title}</p>
-        {meta && <span className="ln-card-meta">{meta}</span>}
-        {progress > 0 && <span className="ln-card-pct" style={{ color: c }}>{progress}%</span>}
+        <span className="ln-card-subject" style={{ color: c }}>{t.subject}</span>
+        <p className="ln-card-title">{t.title}</p>
+        <span className="ln-card-meta">
+          {t.views > 0 ? `${t.views} views` : ""}
+          {t.views > 0 && t.rating > 0 ? " · " : ""}
+          {t.rating > 0 ? `⭐ ${t.rating}` : ""}
+        </span>
+        <span className="ln-card-creator">{t.creatorName}</span>
       </div>
     </button>
   );
 }
 
-// ── continue-watching pill ────────────────────────────────────────────────
-function ContinuePill({ item, onClick }) {
+// ── Continue watching card ────────────────────────────────────────────────
+function ContinueCard({ item, onClick }) {
   const c = color(item.subject);
   return (
-    <button type="button" className="ln-pill" onClick={onClick}>
-      <div className="ln-pill-thumb">
+    <button type="button" className="ln-continue-card" onClick={onClick}>
+      <div className="ln-continue-thumb">
         {item.thumbnailUrl
           ? <img src={item.thumbnailUrl} alt={item.title} />
-          : <div className="ln-pill-thumb-empty" style={{ background: `${c}18` }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill={c}><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          : <div className="ln-card-thumb-empty" style={{ background: `${c}18`, height: "100%" }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill={c} opacity=".5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             </div>
         }
-        <div className="ln-pill-play">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="white"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        <span className="ln-continue-subject-badge">{item.subject}</span>
+        <div className="ln-continue-play">
+          <div style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.18)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </div>
         </div>
       </div>
-      <div className="ln-pill-body">
-        <p className="ln-pill-title">{item.title}</p>
-        <div className="ln-pill-bar-row">
-          <div className="ln-pill-track"><div className="ln-pill-fill" style={{ width: `${item.percentage}%`, background: c }} /></div>
-          <span className="ln-pill-pct" style={{ color: c }}>{item.percentage}%</span>
+      <div className="ln-continue-body">
+        <div className="ln-continue-title">{item.title}</div>
+        <div className="ln-continue-creator">{item.creatorName || ""}</div>
+        <div className="ln-continue-bar-row">
+          <div className="ln-continue-bar">
+            <div className="ln-continue-fill" style={{ width: `${item.percentage}%`, background: c }} />
+          </div>
+          <span className="ln-continue-pct" style={{ color: c }}>{item.percentage}%</span>
         </div>
+        <button type="button" className="ln-continue-resume" style={{ background: c }}>Resume</button>
       </div>
     </button>
   );
 }
 
-// ── section wrapper ───────────────────────────────────────────────────────
+// ── Featured card (horizontal scroll) ────────────────────────────────────
+function FeatureCard({ t, onClick }) {
+  const c = color(t.subject);
+  const dur = t.durationSeconds > 0
+    ? `${Math.floor(t.durationSeconds / 60)}:${String(t.durationSeconds % 60).padStart(2, "0")}`
+    : null;
+  return (
+    <button type="button" className="ln-feature-card" onClick={onClick}>
+      <div className="ln-feature-thumb">
+        {t.thumbnailUrl
+          ? <img src={t.thumbnailUrl} alt={t.title} />
+          : <div className="ln-card-thumb-empty" style={{ background: `${c}18`, height: "100%" }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill={c} opacity=".5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            </div>
+        }
+        <span className="ln-feature-subject" style={{ background: c }}>{t.subject}</span>
+        {dur && <span className="ln-feature-dur">{dur}</span>}
+      </div>
+      <div className="ln-feature-body">
+        <div className="ln-feature-title">{t.title}</div>
+        <div className="ln-feature-creator">{t.creatorName}</div>
+      </div>
+    </button>
+  );
+}
+
+// ── Section wrapper ───────────────────────────────────────────────────────
 function Sec({ title, onAll, children }) {
   return (
     <section className="ln-sec">
       <div className="ln-sec-head">
         <h2 className="ln-sec-title">{title}</h2>
-        {onAll && <button type="button" className="ln-sec-all" onClick={onAll}>See all →</button>}
+        {onAll && <button type="button" className="ln-sec-all" onClick={onAll}>View all →</button>}
       </div>
       {children}
     </section>
   );
 }
 
-// ── main page ─────────────────────────────────────────────────────────────
+// ── Main ──────────────────────────────────────────────────────────────────
 export default function LearnHome() {
   const { profile } = useAuth();
-  const navigate = useNavigate();
-
+  const navigate    = useNavigate();
   const [search,  setSearch]  = useState("");
+  const [subject, setSubject] = useState("All");
   const [feed,    setFeed]    = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -101,173 +175,127 @@ export default function LearnHome() {
     api.getLearnHome().then(setFeed).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
-  const first = profile?.displayName?.split(" ")[0] || "there";
-
   function handleSearch(e) {
     e.preventDefault();
-    if (search.trim()) navigate(`/app/learn/courses?search=${encodeURIComponent(search.trim())}`);
+    if (search.trim()) navigate(`/app/learn/tutorials?search=${encodeURIComponent(search.trim())}`);
   }
-
-  function goCourse(id)   { navigate(`/app/learn/courses/${id}`); }
   function goTutorial(id) { navigate(`/app/learn/tutorials/${id}`); }
-  function goContinue(item) {
-    if (item.type === "lesson") navigate(`/app/learn/courses/${item.courseId}/lessons/${item.id}`);
-    else navigate(`/app/learn/tutorials/${item.id}`);
-  }
+
+  // Flatten all tutorials from feed for subject filter
+  const allTuts = [
+    ...(feed?.latestTutorials || []),
+    ...(feed?.popular || []),
+  ].filter((t, i, arr) => arr.findIndex(x => x.id === t.id) === i);
+
+  const filtered = subject === "All" ? allTuts : allTuts.filter(t => t.subject === subject);
 
   return (
     <div className="ln-page">
+      <MobileHeader />
 
-      {/* ── Hero ─────────────────────────────────────────────────── */}
-      <div className="ln-hero">
-        <div className="ln-hero-text">
-          <p className="ln-hero-greet">Welcome back, {first} 👋</p>
-          <h1 className="ln-hero-h1">Learn smarter,<br />together.</h1>
-          <p className="ln-hero-sub">Courses, tutorials and study tools — all in one place.</p>
-
-          <form className="ln-search" onSubmit={handleSearch}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-            </svg>
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search courses, topics or tutorials..."
-            />
-            <button type="submit">Search</button>
-          </form>
-        </div>
-
-        {/* Quick nav tiles */}
-        <div className="ln-tiles">
-          {[
-            { icon: "📚", label: "Courses",     path: "/app/learn/courses"     },
-            { icon: "🎥", label: "Tutorials",   path: "/app/learn/tutorials"   },
-            { icon: "📈", label: "My Learning", path: "/app/learn/my-learning" },
-            { icon: "🔖", label: "Saved",       path: "/app/learn/saved"       },
-            { icon: "➕", label: "Upload",      path: "/app/learn/create", accent: true },
-          ].map(t => (
-            <button
-              key={t.label}
-              type="button"
-              className={`ln-tile ${t.accent ? "ln-tile--accent" : ""}`}
-              onClick={() => navigate(t.path)}
-            >
-              <span className="ln-tile-icon">{t.icon}</span>
-              <span className="ln-tile-label">{t.label}</span>
-            </button>
-          ))}
+      {/* ── Page heading ── */}
+      <div style={{ padding: "20px 20px 0" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
+          <span style={{ fontSize: "1.6rem" }}>📖</span>
+          <div>
+            <h1 style={{ fontSize: "1.5rem", fontWeight: 900, color: "var(--text)", margin: 0 }}>Learn</h1>
+            <p style={{ fontSize: "0.85rem", color: "var(--text-dim)", margin: 0 }}>Learn something new. Share what you know.</p>
+          </div>
         </div>
       </div>
 
-      {/* ── Subject chips ─────────────────────────────────────────── */}
+      {/* ── Search ── */}
+      <form className="ln-search-wrap" style={{ marginTop: 16 }} onSubmit={handleSearch}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search tutorials, subjects, or topics..."
+        />
+      </form>
+
+      {/* ── Subject chips ── */}
       <div className="ln-chips">
-        {SUBJECTS.map(s => (
+        {["All", ...SUBJECTS].map(s => (
           <button
-            key={s}
-            type="button"
-            className="ln-chip"
+            key={s} type="button"
+            className={`ln-chip ${subject === s ? "selected" : ""}`}
             style={{ "--c": color(s) }}
-            onClick={() => navigate(`/app/learn/courses?subject=${encodeURIComponent(s)}`)}
-          >
-            {s}
-          </button>
+            onClick={() => setSubject(s)}
+          >{s}</button>
         ))}
       </div>
 
-      {loading && <div className="ln-loading"><span className="discover-spinner" /> Loading...</div>}
+      {loading && (
+        <div className="ln-loading">
+          <span className="discover-spinner" /> Loading...
+        </div>
+      )}
 
       {!loading && feed && (
         <>
-          {/* Continue Watching */}
+          {/* ── Continue Learning ── */}
           {feed.continueWatching?.length > 0 && (
-            <Sec title="Continue Watching">
-              <div className="ln-pills-row">
+            <Sec title="Continue Learning" onAll={() => navigate("/app/learn/tutorials")}>
+              <div className="ln-continue-row">
                 {feed.continueWatching.map(item => (
-                  <ContinuePill key={`${item.type}-${item.id}`} item={item} onClick={() => goContinue(item)} />
-                ))}
-              </div>
-            </Sec>
-          )}
-
-          {/* Recommended */}
-          {feed.recommended?.length > 0 && (
-            <Sec title="Recommended for You" onAll={() => navigate("/app/learn/courses")}>
-              <div className="ln-grid">
-                {feed.recommended.slice(0, 4).map(c => (
-                  <Card
-                    key={c.id}
-                    title={c.title}
-                    subject={c.subject}
-                    thumb={c.thumbnailUrl}
-                    meta={`${c.lessonsCount} lessons · ${c.durationMinutes} min${c.rating > 0 ? ` · ⭐ ${c.rating}` : ""}`}
-                    progress={c.progressPct}
-                    onClick={() => goCourse(c.id)}
+                  <ContinueCard
+                    key={`${item.type}-${item.id}`}
+                    item={item}
+                    onClick={() => navigate(`/app/learn/tutorials/${item.id}`)}
                   />
                 ))}
               </div>
             </Sec>
           )}
 
-          {/* Popular Courses */}
-          {feed.popular?.length > 0 && (
-            <Sec title="Popular Courses" onAll={() => navigate("/app/learn/courses")}>
-              <div className="ln-grid">
-                {feed.popular.slice(0, 4).map(c => (
-                  <Card
-                    key={c.id}
-                    title={c.title}
-                    subject={c.subject}
-                    thumb={c.thumbnailUrl}
-                    meta={`${c.lessonsCount} lessons · ${c.durationMinutes} min${c.rating > 0 ? ` · ⭐ ${c.rating}` : ""}`}
-                    progress={c.progressPct}
-                    onClick={() => goCourse(c.id)}
-                  />
-                ))}
-              </div>
-            </Sec>
-          )}
-
-          {/* Student Tutorials */}
+          {/* ── Featured Tutorials ── */}
           {feed.latestTutorials?.length > 0 && (
-            <Sec title="Student Tutorials" onAll={() => navigate("/app/learn/tutorials")}>
-              <div className="ln-grid">
-                {feed.latestTutorials.slice(0, 4).map(t => (
-                  <Card
-                    key={t.id}
-                    title={t.title}
-                    subject={t.subject}
-                    thumb={t.thumbnailUrl}
-                    badge={fmtDur(t.durationSeconds)}
-                    meta={`${t.views > 0 ? `${t.views} views` : ""}${t.rating > 0 ? ` · ⭐ ${t.rating}` : ""}`}
-                    progress={t.progressPct}
-                    onClick={() => goTutorial(t.id)}
-                  />
+            <Sec title="Featured Tutorials" onAll={() => navigate("/app/learn/tutorials")}>
+              <div className="ln-feature-row">
+                {feed.latestTutorials.slice(0, 6).map(t => (
+                  <FeatureCard key={t.id} t={t} onClick={() => goTutorial(t.id)} />
                 ))}
               </div>
             </Sec>
           )}
 
-          {/* Empty state */}
-          {!feed.recommended?.length && !feed.popular?.length && !feed.latestTutorials?.length && (
+          {/* ── Popular Tutorials ── */}
+          {feed.popular?.length > 0 && (
+            <Sec title="Popular Tutorials" onAll={() => navigate("/app/learn/tutorials")}>
+              <div className="ln-grid">
+                {(subject === "All"
+                  ? feed.popular.slice(0, 4)
+                  : feed.popular.filter(t => t.subject === subject).slice(0, 4)
+                ).map(t => (
+                  <TutCard key={t.id} t={t} onClick={() => goTutorial(t.id)} />
+                ))}
+              </div>
+            </Sec>
+          )}
+
+          {/* ── Empty ── */}
+          {!feed.latestTutorials?.length && !feed.popular?.length && (
             <div className="ln-empty">
               <span>🎓</span>
-              <h3>No content yet</h3>
-              <p>Be the first to upload a tutorial!</p>
+              <h3>No tutorials yet</h3>
+              <p>Be the first to share your knowledge!</p>
               <button type="button" className="ln-btn-primary" onClick={() => navigate("/app/learn/create")}>
-                Upload Tutorial
+                Create Tutorial
               </button>
             </div>
           )}
 
-          {/* Creator CTA */}
+          {/* ── Creator CTA ── */}
           <div className="ln-cta-banner">
             <div>
               <h3>Share your knowledge</h3>
               <p>Upload a tutorial and help fellow students learn.</p>
             </div>
             <button type="button" className="ln-btn-primary" onClick={() => navigate("/app/learn/create")}>
-              Become a Creator
+              Create Tutorial
             </button>
           </div>
         </>

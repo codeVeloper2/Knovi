@@ -22,17 +22,12 @@ import SettingsSubjects from "./pages/dashboard/settings/Subjects";
 import SettingsSecurity from "./pages/dashboard/settings/Security";
 import SettingsNotifications from "./pages/dashboard/settings/Notifications";
 import StudyRoomPage from "./pages/study/StudyRoom";
-import LearnPage from "./pages/learn/LearnPage";
 import LearnLayout from "./pages/learn/LearnLayout";
 import LearnHome from "./pages/learn/LearnHome";
-import CoursesPage from "./pages/learn/CoursesPage";
-import CourseDetailPage from "./pages/learn/CourseDetailPage";
-import LessonPage from "./pages/learn/LessonPage";
 import TutorialsPage from "./pages/learn/TutorialsPage";
 import TutorialDetailPage from "./pages/learn/TutorialDetailPage";
 import CreateTutorialPage from "./pages/learn/CreateTutorialPage";
-import SavedPage from "./pages/learn/SavedPage";
-import MyLearningPage from "./pages/learn/MyLearningPage";
+import MyTutorialsPage from "./pages/learn/MyTutorialsPage";
 
 function AppRoutes() {
   return (
@@ -93,14 +88,10 @@ function AppRoutes() {
           <Route path="rooms" element={<StudyRoomPage />} />
           <Route path="learn" element={<LearnLayout />}>
             <Route index element={<LearnHome />} />
-            <Route path="courses" element={<CoursesPage />} />
-            <Route path="courses/:courseId" element={<CourseDetailPage />} />
-            <Route path="courses/:courseId/lessons/:lessonId" element={<LessonPage />} />
             <Route path="tutorials" element={<TutorialsPage />} />
             <Route path="tutorials/:tutorialId" element={<TutorialDetailPage />} />
             <Route path="create" element={<CreateTutorialPage />} />
-            <Route path="saved" element={<SavedPage />} />
-            <Route path="my-learning" element={<MyLearningPage />} />
+            <Route path="my-tutorials" element={<MyTutorialsPage />} />
           </Route>
           <Route path="progress" element={<Progress />} />
           <Route path="settings">
