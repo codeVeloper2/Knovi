@@ -88,6 +88,7 @@ function AppRoutes() {
           <Route index element={<Home />} />
           <Route path="discover" element={<DiscoverPage />} />
           <Route path="chat" element={<ChatPage />} />
+          <Route path="chat/:convId" element={<ChatPage />} />
           <Route path="match-requests" element={<MatchRequestsPage />} />
           <Route path="rooms" element={<StudyRoomPage />} />
           <Route path="learn" element={<LearnLayout />}>

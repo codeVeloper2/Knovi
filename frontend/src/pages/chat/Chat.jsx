@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import * as api from "../../api";
@@ -583,9 +583,9 @@ function MessageBubble({ msg, myId, partnerName, partnerUrl, onDelete, onReport,
           </div>
         </div>
 
-        {/* Reaction chips — below bubble, outside it so they don't affect bubble width */}
+        {/* Reaction chips — WhatsApp style at bottom corner of bubble */}
         {hasReactions && (
-          <div className={`cb-reactions ${mine ? "cb-reactions--mine" : ""}`}>
+          <div className={`cb-reactions ${mine ? "cb-reactions--mine" : "cb-reactions--theirs"}`}>
             {Object.entries(reactions).map(([emoji, users]) => (
               <button
                 key={emoji}
@@ -1121,7 +1121,6 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
         {/* Reply preview */}
         {replyTo && (
           <div className="cr-reply-strip">
-            <div className="cr-reply-strip-accent" />
             <div className="cr-reply-strip-body">
               <span className="cr-reply-strip-name">{replyTo.senderName}</span>
               <span className="cr-reply-strip-text">{replyTo.body}</span>
@@ -1243,19 +1242,35 @@ function EmptyState({ onNew }) {
 export default function ChatPage() {
   const { profile, user } = useAuth();
   const toast = useToast();
+  const { convId: convIdParam } = useParams();
   const myId = parseInt(profile?.uid || user?.uid || "0", 10);
 
-  const [convs, setConvs]         = useState([]);
+  const [convs, setConvs]           = useState([]);
   const [activeConv, setActiveConv] = useState(null);
-  const [loading, setLoading]     = useState(true);
-  const [showNew, setShowNew]     = useState(false);
+  const [loading, setLoading]       = useState(true);
+  const [showNew, setShowNew]       = useState(false);
 
   const loadConvs = useCallback(async () => {
-    try { const data = await api.listConversations(); setConvs(data); }
-    catch { } finally { setLoading(false); }
+    try { const data = await api.listConversations(); setConvs(data); return data; }
+    catch { return []; } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { loadConvs(); }, [loadConvs]);
+  // Load convs, then auto-select if URL has :convId
+  useEffect(() => {
+    let active = true;
+    api.listConversations()
+      .then(data => {
+        if (!active) return;
+        setConvs(data);
+        if (convIdParam) {
+          const target = data.find(c => String(c.id) === String(convIdParam));
+          if (target) setActiveConv(target);
+        }
+      })
+      .catch(() => {})
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [convIdParam]);
 
   function handleSelect(conv) {
     setActiveConv(conv);

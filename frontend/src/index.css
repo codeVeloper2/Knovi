@@ -5212,14 +5212,19 @@ kbd {
   flex-direction: column;
   gap: 6px;
   scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 .cr-messages::-webkit-scrollbar { display: none; }
 
 .cr-loading {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   color: var(--text-dim);
   font-size: 0.85rem;
-  padding: 20px;
+  padding: 40px 20px;
+  flex: 1;
 }
 
 .cr-date-pill {
@@ -5423,44 +5428,52 @@ kbd {
   align-items: center;
 }
 
-/* Reactions below bubble */
+/* Reactions — WhatsApp style: small pill at bottom corner of bubble */
 .cb-reactions {
   position: absolute;
-  bottom: -18px;
+  bottom: -14px;
+  right: 6px;
   display: flex;
-  gap: 3px;
-  z-index: 1;
-  right: 4px;
+  gap: 2px;
+  z-index: 2;
 }
 .cb-reactions--mine {
+  right: 6px;
+  left: auto;
+}
+.cb-reactions--theirs {
+  left: 6px;
   right: auto;
-  left: 4px;
 }
 .cb-reaction {
   background: #2a3942;
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 12px;
-  padding: 2px 7px;
-  font-size: 0.75rem;
+  border: 1.5px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  padding: 1px 5px;
+  font-size: 0.78rem;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   color: var(--text-soft);
-  transition: all 0.12s;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  transition: transform 0.12s;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  line-height: 1.4;
 }
 .cb-reaction span {
-  font-size: 0.68rem;
-  font-weight: 600;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #e2e8f0;
 }
 .cb-reaction--me {
-  background: rgba(83,189,235,0.2);
-  border-color: #53bdeb;
-  color: #53bdeb;
+  background: rgba(37,211,102,0.2);
+  border-color: #25d366;
 }
-.cb-reaction:hover {
-  transform: scale(1.05);
+.cb-reaction:hover { transform: scale(1.1); }
+
+/* Bubble needs extra bottom margin when reactions present */
+.cb--has-reactions {
+  margin-bottom: 16px;
 }
 
 /* Desktop hover actions */
@@ -5601,13 +5614,7 @@ kbd {
   border-left: 3px solid var(--accent);
   border-radius: 6px;
   margin-bottom: 8px;
-}
-.cr-reply-strip-accent {
-  width: 3px;
-  background: var(--accent);
-  height: 100%;
-  position: absolute;
-  left: 0;
+  position: relative;
 }
 .cr-reply-strip-body {
   flex: 1;
