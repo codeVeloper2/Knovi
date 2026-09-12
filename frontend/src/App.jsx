@@ -3,6 +3,8 @@ import { AuthProvider } from "./context/AuthContext";
 import { ToastProvider } from "./context/ToastContext";
 import GuestRoute from "./components/GuestRoute";
 import ProtectedRoute from "./components/ProtectedRoute";
+import AdminRoute from "./components/AdminRoute";
+import CurriculumAdmin from "./pages/admin/CurriculumAdmin";
 import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
 import VerifyEmail from "./pages/auth/VerifyEmail";
@@ -101,6 +103,16 @@ function AppRoutes() {
             <Route path="notifications" element={<SettingsNotifications />} />
           </Route>
         </Route>
+
+        {/* ── Admin — curriculum management (role=admin only) ── */}
+        <Route
+          path="/admin/curriculum"
+          element={
+            <AdminRoute>
+              <CurriculumAdmin />
+            </AdminRoute>
+          }
+        />
       </Routes>
     </>
   );

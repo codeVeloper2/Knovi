@@ -8,10 +8,19 @@ from app.models.learn import (
     CourseEnrollment, SavedContent, LearnComment,
 )
 from app.models.progress import EarnedBadge, Certificate
+from app.models.curriculum import (
+    Subject, Topic, LearningObjective, Concept, Misconception,
+    LearningActivity, Question, Resource, LearningSession,
+    SessionActivityResult, TopicProgress, ResourceDownload,
+)
 
 __all__ = [
     "User", "Conversation", "Message", "MatchRequest", "StudyRoom", "RoomMaterial",
     "Course", "Lesson", "Tutorial", "VideoProgress",
     "CourseEnrollment", "SavedContent", "LearnComment",
     "EarnedBadge", "Certificate",
+    # Curriculum / Learning Session
+    "Subject", "Topic", "LearningObjective", "Concept", "Misconception",
+    "LearningActivity", "Question", "Resource", "LearningSession",
+    "SessionActivityResult", "TopicProgress", "ResourceDownload",
 ]

@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import ARRAY, Boolean, DateTime, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
@@ -40,6 +40,10 @@ class User(Base):
     # Set for accounts created / linked via Google sign-in.
     firebase_uid: Mapped[Optional[str]] = mapped_column(String(128), unique=True, index=True, nullable=True)
     provider: Mapped[str] = mapped_column(String(20), default="password", nullable=False)  # "password" | "google"
+
+    # ── Role ──
+    # "student" (default) | "admin"
+    role: Mapped[str] = mapped_column(String(20), default="student", nullable=False)
 
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # 6-digit email verification code (stored hashed) + its expiry.
@@ -84,6 +88,26 @@ class User(Base):
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False
     )
 
+    # ── Back-references populated by curriculum models ──
+    created_resources: Mapped[list] = relationship(
+        "Resource", back_populates="creator", foreign_keys="Resource.created_by"
+    )
+    learning_sessions_as_creator: Mapped[list] = relationship(
+        "LearningSession", back_populates="creator", foreign_keys="LearningSession.creator_id"
+    )
+    learning_sessions_as_partner: Mapped[list] = relationship(
+        "LearningSession", back_populates="partner", foreign_keys="LearningSession.partner_id"
+    )
+    session_activity_results: Mapped[list] = relationship(
+        "SessionActivityResult", back_populates="user", foreign_keys="SessionActivityResult.user_id"
+    )
+    topic_progress: Mapped[list] = relationship(
+        "TopicProgress", back_populates="user"
+    )
+    resource_downloads: Mapped[list] = relationship(
+        "ResourceDownload", back_populates="user"
+    )
+
     def serialize(self) -> dict:
         """Shape returned to the frontend (matches the previous API contract)."""
         return {
@@ -113,4 +137,5 @@ class User(Base):
             "profileComplete": self.profile_complete,
             "provider": self.provider,
             "hasPassword": bool(self.hashed_password),
+            "role": self.role,
         }

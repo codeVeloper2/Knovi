@@ -96,7 +96,7 @@ export default function DashboardLayout() {
   // Desktop: use the original subnav swap for Settings only
   // Learn now uses dropdown on both desktop and mobile
   const inLearn = location.pathname.startsWith("/app/learn");
-  const desktopNav = inSettings ? SETTINGS_NAV : DESKTOP_MAIN_NAV.filter(n => n.to !== "/app/learn");
+  const desktopNav = SETTINGS_NAV; // only used when inSettings
   const mobileNav  = MOBILE_MAIN_NAV.filter(n => n.to !== "/app/learn");
 
   // Auto-open learn dropdown when navigating into learn
@@ -225,38 +225,48 @@ export default function DashboardLayout() {
           {/* ── DESKTOP: subnav swap for Settings, dropdown for Learn ── */}
           {!isMobile && (
             <>
-              {desktopNav.map(({ to, label, Icon, end }) => (
-                <NavItem key={to} to={to} label={label} Icon={Icon} end={end} inSettingsNav={inSettings} />
-              ))}
-
-              {/* Learn dropdown — desktop (only shown when NOT in settings subnav) */}
-              {!inSettings && (
-                <>
-                  <button
-                    type="button"
-                    className={`dash-link dash-settings-toggle ${inLearn ? "active" : ""}`}
-                    onClick={() => setMobileLearnOpen(o => !o)}
-                    title="Learn"
-                  >
-                    <span className="dash-link-icon-wrap"><LearnIcon /></span>
-                    <span className="dash-link-label">Learn</span>
-                    {!collapsed && <ChevronDown open={mobileLearnOpen} />}
-                  </button>
-                  {mobileLearnOpen && !collapsed && (
-                    <div className="dash-settings-dropdown">
-                      {LEARN_SUB.map(({ to, label, Icon, end }) => (
-                        <NavLink
-                          key={to} to={to} end={end}
-                          className={({ isActive }) => `dash-link dash-sub-link ${isActive ? "active" : ""}`}
-                          title={label}
+              {inSettings ? (
+                /* In settings: show settings subnav only */
+                desktopNav.map(({ to, label, Icon, end }) => (
+                  <NavItem key={to} to={to} label={label} Icon={Icon} end={end} inSettingsNav={true} />
+                ))
+              ) : (
+                /* Normal nav: render each item, injecting the Learn dropdown in place of the Learn slot */
+                DESKTOP_MAIN_NAV.map(({ to, label, Icon, end }) => {
+                  if (to === "/app/learn") {
+                    return (
+                      <div key="learn-dropdown">
+                        <button
+                          type="button"
+                          className={`dash-link dash-settings-toggle ${inLearn ? "active" : ""}`}
+                          onClick={() => setMobileLearnOpen(o => !o)}
+                          title="Learn"
                         >
-                          <span className="dash-link-icon-wrap"><Icon /></span>
-                          <span className="dash-link-label">{label}</span>
-                        </NavLink>
-                      ))}
-                    </div>
-                  )}
-                </>
+                          <span className="dash-link-icon-wrap"><LearnIcon /></span>
+                          <span className="dash-link-label">Learn</span>
+                          {!collapsed && <ChevronDown open={mobileLearnOpen} />}
+                        </button>
+                        {mobileLearnOpen && !collapsed && (
+                          <div className="dash-settings-dropdown">
+                            {LEARN_SUB.map(({ to: subTo, label: subLabel, Icon: SubIcon, end: subEnd }) => (
+                              <NavLink
+                                key={subTo} to={subTo} end={subEnd}
+                                className={({ isActive }) => `dash-link dash-sub-link ${isActive ? "active" : ""}`}
+                                title={subLabel}
+                              >
+                                <span className="dash-link-icon-wrap"><SubIcon /></span>
+                                <span className="dash-link-label">{subLabel}</span>
+                              </NavLink>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+                  return (
+                    <NavItem key={to} to={to} label={label} Icon={Icon} end={end} inSettingsNav={false} />
+                  );
+                })
               )}
             </>
           )}

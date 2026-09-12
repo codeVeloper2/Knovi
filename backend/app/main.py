@@ -14,6 +14,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from app.api.v1 import ai, auth, chat, learn, match, notifications, profile, progress, rooms, users
+from app.api.v1 import admin_curriculum
 from app.api.v1.auth import limiter
 from app.core.config import settings
 from app.core.database import init_models
@@ -49,3 +50,6 @@ app.include_router(rooms.router,   prefix="/api",        tags=["rooms"])
 app.include_router(learn.router,   prefix="/api",        tags=["learn"])
 app.include_router(progress.router,       prefix="/api", tags=["progress"])
 app.include_router(notifications.router,  prefix="/api", tags=["notifications"])
+
+# ── Admin (curriculum management — requires role=admin) ──
+app.include_router(admin_curriculum.router, prefix="/api/admin", tags=["admin-curriculum"])

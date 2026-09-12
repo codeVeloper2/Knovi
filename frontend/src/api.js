@@ -433,3 +433,47 @@ export function getProgressCertificates() {
 export function getNotifications() {
   return request("/api/notifications", { auth: true });
 }
+
+// ── Curriculum Admin API ─────────────────────────────────────
+// All calls require an admin JWT (the server enforces role=admin).
+
+// Subjects
+export const adminGetSubjects  = ()         => request("/api/admin/subjects",        { auth: true });
+export const adminCreateSubject = (body)    => request("/api/admin/subjects",        { method: "POST", body, auth: true });
+export const adminUpdateSubject = (id, body)=> request(`/api/admin/subjects/${id}`,  { method: "PATCH", body, auth: true });
+export const adminDeleteSubject = (id)      => request(`/api/admin/subjects/${id}`,  { method: "DELETE", auth: true });
+
+// Topics
+export const adminGetTopics    = (subjectId) =>
+  request(`/api/admin/topics${subjectId ? `?subject_id=${subjectId}` : ""}`, { auth: true });
+export const adminCreateTopic  = (body)     => request("/api/admin/topics",          { method: "POST", body, auth: true });
+export const adminGetTopic     = (id)       => request(`/api/admin/topics/${id}`,    { auth: true });
+export const adminUpdateTopic  = (id, body) => request(`/api/admin/topics/${id}`,    { method: "PATCH", body, auth: true });
+export const adminDeleteTopic  = (id)       => request(`/api/admin/topics/${id}`,    { method: "DELETE", auth: true });
+
+// Child resources (objectives, concepts, misconceptions, activities, questions, resources)
+const _child = (topicId, type) => `/api/admin/topics/${topicId}/${type}`;
+
+export const adminAddObjective    = (tid, body) => request(_child(tid, "objectives"),    { method: "POST", body, auth: true });
+export const adminUpdateObjective = (tid, id, body) => request(`${_child(tid, "objectives")}/${id}`, { method: "PATCH", body, auth: true });
+export const adminDeleteObjective = (tid, id)   => request(`${_child(tid, "objectives")}/${id}`, { method: "DELETE", auth: true });
+
+export const adminAddConcept      = (tid, body) => request(_child(tid, "concepts"),      { method: "POST", body, auth: true });
+export const adminUpdateConcept   = (tid, id, body) => request(`${_child(tid, "concepts")}/${id}`, { method: "PATCH", body, auth: true });
+export const adminDeleteConcept   = (tid, id)   => request(`${_child(tid, "concepts")}/${id}`, { method: "DELETE", auth: true });
+
+export const adminAddMisconception    = (tid, body) => request(_child(tid, "misconceptions"), { method: "POST", body, auth: true });
+export const adminUpdateMisconception = (tid, id, body) => request(`${_child(tid, "misconceptions")}/${id}`, { method: "PATCH", body, auth: true });
+export const adminDeleteMisconception = (tid, id)   => request(`${_child(tid, "misconceptions")}/${id}`, { method: "DELETE", auth: true });
+
+export const adminAddActivity     = (tid, body) => request(_child(tid, "activities"),    { method: "POST", body, auth: true });
+export const adminUpdateActivity  = (tid, id, body) => request(`${_child(tid, "activities")}/${id}`, { method: "PATCH", body, auth: true });
+export const adminDeleteActivity  = (tid, id)   => request(`${_child(tid, "activities")}/${id}`, { method: "DELETE", auth: true });
+
+export const adminAddQuestion     = (tid, body) => request(_child(tid, "questions"),     { method: "POST", body, auth: true });
+export const adminUpdateQuestion  = (tid, id, body) => request(`${_child(tid, "questions")}/${id}`, { method: "PATCH", body, auth: true });
+export const adminDeleteQuestion  = (tid, id)   => request(`${_child(tid, "questions")}/${id}`, { method: "DELETE", auth: true });
+
+export const adminAddResource     = (tid, body) => request(_child(tid, "resources"),     { method: "POST", body, auth: true });
+export const adminUpdateResource  = (tid, id, body) => request(`${_child(tid, "resources")}/${id}`, { method: "PATCH", body, auth: true });
+export const adminDeleteResource  = (tid, id)   => request(`${_child(tid, "resources")}/${id}`, { method: "DELETE", auth: true });

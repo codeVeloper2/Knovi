@@ -130,6 +130,10 @@ async def init_models() -> None:
         await conn.execute(text(
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity_date TIMESTAMPTZ"
         ))
+        # ── Role column (added for curriculum admin authorization) ──
+        await conn.execute(text(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'student'"
+        ))
 
         # ── Progress tables (created by create_all; these guard indexes) ──
         await conn.execute(text(
