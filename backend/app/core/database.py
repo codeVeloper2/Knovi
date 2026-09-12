@@ -57,6 +57,7 @@ async def init_models() -> None:
         return
     # Import models so they're registered on Base.metadata before create_all.
     from app import models  # noqa: F401
+    from app.core.seed_curriculum import seed_curriculum_data
     from sqlalchemy import text
 
     async with engine.begin() as conn:
@@ -142,3 +143,55 @@ async def init_models() -> None:
         await conn.execute(text(
             "CREATE INDEX IF NOT EXISTS idx_certificates_user ON certificates(user_id)"
         ))
+
+        # ── Curriculum tables (Learning Session foundation) ──
+        # These will be created by create_all() from the curriculum models.
+        # Add indexes for foreign keys to optimize queries:
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_topics_subject ON topics(subject_id)"
+        ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_learning_objectives_topic ON learning_objectives(topic_id)"
+        ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_concepts_objective ON concepts(objective_id)"
+        ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_misconceptions_concept ON misconceptions(concept_id)"
+        ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_learning_activities_objective ON learning_activities(objective_id)"
+        ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_questions_concept ON questions(concept_id)"
+        ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_resources_topic ON resources(topic_id)"
+        ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_learning_sessions_user ON learning_sessions(user_id)"
+        ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_learning_sessions_objective ON learning_sessions(objective_id)"
+        ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_session_activity_results_session ON session_activity_results(session_id)"
+        ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_session_activity_results_activity ON session_activity_results(activity_id)"
+        ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_topic_progress_user ON topic_progress(user_id)"
+        ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_topic_progress_topic ON topic_progress(topic_id)"
+        ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_resource_downloads_user ON resource_downloads(user_id)"
+        ))
+        await conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_resource_downloads_resource ON resource_downloads(resource_id)"
+        ))
+    
+    # Seed initial curriculum data (subjects)
+    await seed_curriculum_data(engine)
