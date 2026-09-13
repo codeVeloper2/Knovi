@@ -57,14 +57,13 @@ function OverviewTab({ topic, subjects, onTopicUpdated }) {
     slug:        topic.slug,
     description: topic.description || "",
     difficulty:  topic.difficulty  || "intermediate",
-    is_active:   topic.is_active,
+    is_active:   topic.isActive,
   });
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState("");
   const [ok, setOk]     = useState("");
 
-  const subjectName = subjects.find((s) => s.id === topic.subject_id)?.name ?? "Unknown";
-
+  const subjectName = subjects.find((s) => s.id === topic.subjectId)?.name ?? "Unknown";
   async function handleSave(e) {
     e.preventDefault();
     setBusy(true); setErr(""); setOk("");
@@ -98,8 +97,8 @@ function OverviewTab({ topic, subjects, onTopicUpdated }) {
           <div className="adm-dl-row">
             <dt>Status</dt>
             <dd>
-              <span className={`adm-badge ${topic.is_active ? "adm-badge-green" : "adm-badge-grey"}`}>
-                {topic.is_active ? "Active" : "Inactive"}
+              <span className={`adm-badge ${topic.isActive ? "adm-badge-green" : "adm-badge-grey"}`}>
+                {topic.isActive ? "Active" : "Inactive"}
               </span>
             </dd>
           </div>
@@ -182,7 +181,7 @@ function ObjectivesTab({ topicId }) {
       const item = await api.adminAddObjective(topicId, {
         title: f.title, description: f.description, order_index: Number(f.order_index),
       });
-      setItems((ii) => [...ii, item].sort((a, b) => a.order_index - b.order_index));
+      setItems((ii) => [...ii, item].sort((a, b) => a.orderIndex - b.orderIndex));
       reset(); setMsg({ ok: "Objective added." });
     } catch (e) { setMsg({ err: e.message }); }
     finally { setBusy(false); }
@@ -225,7 +224,7 @@ function ObjectivesTab({ topicId }) {
               ) : (
                 <li key={item.id} className="adm-content-item">
                   <div className="adm-item-meta">
-                    <span className="adm-item-order">#{item.order_index}</span>
+                    <span className="adm-item-order">#{item.orderIndex}</span>
                     <div>
                       <p className="adm-item-title">{item.title}</p>
                       <p className="adm-item-sub">{item.description}</p>
@@ -268,7 +267,7 @@ function ObjectivesTab({ topicId }) {
 }
 
 function InlineEditObjective({ item, onSave, onCancel }) {
-  const [f, set] = useState({ title: item.title, description: item.description, order_index: item.order_index });
+  const [f, set] = useState({ title: item.title, description: item.description, order_index: item.orderIndex });
   return (
     <li className="adm-content-item adm-content-item-editing">
       <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
@@ -357,9 +356,9 @@ function ConceptsTab({ topicId }) {
                   <div style={{ flex: 1 }}>
                     <p className="adm-item-title">{item.name}</p>
                     <p className="adm-item-sub">{item.explanation}</p>
-                    {item.key_points?.length > 0 && (
+                    {item.keyPoints?.length > 0 && (
                       <ul className="adm-kp-list">
-                        {item.key_points.map((kp, i) => <li key={i}>{kp}</li>)}
+                        {item.keyPoints.map((kp, i) => <li key={i}>{kp}</li>)}
                       </ul>
                     )}
                   </div>
@@ -404,7 +403,7 @@ function InlineEditConcept({ item, onSave, onCancel }) {
   const [f, set] = useState({
     name: item.name,
     explanation: item.explanation,
-    key_points_raw: (item.key_points || []).join("\n"),
+    key_points_raw: (item.keyPoints || []).join("\n"),
   });
   function handleSave() {
     onSave({
@@ -494,8 +493,8 @@ function MisconceptionsTab({ topicId, concepts }) {
                   <p className="adm-item-text">{item.correction}</p>
                   <p className="adm-item-label">Hint</p>
                   <p className="adm-item-text adm-item-hint">{item.hint}</p>
-                  {item.concept_id && (
-                    <p className="adm-item-sub">Related concept: <em>{conceptName(item.concept_id)}</em></p>
+                  {item.conceptId && (
+                    <p className="adm-item-sub">Related concept: <em>{conceptName(item.conceptId)}</em></p>
                   )}
                 </div>
                 <div className="adm-item-actions">
@@ -573,7 +572,7 @@ function ActivitiesTab({ topicId }) {
         type: f.type, title: f.title,
         prompt: f.prompt || null, order_index: Number(f.order_index),
       });
-      setItems((ii) => [...ii, item].sort((a, b) => a.order_index - b.order_index));
+      setItems((ii) => [...ii, item].sort((a, b) => a.orderIndex - b.orderIndex));
       reset(); setMsg({ ok: "Activity added." });
     } catch (e) { setMsg({ err: e.message }); }
     finally { setBusy(false); }
@@ -604,7 +603,7 @@ function ActivitiesTab({ topicId }) {
           <ul className="adm-content-list">
             {items.map((item) => (
               <li key={item.id} className="adm-content-item">
-                <span className="adm-item-order">#{item.order_index}</span>
+                <span className="adm-item-order">#{item.orderIndex}</span>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                     <span className={`adm-badge ${typeColors[item.type] ?? "adm-badge-grey"}`}>
@@ -733,8 +732,8 @@ function QuestionsTab({ topicId, activities }) {
               <li key={item.id} className="adm-content-item">
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                    <span className={`adm-badge ${qtColors[item.question_type] ?? "adm-badge-grey"}`}>
-                      {item.question_type}
+                    <span className={`adm-badge ${qtColors[item.questionType] ?? "adm-badge-grey"}`}>
+                      {item.questionType}
                     </span>
                     <span className="adm-badge adm-badge-grey">{item.difficulty}</span>
                   </div>
@@ -1032,7 +1031,7 @@ export default function TopicDetailPage() {
   if (error)   return <div className="adm-page"><p className="adm-page-err">{error}</p></div>;
   if (!topic)  return null;
 
-  const subjectName = subjects.find((s) => s.id === topic.subject_id)?.name ?? "Unknown";
+  const subjectName = subjects.find((s) => s.id === topic.subjectId)?.name ?? "Unknown";
   const diffClass = { beginner: "adm-badge-teal", intermediate: "adm-badge-blue", advanced: "adm-badge-purple" };
 
   return (
@@ -1057,8 +1056,8 @@ export default function TopicDetailPage() {
                 {topic.difficulty.charAt(0).toUpperCase() + topic.difficulty.slice(1)}
               </span>
             )}
-            <span className={`adm-badge ${topic.is_active ? "adm-badge-green" : "adm-badge-grey"}`}>
-              {topic.is_active ? "Active" : "Inactive"}
+            <span className={`adm-badge ${topic.isActive ? "adm-badge-green" : "adm-badge-grey"}`}>
+              {topic.isActive ? "Active" : "Inactive"}
             </span>
           </div>
           {topic.description && <p className="adm-page-sub">{topic.description}</p>}

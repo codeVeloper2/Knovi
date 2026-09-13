@@ -19,12 +19,12 @@ const DIFFICULTIES = ["beginner", "intermediate", "advanced"];
 function TopicModal({ topic, subjects, onClose, onSaved }) {
   const editing = !!topic;
   const [form, setForm] = useState({
-    subject_id:  topic?.subject_id  || (subjects[0]?.id ?? ""),
+    subject_id:  topic?.subjectId   || (subjects[0]?.id ?? ""),
     name:        topic?.name        || "",
     slug:        topic?.slug        || "",
     description: topic?.description || "",
     difficulty:  topic?.difficulty  || "intermediate",
-    is_active:   topic?.is_active   ?? true,
+    is_active:   topic?.isActive    ?? true,
   });
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState("");
@@ -245,7 +245,7 @@ export default function TopicsPage() {
   }
 
   const displayed = filter
-    ? topics.filter((t) => String(t.subject_id) === filter)
+    ? topics.filter((t) => String(t.subjectId) === filter)
     : topics;
 
   const diffClass = (d) => ({
@@ -329,7 +329,7 @@ export default function TopicsPage() {
                     </Link>
                   </td>
                   <td>
-                    <span className="adm-tag">{subjectName(t.subject_id)}</span>
+                    <span className="adm-tag">{subjectName(t.subjectId)}</span>
                   </td>
                   <td>
                     {t.difficulty ? (
@@ -339,8 +339,8 @@ export default function TopicsPage() {
                     ) : "—"}
                   </td>
                   <td>
-                    <span className={`adm-badge ${t.is_active ? "adm-badge-green" : "adm-badge-grey"}`}>
-                      {t.is_active ? "Active" : "Inactive"}
+                    <span className={`adm-badge ${t.isActive ? "adm-badge-green" : "adm-badge-grey"}`}>
+                      {t.isActive ? "Active" : "Inactive"}
                     </span>
                   </td>
                   <td className="adm-table-actions">

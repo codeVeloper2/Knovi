@@ -1,7 +1,10 @@
 """Pydantic request/response schemas for the Curriculum Admin API.
 
 All request bodies use StrictModel (extra="forbid") so typos are caught
-immediately at the API boundary.  Response shapes use plain BaseModel.
+immediately at the API boundary.
+
+Response (*Out) schemas use the SAME camelCase keys that each model's
+serialize() method returns, so SubjectOut(**subject.serialize()) always works.
 """
 from __future__ import annotations
 
@@ -37,14 +40,15 @@ class SubjectUpdate(StrictModel):
 
 
 class SubjectOut(BaseModel):
+    """Matches Subject.serialize() — all keys are camelCase."""
     id:          int
     name:        str
     slug:        str
     description: Optional[str]
     icon:        Optional[str]
-    is_active:   bool
-    created_at:  str
-    updated_at:  str
+    isActive:    bool
+    createdAt:   str
+    updatedAt:   str
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -69,15 +73,16 @@ class TopicUpdate(StrictModel):
 
 
 class TopicOut(BaseModel):
+    """Matches Topic.serialize() — all keys are camelCase."""
     id:          int
-    subject_id:  int
+    subjectId:   int
     name:        str
     slug:        str
     description: Optional[str]
     difficulty:  Optional[str]
-    is_active:   bool
-    created_at:  str
-    updated_at:  str
+    isActive:    bool
+    createdAt:   str
+    updatedAt:   str
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -97,13 +102,14 @@ class ObjectiveUpdate(StrictModel):
 
 
 class ObjectiveOut(BaseModel):
+    """Matches LearningObjective.serialize()."""
     id:          int
-    topic_id:    int
+    topicId:     int
     title:       str
     description: str
-    order_index: int
-    created_at:  str
-    updated_at:  str
+    orderIndex:  int
+    createdAt:   str
+    updatedAt:   str
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -135,13 +141,14 @@ class ConceptUpdate(StrictModel):
 
 
 class ConceptOut(BaseModel):
+    """Matches Concept.serialize()."""
     id:          int
-    topic_id:    int
+    topicId:     int
     name:        str
     explanation: str
-    key_points:  list[str]
-    created_at:  str
-    updated_at:  str
+    keyPoints:   list[str]
+    createdAt:   str
+    updatedAt:   str
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -163,14 +170,15 @@ class MisconceptionUpdate(StrictModel):
 
 
 class MisconceptionOut(BaseModel):
+    """Matches Misconception.serialize()."""
     id:            int
-    topic_id:      int
-    concept_id:    Optional[int]
+    topicId:       int
+    conceptId:     Optional[int]
     misconception: str
     correction:    str
     hint:          str
-    created_at:    str
-    updated_at:    str
+    createdAt:     str
+    updatedAt:     str
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -212,15 +220,16 @@ class ActivityUpdate(StrictModel):
 
 
 class ActivityOut(BaseModel):
+    """Matches LearningActivity.serialize()."""
     id:          int
-    topic_id:    int
+    topicId:     int
     type:        str
     title:       str
     prompt:      Optional[str]
-    order_index: int
+    orderIndex:  int
     metadata:    Optional[dict[str, Any]]
-    created_at:  str
-    updated_at:  str
+    createdAt:   str
+    updatedAt:   str
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -264,18 +273,19 @@ class QuestionUpdate(StrictModel):
 
 
 class QuestionOut(BaseModel):
+    """Matches Question.serialize()."""
     id:            int
-    topic_id:      int
-    activity_id:   Optional[int]
+    topicId:       int
+    activityId:    Optional[int]
     question:      str
-    question_type: str
+    questionType:  str
     difficulty:    str
     answer:        Optional[str]
     explanation:   Optional[str]
     hint:          Optional[str]
     options:       Optional[list[Any]]
-    created_at:    str
-    updated_at:    str
+    createdAt:     str
+    updatedAt:     str
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -323,41 +333,42 @@ class ResourceUpdate(StrictModel):
 
 
 class ResourceOut(BaseModel):
+    """Matches Resource.serialize()."""
     id:              int
-    topic_id:        Optional[int]
+    topicId:         Optional[int]
     title:           str
     type:            str
     description:     Optional[str]
     url:             Optional[str]
-    file_url:        Optional[str]
-    thumbnail_url:   Optional[str]
+    fileUrl:         Optional[str]
+    thumbnailUrl:    Optional[str]
     duration:        Optional[str]
-    is_downloadable: bool
+    isDownloadable:  bool
     source:          Optional[str]
-    is_verified:     bool
-    created_by:      Optional[int]
-    created_at:      str
-    updated_at:      str
+    isVerified:      bool
+    createdBy:       Optional[int]
+    createdAt:       str
+    updatedAt:       str
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TOPIC DETAIL (admin full view)
+# TOPIC DETAIL (full nested view)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TopicDetailOut(BaseModel):
     """Full topic view including all related curriculum content."""
     id:                  int
-    subject_id:          int
+    subjectId:           int
     name:                str
     slug:                str
     description:         Optional[str]
     difficulty:          Optional[str]
-    is_active:           bool
-    created_at:          str
-    updated_at:          str
-    learning_objectives: list[ObjectiveOut]   = []
-    concepts:            list[ConceptOut]     = []
+    isActive:            bool
+    createdAt:           str
+    updatedAt:           str
+    learning_objectives: list[ObjectiveOut]    = []
+    concepts:            list[ConceptOut]      = []
     misconceptions:      list[MisconceptionOut] = []
-    learning_activities: list[ActivityOut]   = []
-    questions:           list[QuestionOut]   = []
-    resources:           list[ResourceOut]   = []
+    learning_activities: list[ActivityOut]     = []
+    questions:           list[QuestionOut]     = []
+    resources:           list[ResourceOut]     = []

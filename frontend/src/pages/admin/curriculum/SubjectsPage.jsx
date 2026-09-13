@@ -20,7 +20,7 @@ function SubjectModal({ subject, onClose, onSaved }) {
     slug:        subject?.slug        || "",
     description: subject?.description || "",
     icon:        subject?.icon        || "",
-    is_active:   subject?.is_active   ?? true,
+    is_active:   subject?.isActive    ?? true,
   });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -221,7 +221,7 @@ export default function SubjectsPage() {
 
   async function toggleActive(subj) {
     try {
-      const updated = await api.adminUpdateSubject(subj.id, { is_active: !subj.is_active });
+      const updated = await api.adminUpdateSubject(subj.id, { is_active: !subj.isActive });
       handleSaved(updated);
     } catch (e) {
       alert(e.message);
@@ -275,8 +275,8 @@ export default function SubjectsPage() {
                   <td><code className="adm-code">{s.slug}</code></td>
                   <td className="adm-table-desc">{s.description || "—"}</td>
                   <td>
-                    <span className={`adm-badge ${s.is_active ? "adm-badge-green" : "adm-badge-grey"}`}>
-                      {s.is_active ? "Active" : "Inactive"}
+                    <span className={`adm-badge ${s.isActive ? "adm-badge-green" : "adm-badge-grey"}`}>
+                      {s.isActive ? "Active" : "Inactive"}
                     </span>
                   </td>
                   <td className="adm-table-actions">
