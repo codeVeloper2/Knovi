@@ -4,7 +4,20 @@ import { ToastProvider } from "./context/ToastContext";
 import GuestRoute from "./components/GuestRoute";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminRoute from "./components/AdminRoute";
+
+// ── Admin pages ──
+import AdminLayout from "./pages/admin/AdminLayout";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminPlaceholder from "./pages/admin/AdminPlaceholder";
+import SubjectsPage from "./pages/admin/curriculum/SubjectsPage";
+import TopicsPage from "./pages/admin/curriculum/TopicsPage";
+import TopicDetailPage from "./pages/admin/curriculum/TopicDetailPage";
+import CurriculumPlaceholder from "./pages/admin/curriculum/CurriculumPlaceholder";
+
+// ── Legacy admin page (still reachable for backwards compat) ──
 import CurriculumAdmin from "./pages/admin/CurriculumAdmin";
+
+// ── Auth pages ──
 import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
 import VerifyEmail from "./pages/auth/VerifyEmail";
@@ -12,6 +25,8 @@ import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
 import MobileWelcome from "./pages/auth/MobileWelcome";
 import Onboarding from "./pages/onboarding/Onboarding";
+
+// ── Student app pages ──
 import DashboardLayout from "./components/DashboardLayout";
 import Home from "./pages/dashboard/Home";
 import Progress from "./pages/dashboard/Progress";
@@ -74,6 +89,8 @@ function AppRoutes() {
         {/* Legacy routes now point to the unified onboarding wizard. */}
         <Route path="/agreement" element={<Navigate to="/onboarding" replace />} />
         <Route path="/profile-setup" element={<Navigate to="/onboarding" replace />} />
+
+        {/* ── Student app ── */}
         <Route
           path="/app"
           element={
@@ -104,12 +121,40 @@ function AppRoutes() {
           </Route>
         </Route>
 
-        {/* ── Admin — curriculum management (role=admin only) ── */}
+        {/* ── Admin — full dashboard layout ── */}
+        <Route
+          path="/admin"
+          element={
+            <AdminRoute>
+              <AdminLayout />
+            </AdminRoute>
+          }
+        >
+          {/* Dashboard */}
+          <Route index element={<AdminDashboard />} />
+
+          {/* Curriculum sub-routes */}
+          <Route path="curriculum/subjects" element={<SubjectsPage />} />
+          <Route path="curriculum/topics" element={<TopicsPage />} />
+          <Route path="curriculum/topics/:topicId" element={<TopicDetailPage />} />
+          <Route path="curriculum/concepts"       element={<CurriculumPlaceholder section="concepts" />} />
+          <Route path="curriculum/objectives"     element={<CurriculumPlaceholder section="objectives" />} />
+          <Route path="curriculum/misconceptions" element={<CurriculumPlaceholder section="misconceptions" />} />
+          <Route path="curriculum/activities"     element={<CurriculumPlaceholder section="activities" />} />
+          <Route path="curriculum/questions"      element={<CurriculumPlaceholder section="questions" />} />
+          <Route path="curriculum/resources"      element={<CurriculumPlaceholder section="resources" />} />
+
+          {/* Other admin sections */}
+          <Route path="users"  element={<AdminPlaceholder title="Users"  icon="👤" description="Manage student accounts and roles." />} />
+          <Route path="system" element={<AdminPlaceholder title="System" icon="⚙️"  description="System configuration and settings." />} />
+        </Route>
+
+        {/* Legacy /admin/curriculum URL — redirect into new layout */}
         <Route
           path="/admin/curriculum"
           element={
             <AdminRoute>
-              <CurriculumAdmin />
+              <Navigate to="/admin/curriculum/subjects" replace />
             </AdminRoute>
           }
         />

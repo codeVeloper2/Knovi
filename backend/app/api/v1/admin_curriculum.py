@@ -7,10 +7,11 @@ Route prefix (mounted in main.py): /api/admin
 """
 from __future__ import annotations
 
-from typing import Optional
+from datetime import datetime, timezone
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -33,6 +34,115 @@ from app.schemas.curriculum import (
 )
 
 router = APIRouter()
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# DASHBOARD STATS
+# ═════════════════════════════════════════════════════════════════════════════
+
+@router.get("/dashboard", response_model=dict)
+async def dashboard_stats(
+    _admin: User = Depends(admin_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Return real counts from the database for the admin dashboard."""
+    total_students = (await session.execute(
+        select(func.count(User.id)).where(User.role == "student")
+    )).scalar_one()
+
+    total_subjects = (await session.execute(
+        select(func.count(Subject.id))
+    )).scalar_one()
+
+    total_topics = (await session.execute(
+        select(func.count(Topic.id))
+    )).scalar_one()
+
+    total_questions = (await session.execute(
+        select(func.count(Question.id))
+    )).scalar_one()
+
+    total_resources = (await session.execute(
+        select(func.count(Resource.id))
+    )).scalar_one()
+
+    # Curriculum distribution per subject (topic count)
+    subject_rows = (await session.execute(
+        select(Subject).where(Subject.is_active == True).order_by(Subject.name)  # noqa: E712
+    )).scalars().all()
+
+    distribution = []
+    for subj in subject_rows:
+        count = (await session.execute(
+            select(func.count(Topic.id)).where(
+                Topic.subject_id == subj.id,
+                Topic.is_active == True,  # noqa: E712
+            )
+        )).scalar_one()
+        distribution.append({
+            "subject": subj.name,
+            "icon": subj.icon,
+            "topic_count": count,
+        })
+
+    # Recent updates — last 10 created/updated topics
+    recent_topics = (await session.execute(
+        select(Topic)
+        .order_by(Topic.updated_at.desc())
+        .limit(10)
+    )).scalars().all()
+
+    recent_updates: list[dict[str, Any]] = []
+    for t in recent_topics:
+        subj = (await session.execute(
+            select(Subject).where(Subject.id == t.subject_id)
+        )).scalar_one_or_none()
+        recent_updates.append({
+            "id": t.id,
+            "name": t.name,
+            "subject": subj.name if subj else "Unknown",
+            "updated_at": t.updated_at.isoformat(),
+        })
+
+    return {
+        "total_students": total_students,
+        "total_subjects": total_subjects,
+        "total_topics": total_topics,
+        "total_questions": total_questions,
+        "total_resources": total_resources,
+        "curriculum_distribution": distribution,
+        "recent_updates": recent_updates,
+    }
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# SEED INITIAL SUBJECTS
+# ═════════════════════════════════════════════════════════════════════════════
+
+_INITIAL_SUBJECTS = [
+    {"name": "Mathematics",  "slug": "mathematics",  "icon": "📐", "description": "Numbers, algebra, geometry, calculus, and more."},
+    {"name": "Physics",      "slug": "physics",      "icon": "⚛️",  "description": "Forces, motion, energy, waves, and the laws of the universe."},
+    {"name": "Chemistry",    "slug": "chemistry",    "icon": "🧪", "description": "Elements, reactions, bonding, and the molecular world."},
+]
+
+
+@router.post("/seed-subjects", response_model=dict, status_code=201)
+async def seed_subjects(
+    _admin: User = Depends(admin_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Idempotent: insert Mathematics, Physics, Chemistry if they don't exist."""
+    created = []
+    for data in _INITIAL_SUBJECTS:
+        existing = (await session.execute(
+            select(Subject).where(Subject.slug == data["slug"])
+        )).scalar_one_or_none()
+        if existing is None:
+            subj = Subject(**data, is_active=True)
+            session.add(subj)
+            created.append(data["name"])
+    await session.commit()
+    return {"created": created, "message": f"Seeded {len(created)} subject(s)."}
 
 
 # ═════════════════════════════════════════════════════════════════════════════

@@ -1,11 +1,9 @@
 """PeerUP API — application entry point.
 
-Creates the FastAPI app, configures CORS, creates DB tables on startup,
-and mounts the versioned routers.
+Creates the FastAPI app, configures CORS, and mounts the versioned routers.
+Tables are managed externally in Supabase — no auto-creation at startup.
 """
 from __future__ import annotations
-
-from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,19 +12,12 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from app.api.v1 import ai, auth, chat, learn, match, notifications, profile, progress, rooms, users
-from app.api.v1 import admin_curriculum, make_admin
+from app.api.v1 import admin_curriculum, curriculum
 from app.api.v1.auth import limiter
 from app.core.config import settings
-from app.core.database import init_models
 
 
-@asynccontextmanager
-async def lifespan(_app: FastAPI):
-    await init_models()
-    yield
-
-
-app = FastAPI(title=settings.APP_TITLE, lifespan=lifespan)
+app = FastAPI(title=settings.APP_TITLE)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
@@ -54,5 +45,5 @@ app.include_router(notifications.router,  prefix="/api", tags=["notifications"])
 # ── Admin (curriculum management — requires role=admin) ──
 app.include_router(admin_curriculum.router, prefix="/api/admin", tags=["admin-curriculum"])
 
-# ── One-time admin setup endpoint (can be removed after use) ──
-app.include_router(make_admin.router, prefix="/api/setup", tags=["setup"])
+# ── Student read-only curriculum endpoints ──
+app.include_router(curriculum.router, prefix="/api", tags=["curriculum"])
