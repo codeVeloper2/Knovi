@@ -6,22 +6,15 @@ export default function ProtectedRoute({ children }) {
   const { user, profile, loading } = useAuth();
   const location = useLocation();
 
-  if (loading) {
-    return <Loader label="Loading your session…" />;
-  }
+  if (loading) return <Loader label="Loading your session…" />;
 
-  // No JWT / not logged in.
-  if (!user) {
-    return <Navigate to="/login" replace state={{ from: location }} />;
-  }
+  if (!user) return <Navigate to="/login" replace state={{ from: location }} />;
 
-  // Backend already blocks unverified users from authenticated routes,
-  // but guard here too for a clean redirect.
-  if (!user.emailVerified) {
-    return <Navigate to="/login" replace />;
-  }
+  if (!user.emailVerified) return <Navigate to="/login" replace />;
 
-  // Onboarding gate: until the profile is complete, keep the user in the wizard.
+  // Admin users should never be inside /app — redirect them to /admin
+  if (user.role === "admin") return <Navigate to="/admin" replace />;
+
   if (!profile?.profileComplete && location.pathname !== "/onboarding") {
     return <Navigate to="/onboarding" replace />;
   }

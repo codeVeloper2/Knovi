@@ -14818,3 +14818,535 @@ kbd {
   border-radius: 12px;
   padding: 20px;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   ADMIN LAYOUT 2.0 — adm2-* styles
+   Append this entire block to the END of index.css
+   Mobile-first. Sidebar becomes a drawer on small screens.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Shell ──────────────────────────────────────────────────── */
+.adm2-shell {
+  display: flex;
+  min-height: 100vh;
+  background: #060d1a;
+  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  color: #e2e8f0;
+  position: relative;
+}
+
+/* ── Overlay (mobile) ───────────────────────────────────────── */
+.adm2-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 99;
+}
+
+/* ── Sidebar ────────────────────────────────────────────────── */
+.adm2-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: #0b1526;
+  border-right: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  z-index: 100;
+  transform: translateX(-100%);
+  transition: transform 0.25s ease;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.adm2-sidebar::-webkit-scrollbar { display: none; }
+.adm2-sidebar.open { transform: translateX(0); }
+
+/* ── Logo ───────────────────────────────────────────────────── */
+.adm2-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 18px;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0;
+}
+.adm2-logo-mark {
+  width: 32px; height: 32px;
+  background: linear-gradient(135deg, #4f6ef7, #06b6d4);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 1rem; color: #fff;
+  flex-shrink: 0;
+}
+.adm2-logo-text {
+  font-size: 1rem; font-weight: 700; color: #fff;
+}
+.adm2-logo-badge {
+  margin-left: auto;
+  background: rgba(79,110,247,0.2);
+  border: 1px solid rgba(79,110,247,0.3);
+  color: #818cf8;
+  font-size: 0.62rem; font-weight: 700;
+  padding: 2px 7px; border-radius: 5px;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+
+/* ── Nav ────────────────────────────────────────────────────── */
+.adm2-nav {
+  flex: 1;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.adm2-nav-link,
+.adm2-nav-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #64748b;
+  background: none;
+  border: none;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+}
+.adm2-nav-link:hover,
+.adm2-nav-group:hover { background: rgba(255,255,255,0.05); color: #e2e8f0; }
+.adm2-nav-link.active { background: rgba(79,110,247,0.15); color: #818cf8; font-weight: 600; }
+
+.adm2-nav-icon  { font-size: 1rem; flex-shrink: 0; }
+.adm2-nav-label { flex: 1; }
+.adm2-nav-arrow {
+  font-size: 0.75rem; color: #475569;
+  transition: transform 0.2s;
+}
+.adm2-nav-arrow.open { transform: rotate(180deg); }
+
+.adm2-nav-children {
+  padding: 2px 0 2px 14px;
+  display: flex; flex-direction: column; gap: 1px;
+}
+.adm2-nav-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 7px;
+  text-decoration: none;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #475569;
+  transition: background 0.15s, color 0.15s;
+}
+.adm2-nav-child:hover { background: rgba(255,255,255,0.04); color: #94a3b8; }
+.adm2-nav-child.active { color: #818cf8; background: rgba(79,110,247,0.12); }
+.adm2-child-icon { font-size: 0.85rem; flex-shrink: 0; }
+
+/* ── Sidebar footer ─────────────────────────────────────────── */
+.adm2-sidebar-footer {
+  padding: 14px 14px 20px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.adm2-footer-link {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.8rem; color: #475569;
+  text-decoration: none;
+  padding: 8px 10px; border-radius: 8px;
+  transition: background 0.15s, color 0.15s;
+}
+.adm2-footer-link:hover { background: rgba(255,255,255,0.05); color: #94a3b8; }
+.adm2-footer-logout {
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.15);
+  color: #ef4444;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.adm2-footer-logout:hover { background: rgba(239,68,68,0.15); }
+
+/* ── Main area ──────────────────────────────────────────────── */
+.adm2-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  /* On mobile no margin; on desktop offset for sidebar */
+  margin-left: 0;
+  transition: margin-left 0.25s ease;
+}
+
+/* ── Top bar ────────────────────────────────────────────────── */
+.adm2-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  height: 60px;
+  background: #0b1526;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  flex-shrink: 0;
+}
+
+/* Hamburger */
+.adm2-hamburger {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  flex-shrink: 0;
+}
+.adm2-hamburger span {
+  display: block;
+  width: 20px; height: 2px;
+  background: #94a3b8;
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+.adm2-hamburger:hover span { background: #e2e8f0; }
+
+.adm2-topbar-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #94a3b8;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adm2-topbar-right {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+}
+.adm2-notif-btn {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 0.9rem;
+  transition: background 0.15s;
+}
+.adm2-notif-btn:hover { background: rgba(255,255,255,0.1); }
+
+.adm2-user-chip {
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 5px 10px 5px 5px;
+}
+.adm2-avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%; object-fit: cover; flex-shrink: 0;
+}
+.adm2-avatar-fallback {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: linear-gradient(135deg, #4f6ef7, #06b6d4);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.78rem; font-weight: 700; color: #fff;
+  flex-shrink: 0;
+}
+.adm2-user-info { display: flex; flex-direction: column; }
+.adm2-user-name { font-size: 0.78rem; font-weight: 600; color: #e2e8f0; line-height: 1.2; }
+.adm2-user-role { font-size: 0.65rem; color: #475569; }
+
+/* Hide user info text on very small screens */
+@media (max-width: 400px) {
+  .adm2-user-info { display: none; }
+  .adm2-user-chip { padding: 4px; }
+}
+
+/* ── Content ────────────────────────────────────────────────── */
+.adm2-content {
+  flex: 1;
+  padding: 16px;
+  overflow-x: hidden;
+}
+
+/* ── Admin page common elements ─────────────────────────────── */
+.adm2-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.adm2-page-title {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #fff;
+  margin: 0 0 4px;
+}
+.adm2-page-sub {
+  font-size: 0.8rem;
+  color: #475569;
+  margin: 0;
+}
+.adm2-btn-primary {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #4f6ef7; color: #fff;
+  border: none; border-radius: 10px;
+  padding: 10px 18px; font-size: 0.84rem;
+  font-weight: 600; cursor: pointer;
+  white-space: nowrap; flex-shrink: 0;
+  transition: background 0.15s;
+}
+.adm2-btn-primary:hover { background: #3d5ce0; }
+.adm2-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.adm2-btn-ghost {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #94a3b8; border-radius: 10px;
+  padding: 9px 16px; font-size: 0.84rem;
+  font-weight: 500; cursor: pointer;
+  transition: background 0.15s;
+}
+.adm2-btn-ghost:hover { background: rgba(255,255,255,0.1); color: #e2e8f0; }
+
+/* ── Stat cards ─────────────────────────────────────────────── */
+.adm2-stats-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.adm2-stat-card {
+  background: #0f1e35;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex; align-items: center; gap: 12px;
+}
+.adm2-stat-icon {
+  width: 42px; height: 42px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem; flex-shrink: 0;
+}
+.adm2-stat-val {
+  font-size: 1.5rem; font-weight: 800; color: #fff;
+  line-height: 1; margin: 0 0 2px;
+}
+.adm2-stat-label {
+  font-size: 0.72rem; color: #64748b; margin: 0;
+}
+.adm2-stat-delta {
+  font-size: 0.72rem; font-weight: 600; margin: 2px 0 0;
+}
+.adm2-stat-delta.up { color: #22c55e; }
+.adm2-stat-delta.down { color: #ef4444; }
+
+/* ── Card ───────────────────────────────────────────────────── */
+.adm2-card {
+  background: #0f1e35;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.adm2-card-title {
+  font-size: 0.9rem; font-weight: 700; color: #fff;
+  margin: 0 0 12px;
+}
+
+/* ── Table ──────────────────────────────────────────────────── */
+.adm2-table-wrap {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.adm2-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+.adm2-table th {
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(255,255,255,0.03);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  white-space: nowrap;
+}
+.adm2-table td {
+  padding: 11px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: #cbd5e1;
+  vertical-align: middle;
+}
+.adm2-table tr:last-child td { border-bottom: none; }
+.adm2-table tr:hover td { background: rgba(255,255,255,0.025); }
+
+.adm2-badge {
+  display: inline-block;
+  padding: 2px 8px; border-radius: 5px;
+  font-size: 0.7rem; font-weight: 700;
+}
+.adm2-badge--green  { background: rgba(34,197,94,0.15);  color: #22c55e; }
+.adm2-badge--blue   { background: rgba(79,110,247,0.15); color: #818cf8; }
+.adm2-badge--yellow { background: rgba(245,158,11,0.15); color: #fbbf24; }
+.adm2-badge--red    { background: rgba(239,68,68,0.15);  color: #ef4444; }
+.adm2-badge--gray   { background: rgba(100,116,139,0.15);color: #64748b; }
+
+.adm2-action-btn {
+  background: none; border: none;
+  cursor: pointer; font-size: 0.9rem;
+  padding: 4px 6px; border-radius: 5px;
+  transition: background 0.1s;
+}
+.adm2-action-btn:hover { background: rgba(255,255,255,0.08); }
+
+/* ── Form elements ──────────────────────────────────────────── */
+.adm2-form { display: flex; flex-direction: column; gap: 14px; }
+.adm2-field { display: flex; flex-direction: column; gap: 5px; }
+.adm2-label {
+  font-size: 0.78rem; font-weight: 600; color: #94a3b8;
+}
+.adm2-req { color: #ef4444; }
+.adm2-input, .adm2-textarea, .adm2-select {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 10px 13px;
+  color: #e2e8f0;
+  font-size: 0.85rem;
+  width: 100%;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.15s;
+  font-family: inherit;
+}
+.adm2-input:focus, .adm2-textarea:focus, .adm2-select:focus {
+  border-color: #4f6ef7;
+}
+.adm2-textarea { resize: vertical; min-height: 90px; }
+.adm2-select { appearance: none; }
+
+.adm2-form-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.adm2-search-bar {
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px; padding: 9px 13px;
+  margin-bottom: 14px;
+}
+.adm2-search-bar svg { color: #475569; flex-shrink: 0; }
+.adm2-search-bar input {
+  flex: 1; background: none; border: none; outline: none;
+  color: #e2e8f0; font-size: 0.84rem; min-width: 0;
+}
+.adm2-search-bar input::placeholder { color: #334155; }
+
+/* ── Loading / Empty ────────────────────────────────────────── */
+.adm2-loading, .adm2-empty {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 10px; padding: 48px 16px;
+  text-align: center; color: #475569;
+  font-size: 0.88rem;
+}
+.adm2-empty > span { font-size: 2rem; }
+.adm2-empty h3 { color: #94a3b8; margin: 0; font-size: 1rem; }
+
+/* ── Modal ──────────────────────────────────────────────────── */
+.adm2-modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex; align-items: flex-end;
+  justify-content: center;
+  z-index: 200;
+  padding: 0;
+}
+.adm2-modal {
+  background: #0f1e35;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px 18px 0 0;
+  padding: 20px 18px 32px;
+  width: 100%; max-width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.adm2-modal-header {
+  display: flex; align-items: center;
+  justify-content: space-between; margin-bottom: 16px;
+}
+.adm2-modal-title {
+  font-size: 1.05rem; font-weight: 700; color: #fff; margin: 0;
+}
+.adm2-modal-close {
+  background: rgba(255,255,255,0.08);
+  border: none; border-radius: 8px;
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  color: #64748b; cursor: pointer; font-size: 1rem;
+  transition: background 0.15s;
+}
+.adm2-modal-close:hover { background: rgba(255,255,255,0.15); color: #e2e8f0; }
+.adm2-modal-footer {
+  display: flex; gap: 10px; margin-top: 18px;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   DESKTOP OVERRIDES ≥ 769px
+   ─────────────────────────────────────────────────────────────*/
+@media (min-width: 769px) {
+  .adm2-sidebar {
+    position: sticky;
+    transform: none;
+    flex-shrink: 0;
+  }
+  .adm2-overlay { display: none !important; }
+  .adm2-main { margin-left: 0; }
+  .adm2-hamburger { display: none; }
+  .adm2-topbar-title { font-size: 1rem; }
+  .adm2-content { padding: 24px 28px; }
+  .adm2-stats-row { grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .adm2-form-row { grid-template-columns: 1fr 1fr; }
+  .adm2-modal-backdrop {
+    align-items: center;
+    padding: 20px;
+  }
+  .adm2-modal {
+    border-radius: 16px;
+    max-width: 540px;
+    width: 100%;
+  }
+}
+
+@media (min-width: 1024px) {
+  .adm2-content { padding: 28px 36px; }
+}
