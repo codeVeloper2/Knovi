@@ -362,25 +362,29 @@ class LearningSession(Base):
         Index("idx_learning_sessions_status",   "status"),
     )
 
-    id:            Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
-    creator_id:    Mapped[int]           = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    partner_id:    Mapped[int]           = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    topic_id:      Mapped[int]           = mapped_column(Integer, ForeignKey("topics.id", ondelete="CASCADE"), nullable=False)
-    goal:          Mapped[str]           = mapped_column(Text, nullable=False)
+    id:            Mapped[int]               = mapped_column(Integer, primary_key=True, autoincrement=True)
+    creator_id:    Mapped[int]               = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    # Nullable until a partner joins (status="pending" → partner_id is NULL)
+    partner_id:    Mapped[Optional[int]]     = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    topic_id:      Mapped[int]               = mapped_column(Integer, ForeignKey("topics.id", ondelete="CASCADE"), nullable=False)
+    goal:          Mapped[str]               = mapped_column(Text, nullable=False)
     # pending | active | completed | cancelled
-    status:        Mapped[str]           = mapped_column(String(20), default="pending", nullable=False)
+    status:        Mapped[str]               = mapped_column(String(20), default="pending", nullable=False)
     # learn | explain | practice | challenge | check | completed
-    current_stage: Mapped[str]           = mapped_column(String(20), default="learn", nullable=False)
+    current_stage: Mapped[str]               = mapped_column(String(20), default="learn", nullable=False)
+    # Short human-readable join code, e.g. "NLM-4827"
+    session_code:  Mapped[Optional[str]]     = mapped_column(String(12), unique=True, nullable=True, index=True)
     started_at:    Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at:  Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at:    Mapped[datetime]      = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
-    updated_at:    Mapped[datetime]      = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now, nullable=False)
+    expires_at:    Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at:    Mapped[datetime]           = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
+    updated_at:    Mapped[datetime]           = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now, nullable=False)
 
     # Relationships
     creator:          Mapped["User"]                        = relationship(  # type: ignore[name-defined]
         "User", back_populates="learning_sessions_as_creator", foreign_keys=[creator_id]
     )
-    partner:          Mapped["User"]                        = relationship(  # type: ignore[name-defined]
+    partner:          Mapped[Optional["User"]]              = relationship(  # type: ignore[name-defined]
         "User", back_populates="learning_sessions_as_partner", foreign_keys=[partner_id]
     )
     topic:            Mapped["Topic"]                       = relationship("Topic", back_populates="learning_sessions")
@@ -395,8 +399,10 @@ class LearningSession(Base):
             "goal": self.goal,
             "status": self.status,
             "currentStage": self.current_stage,
+            "sessionCode": self.session_code,
             "startedAt": self.started_at.isoformat() if self.started_at else None,
             "completedAt": self.completed_at.isoformat() if self.completed_at else None,
+            "expiresAt": self.expires_at.isoformat() if self.expires_at else None,
             "createdAt": self.created_at.isoformat(),
             "updatedAt": self.updated_at.isoformat(),
         }
