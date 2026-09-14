@@ -16,9 +16,10 @@ import string
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -27,15 +28,44 @@ from app.core.security import current_user
 from app.models.curriculum import (
     Concept, LearningActivity, LearningObjective,
     LearningSession, Misconception, Question, Resource,
-    SessionActivityResult, Subject, Topic, TopicProgress,
+    SessionActivityResult, SessionPracticeAnswer, SessionTeachingExchange,
+    Subject, Topic, TopicProgress,
 )
+from app.models.chat import Conversation
 from app.models.match import MatchRequest
 from app.models.user import User
 from app.schemas.base import StrictModel
 from app.services import progress_service
 from app.services.ai_service import verify_explanation
+from app.services.learning_session_ws_manager import manager as session_ws_manager
 
 router = APIRouter()
+
+
+@router.websocket("/learning/sessions/ws/{session_id}")
+async def learning_session_websocket(
+    websocket: WebSocket, session_id: int, token: str = Query(...),
+    db: AsyncSession = Depends(get_db_session),
+) -> None:
+    """State-event channel; chat messages continue to use /chat/ws/{conv_id}."""
+    from app.core.security import decode_token
+    try:
+        token_payload = decode_token(token)
+        if token_payload.get("type") != "access":
+            raise ValueError("non-access token")
+        user_id = int(token_payload["sub"])
+        sess = await _session_or_404(db, session_id)
+        await _assert_participant(sess, user_id)
+    except Exception:
+        await websocket.close(code=4003)
+        return
+    await session_ws_manager.connect(websocket, session_id)
+    try:
+        while True:
+            # Clients may send ping only; transitions are REST-authorized.
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        session_ws_manager.disconnect(websocket, session_id)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -133,6 +163,7 @@ def _full_session(
     teacher: Optional[User] = None,
     learner: Optional[User] = None,
     results: Optional[list] = None,
+    viewer_id: Optional[int] = None,
 ) -> dict:
     data = sess.serialize()
     if topic:
@@ -142,8 +173,32 @@ def _full_session(
     if learner:
         data["learner"] = _user_brief(learner)
     if results is not None:
-        data["results"] = [r.serialize() for r in results]
+        data["results"] = [
+            _result_for_viewer(result, viewer_id, sess.teacher_id)
+            if viewer_id is not None else result.serialize()
+            for result in results
+        ]
     return data
+
+
+def _result_for_viewer(result: SessionActivityResult, viewer_id: int, teacher_id: int) -> dict:
+    """Do not return AI assessment fields outside the private teacher view."""
+    data = result.serialize()
+    if viewer_id != teacher_id:
+        for key in ("aiFeedback", "aiVerdict", "aiConfidence", "aiProvider", "misconceptionsDetected", "score"):
+            data.pop(key, None)
+    return data
+
+
+async def _practice_questions(db: AsyncSession, topic_id: int) -> list[Question]:
+    """Use explicitly marked practice questions, falling back for legacy data."""
+    activity_ids = set((await db.execute(select(LearningActivity.id).where(
+        LearningActivity.topic_id == topic_id, LearningActivity.type == "practice"
+    ))).scalars().all())
+    statement = select(Question).where(Question.topic_id == topic_id)
+    if activity_ids:
+        statement = statement.where(Question.activity_id.in_(activity_ids))
+    return list((await db.execute(statement.order_by(Question.id))).scalars().all())
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -153,6 +208,7 @@ def _full_session(
 class CreateSessionRequest(StrictModel):
     topicId:   int
     partnerId: int
+    description: str = Field(default="", max_length=2000)
 
 
 class JoinSessionRequest(BaseModel):
@@ -175,6 +231,70 @@ class PracticeAnswerRequest(BaseModel):
 
 class ChallengeRequest(BaseModel):
     response: str = Field(min_length=1)
+
+
+class TeacherExplanationRequest(StrictModel):
+    explanation: str = Field(min_length=1, max_length=10000)
+
+
+class TeacherFeedbackRequest(StrictModel):
+    verdict: str = Field(pattern=r"^(approved|retry)$")
+    teacherComment: str = Field(default="", max_length=4000)
+
+
+def _same_subject(value: str, subject: str) -> bool:
+    return value.strip().casefold() == subject.strip().casefold()
+
+
+def _require_state(sess: LearningSession, *states: str) -> None:
+    if sess.workflow_state not in states:
+        raise HTTPException(409, f"This action is unavailable while the session is {sess.workflow_state}.")
+
+
+def _require_teacher(sess: LearningSession, user: User) -> None:
+    if user.id != sess.teacher_id:
+        raise HTTPException(403, "Only the session teacher can perform this action.")
+
+
+def _require_learner(sess: LearningSession, user: User) -> None:
+    if user.id != sess.learner_id:
+        raise HTTPException(403, "Only the session learner can perform this action.")
+
+
+async def _session_or_404(db: AsyncSession, session_id: int) -> LearningSession:
+    session = (await db.execute(select(LearningSession).where(LearningSession.id == session_id))).scalar_one_or_none()
+    if session is None:
+        raise HTTPException(404, "Session not found.")
+    return session
+
+
+async def _current_concept(db: AsyncSession, sess: LearningSession) -> Concept:
+    if sess.current_concept_id is None:
+        raise HTTPException(409, "No current concept has been started.")
+    concept = (await db.execute(select(Concept).where(Concept.id == sess.current_concept_id, Concept.topic_id == sess.topic_id))).scalar_one_or_none()
+    if concept is None:
+        raise HTTPException(409, "The current concept is invalid.")
+    return concept
+
+
+def _numeric_answer(value: str) -> float | None:
+    import re
+    match = re.match(r"^\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)", value)
+    return float(match.group(1)) if match else None
+
+
+def _is_correct_answer(question: Question, response: str) -> bool:
+    expected = question.answer or ""
+    if question.question_type == "numeric":
+        actual_number, expected_number = _numeric_answer(response), _numeric_answer(expected)
+        if actual_number is None or expected_number is None:
+            return False
+        # Curriculum currently stores the expected numeric value in `answer`.
+        # A later explicit question tolerance field can be honoured here without
+        # ever delegating deterministic grading to AI.
+        tolerance = float(getattr(question, "numeric_tolerance", 0) or 0)
+        return abs(actual_number - expected_number) <= tolerance
+    return response.strip().casefold() == expected.strip().casefold()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -252,15 +372,22 @@ async def create_session(
     if connection is None:
         raise HTTPException(403, "You must be connected with this student to create a session.")
 
-    # Determine roles: sender of the match request = learner, receiver = teacher
-    if connection.sender_id == user.id:
-        # current user sent the request → current user is the learner
-        teacher_id = partner.id
-        learner_id = user.id
-    else:
-        # current user received the request → current user is the teacher
-        teacher_id = user.id
-        learner_id = partner.id
+    # A Learning Session is always created by its teacher.  Match direction is
+    # historical connection metadata, never a source of session role authority.
+    subject_name = topic.subject.name if topic.subject else ""
+    if not any(_same_subject(item, subject_name) for item in (user.subjects_good_at or [])):
+        raise HTTPException(403, "You can only create a teaching session for a subject you teach.")
+    if not any(_same_subject(item, subject_name) for item in (partner.subjects_need_help or [])):
+        raise HTTPException(403, "This partner has not selected this subject as one they need help with.")
+
+    conversation = (await db.execute(
+        select(Conversation).where(
+            Conversation.user_a_id == min(user.id, partner.id),
+            Conversation.user_b_id == max(user.id, partner.id),
+        )
+    )).scalar_one_or_none()
+    if conversation is None:
+        raise HTTPException(409, "Your accepted connection does not have its required conversation yet.")
 
     code = await _generate_code(db, topic.name)
     expires = _now() + timedelta(hours=24)
@@ -268,13 +395,16 @@ async def create_session(
     sess = LearningSession(
         creator_id=user.id,
         partner_id=partner.id,
-        teacher_id=teacher_id,
-        learner_id=learner_id,
+        teacher_id=user.id,
+        learner_id=partner.id,
         topic_id=body.topicId,
-        goal=f"Peer teaching: {topic.name}",
+        goal=body.description.strip() or f"Peer teaching: {topic.name}",
+        session_description=body.description.strip(),
+        conversation_id=conversation.id,
         status="pending",
         phase="setup",
         current_stage="learn",
+        workflow_state="LOBBY",
         current_concept_idx=0,
         session_code=code,
         expires_at=expires,
@@ -283,8 +413,8 @@ async def create_session(
     await db.commit()
     await db.refresh(sess)
 
-    teacher_user = (await db.execute(select(User).where(User.id == teacher_id))).scalar_one()
-    learner_user = (await db.execute(select(User).where(User.id == learner_id))).scalar_one()
+    teacher_user = user
+    learner_user = partner
 
     return {
         **sess.serialize(),
@@ -357,17 +487,19 @@ async def join_session(
     )).scalar_one_or_none()
     if sess is None:
         raise HTTPException(404, "Session not found.")
+    if sess.status not in ("pending", "active"):
+        raise HTTPException(409, "This session is no longer joinable.")
     if user.id not in (sess.creator_id, sess.partner_id, sess.teacher_id, sess.learner_id):
         raise HTTPException(403, "You are not invited to this session.")
     if sess.expires_at and sess.expires_at < _now():
         raise HTTPException(400, "This session has expired.")
 
-    if sess.status == "pending":
-        sess.status = "active"
-        sess.phase = "setup"
-        sess.started_at = _now()
+    # Joining the lobby is not starting a lesson.  Only the teacher can start
+    # it through the preserved /ready route (or the explicit start endpoint).
+    if user.id == sess.learner_id:
+        sess.learner_ready = True
         await db.commit()
-        await db.refresh(sess)
+        await session_ws_manager.broadcast(session_id, "session_joined", {"userId": user.id})
 
     topic = await _load_topic_full(db, sess.topic_id)
     teacher = (await db.execute(select(User).where(User.id == sess.teacher_id))).scalar_one_or_none()
@@ -375,7 +507,7 @@ async def join_session(
     results = (await db.execute(
         select(SessionActivityResult).where(SessionActivityResult.session_id == session_id)
     )).scalars().all()
-    return _full_session(sess, topic, teacher, learner, list(results))
+    return _full_session(sess, topic, teacher, learner, list(results), viewer_id=user.id)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -401,7 +533,7 @@ async def get_learning_session(
     results = (await db.execute(
         select(SessionActivityResult).where(SessionActivityResult.session_id == session_id)
     )).scalars().all()
-    return _full_session(sess, topic, teacher, learner, list(results))
+    return _full_session(sess, topic, teacher, learner, list(results), viewer_id=user.id)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -419,16 +551,25 @@ async def mark_ready(
     )).scalar_one_or_none()
     if sess is None:
         raise HTTPException(404, "Session not found.")
-    await _assert_participant(sess, user.id)
+    _require_teacher(sess, user)
+    _require_state(sess, "LOBBY")
+    if not sess.learner_ready:
+        raise HTTPException(409, "The learner must join the lobby before the session starts.")
 
-    if user.id == sess.teacher_id:
-        sess.teacher_ready = True
-    elif user.id == sess.learner_id:
-        sess.learner_ready = True
-
-    # Both ready → advance to concepts phase
-    if sess.teacher_ready and sess.learner_ready:
-        sess.phase = "concepts"
+    first = (await db.execute(
+        select(Concept).where(Concept.topic_id == sess.topic_id).order_by(Concept.id).limit(1)
+    )).scalar_one_or_none()
+    if first is None:
+        raise HTTPException(409, "This topic has no concepts to teach.")
+    # Kept as a legacy route for the current frontend, but it now means the
+    # teacher starts the session; it never waits for or advances on learner input.
+    sess.status = "active"
+    sess.teacher_ready = True
+    sess.phase = "concepts"
+    sess.workflow_state = "TEACHING_CONCEPT"
+    sess.current_concept_id = first.id
+    sess.current_concept_idx = 0
+    sess.started_at = sess.started_at or _now()
 
     await db.commit()
 
@@ -436,12 +577,130 @@ async def mark_ready(
     updated = (await db.execute(
         select(LearningSession).where(LearningSession.id == session_id)
     )).scalar_one()
+    await session_ws_manager.broadcast(session_id, "session_started", {"workflowState": updated.workflow_state})
     return updated.serialize()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 7. POST /api/learning/sessions/{sessionId}/concepts/{conceptId}/explanation
 # ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/learning/sessions/{session_id}/start")
+async def start_learning_session(
+    session_id: int, user: User = Depends(current_user), db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    """Explicit teacher-only alias for the legacy /ready start action."""
+    return await mark_ready(session_id, user, db)
+
+
+@router.post("/learning/sessions/{session_id}/concepts/{concept_id}/teach")
+async def send_teacher_explanation(
+    session_id: int, concept_id: int, body: TeacherExplanationRequest,
+    user: User = Depends(current_user), db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    sess = await _session_or_404(db, session_id)
+    _require_teacher(sess, user)
+    _require_state(sess, "TEACHING_CONCEPT")
+    if sess.current_concept_id != concept_id:
+        raise HTTPException(409, "This is not the active concept.")
+    exchange = (await db.execute(select(SessionTeachingExchange).where(
+        SessionTeachingExchange.session_id == session_id, SessionTeachingExchange.concept_id == concept_id
+    ))).scalar_one_or_none()
+    if exchange is None:
+        exchange = SessionTeachingExchange(session_id=session_id, concept_id=concept_id, teacher_id=user.id, explanation=body.explanation.strip())
+        db.add(exchange)
+    else:
+        exchange.explanation = body.explanation.strip()
+        exchange.learner_read_at = None
+        exchange.explain_back_requested_at = None
+    sess.workflow_state = "LEARNER_READING"
+    await db.commit()
+    await session_ws_manager.broadcast(session_id, "teacher_explanation_sent", {"conceptId": concept_id, "explanation": exchange.explanation})
+    return {"conceptId": concept_id, "sent": True, "workflowState": sess.workflow_state}
+
+
+@router.post("/learning/sessions/{session_id}/concepts/{concept_id}/read")
+async def acknowledge_teacher_explanation(
+    session_id: int, concept_id: int, user: User = Depends(current_user), db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    sess = await _session_or_404(db, session_id)
+    _require_learner(sess, user)
+    _require_state(sess, "LEARNER_READING")
+    exchange = (await db.execute(select(SessionTeachingExchange).where(
+        SessionTeachingExchange.session_id == session_id, SessionTeachingExchange.concept_id == concept_id
+    ))).scalar_one_or_none()
+    if exchange is None:
+        raise HTTPException(409, "No teacher explanation is awaiting acknowledgement.")
+    exchange.learner_read_at = _now()
+    await db.commit()
+    await session_ws_manager.broadcast(session_id, "learner_read_explanation", {"conceptId": concept_id})
+    return {"conceptId": concept_id, "read": True, "workflowState": sess.workflow_state}
+
+
+@router.post("/learning/sessions/{session_id}/concepts/{concept_id}/request-explanation")
+async def request_explain_back(
+    session_id: int, concept_id: int, user: User = Depends(current_user), db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    sess = await _session_or_404(db, session_id)
+    _require_teacher(sess, user)
+    _require_state(sess, "LEARNER_READING")
+    exchange = (await db.execute(select(SessionTeachingExchange).where(
+        SessionTeachingExchange.session_id == session_id, SessionTeachingExchange.concept_id == concept_id
+    ))).scalar_one_or_none()
+    if exchange is None or exchange.learner_read_at is None:
+        raise HTTPException(409, "The learner must acknowledge the explanation first.")
+    exchange.explain_back_requested_at = _now()
+    sess.workflow_state = "EXPLAIN_BACK_REQUESTED"
+    await db.commit()
+    await session_ws_manager.broadcast(session_id, "teacher_requested_explanation", {"conceptId": concept_id})
+    return {"conceptId": concept_id, "requested": True, "workflowState": sess.workflow_state}
+
+
+@router.post("/learning/sessions/{session_id}/concepts/{concept_id}/begin-explanation")
+async def begin_explain_back(
+    session_id: int, concept_id: int, user: User = Depends(current_user), db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    sess = await _session_or_404(db, session_id)
+    _require_learner(sess, user)
+    _require_state(sess, "EXPLAIN_BACK_REQUESTED")
+    if sess.current_concept_id != concept_id:
+        raise HTTPException(409, "This is not the active concept.")
+    sess.workflow_state = "LEARNER_EXPLAINING"
+    await db.commit()
+    await session_ws_manager.broadcast(session_id, "learner_explanation_started", {"conceptId": concept_id})
+    return {"conceptId": concept_id, "started": True, "workflowState": sess.workflow_state}
+
+
+@router.get("/learning/sessions/{session_id}/teacher-review")
+async def teacher_review_queue(
+    session_id: int, user: User = Depends(current_user), db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    sess = await _session_or_404(db, session_id)
+    _require_teacher(sess, user)
+    results = (await db.execute(select(SessionActivityResult).where(
+        SessionActivityResult.session_id == session_id, SessionActivityResult.user_id == sess.learner_id,
+        SessionActivityResult.concept_id == sess.current_concept_id,
+    ).order_by(SessionActivityResult.attempt_number.desc()))).scalars().all()
+    return {"results": [result.serialize() for result in results], "workflowState": sess.workflow_state}
+
+
+@router.post("/learning/sessions/{session_id}/next-concept")
+async def start_next_concept(
+    session_id: int, user: User = Depends(current_user), db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    sess = await _session_or_404(db, session_id)
+    _require_teacher(sess, user)
+    _require_state(sess, "NEXT_CONCEPT")
+    concepts = (await db.execute(select(Concept).where(Concept.topic_id == sess.topic_id).order_by(Concept.id))).scalars().all()
+    next_index = sess.current_concept_idx + 1
+    if next_index >= len(concepts):
+        raise HTTPException(409, "All concepts are complete. Start practice instead.")
+    sess.current_concept_idx = next_index
+    sess.current_concept_id = concepts[next_index].id
+    sess.workflow_state = "TEACHING_CONCEPT"
+    await db.commit()
+    await session_ws_manager.broadcast(session_id, "next_concept_started", {"conceptId": sess.current_concept_id})
+    return sess.serialize()
 
 @router.post("/learning/sessions/{session_id}/concepts/{concept_id}/explanation")
 async def submit_explanation(
@@ -458,9 +717,10 @@ async def submit_explanation(
         raise HTTPException(404, "Session not found.")
     await _assert_participant(sess, user.id)
 
-    # Only the learner can submit explanations
-    if user.id != sess.learner_id:
-        raise HTTPException(403, "Only the learner submits explanations.")
+    _require_learner(sess, user)
+    _require_state(sess, "LEARNER_EXPLAINING")
+    if sess.current_concept_id != concept_id:
+        raise HTTPException(409, "This is not the concept currently being taught.")
 
     # Load concept
     concept = (await db.execute(
@@ -545,14 +805,14 @@ async def submit_explanation(
         score=score,
     )
     db.add(result)
+    sess.workflow_state = "TEACHER_REVIEW"
     await db.commit()
     await db.refresh(result)
 
-    # Return AI assessment to teacher (caller decides what to show learner)
-    return {
-        **result.serialize(),
-        "aiResult": ai_result,
-    }
+    await session_ws_manager.broadcast(session_id, "learner_explanation_submitted", {"conceptId": concept_id})
+    # The learner receives only a receipt.  The AI assessment is available to
+    # the teacher through the authenticated teacher-review endpoint.
+    return {"id": result.id, "conceptId": concept_id, "submitted": True, "workflowState": sess.workflow_state}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -573,9 +833,8 @@ async def submit_verdict(
     if sess is None:
         raise HTTPException(404, "Session not found.")
 
-    # Only teacher verdicts
-    if user.id != sess.teacher_id:
-        raise HTTPException(403, "Only the teacher can submit a verdict.")
+    _require_teacher(sess, user)
+    _require_state(sess, "TEACHER_REVIEW")
 
     # Find the most recent explanation result for this concept
     latest_result = (await db.execute(
@@ -600,22 +859,15 @@ async def submit_verdict(
     max_attempts = settings.AI_MAX_EXPLANATION_ATTEMPTS
     concept_done = (body.verdict == "approved") or (latest_result.attempt_number >= max_attempts)
 
-    if concept_done:
-        # Advance to next concept or change phase
-        topic = await _load_topic_full(db, sess.topic_id)
-        concepts = sorted(topic.concepts, key=lambda c: c.id)
-        next_idx = sess.current_concept_idx + 1
-        if next_idx < len(concepts):
-            sess.current_concept_idx = next_idx
-        else:
-            # All concepts done → move to practice
-            sess.phase = "practice"
-            sess.current_concept_idx = len(concepts) - 1
+    # Approval makes the concept eligible for the teacher's explicit "start
+    # next concept" action.  It never auto-advances the learner.
+    sess.workflow_state = "NEXT_CONCEPT" if concept_done else "LEARNER_EXPLAINING"
 
     await db.commit()
     await db.refresh(sess)
     await db.refresh(latest_result)
 
+    await session_ws_manager.broadcast(session_id, "teacher_feedback_sent", {"conceptId": concept_id, "verdict": body.verdict, "conceptDone": concept_done})
     return {
         "result": latest_result.serialize(),
         "session": sess.serialize(),
@@ -627,6 +879,28 @@ async def submit_verdict(
 # ─────────────────────────────────────────────────────────────────────────────
 # 9. GET /api/learning/sessions/{sessionId}/practice
 # ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/learning/sessions/{session_id}/practice/start")
+async def start_practice(
+    session_id: int, user: User = Depends(current_user), db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    sess = await _session_or_404(db, session_id)
+    _require_teacher(sess, user)
+    _require_state(sess, "NEXT_CONCEPT")
+    concepts = (await db.execute(select(Concept.id).where(Concept.topic_id == sess.topic_id))).scalars().all()
+    completed = (await db.execute(select(SessionActivityResult.concept_id).where(
+        SessionActivityResult.session_id == session_id, SessionActivityResult.teacher_verdict == "approved"
+    ))).scalars().all()
+    if not concepts or not set(concepts).issubset(set(completed)):
+        raise HTTPException(409, "Every concept must be approved before practice starts.")
+    questions = await _practice_questions(db, sess.topic_id)
+    question = questions[0] if questions else None
+    if question is None:
+        raise HTTPException(409, "This topic has no practice questions.")
+    sess.phase, sess.workflow_state, sess.current_practice_question_id = "practice", "PRACTICE", question.id
+    await db.commit()
+    await session_ws_manager.broadcast(session_id, "practice_started", {"questionId": question.id})
+    return sess.serialize()
 
 @router.get("/learning/sessions/{session_id}/practice")
 async def get_practice_questions(
@@ -641,18 +915,28 @@ async def get_practice_questions(
         raise HTTPException(404, "Session not found.")
     await _assert_participant(sess, user.id)
 
-    topic = await _load_topic_full(db, sess.topic_id)
-    practice_activities = [a for a in topic.learning_activities if a.type == "practice"]
-    activity_ids = {a.id for a in practice_activities}
-    practice_questions = [
-        q.serialize() for q in topic.questions
-        if q.activity_id in activity_ids or not activity_ids
-    ]
-
-    return {
-        "activities": [a.serialize() for a in practice_activities],
-        "questions": practice_questions,
-    }
+    _require_state(sess, "PRACTICE", "PRACTICE_REVEAL")
+    question = (await db.execute(select(Question).where(Question.id == sess.current_practice_question_id))).scalar_one_or_none()
+    if question is None:
+        raise HTTPException(409, "No active practice question.")
+    own = (await db.execute(select(SessionPracticeAnswer).where(
+        SessionPracticeAnswer.session_id == session_id, SessionPracticeAnswer.question_id == question.id,
+        SessionPracticeAnswer.user_id == user.id,
+    ))).scalar_one_or_none()
+    payload = question.serialize()
+    payload.pop("answer", None)
+    payload.pop("explanation", None)
+    # Keep the existing `questions` array contract while limiting it to the
+    # server-selected question; answers/explanations remain absent until reveal.
+    data: dict[str, Any] = {"question": payload, "questions": [payload], "activities": [],
+                            "submitted": own is not None, "workflowState": sess.workflow_state}
+    if sess.workflow_state == "PRACTICE_REVEAL":
+        answers = (await db.execute(select(SessionPracticeAnswer).where(
+            SessionPracticeAnswer.session_id == session_id, SessionPracticeAnswer.question_id == question.id
+        ))).scalars().all()
+        data["reveal"] = {"correctAnswer": question.answer, "explanation": question.explanation,
+                          "allAnswers": [{"userId": a.user_id, "response": a.response, "isCorrect": a.is_correct} for a in answers]}
+    return data
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -674,60 +958,40 @@ async def submit_practice_answer(
         raise HTTPException(404, "Session not found.")
     await _assert_participant(sess, user.id)
 
+    _require_state(sess, "PRACTICE")
+    if sess.current_practice_question_id != question_id:
+        raise HTTPException(409, "This is not the active practice question.")
     question = (await db.execute(
         select(Question).where(Question.id == question_id, Question.topic_id == sess.topic_id)
     )).scalar_one_or_none()
     if question is None:
         raise HTTPException(404, "Question not found.")
 
-    # Get activity_id for this question
-    activity_id = question.activity_id
-    if activity_id is None:
-        # Fallback to first practice activity
-        topic = await _load_topic_full(db, sess.topic_id)
-        pa = next((a for a in topic.learning_activities if a.type == "practice"), None)
-        activity_id = pa.id if pa else topic.learning_activities[0].id if topic.learning_activities else None
-    if activity_id is None:
-        raise HTTPException(400, "No activities configured for this topic.")
-
-    # Check if user already answered
-    existing = (await db.execute(
-        select(SessionActivityResult).where(
-            SessionActivityResult.session_id == session_id,
-            SessionActivityResult.user_id == user.id,
-            SessionActivityResult.activity_id == activity_id,
-            SessionActivityResult.response.isnot(None),
-        )
-    )).scalar_one_or_none()
-
-    is_correct = None
-    if question.answer:
-        is_correct = body.response.strip().lower() == question.answer.strip().lower()
-
-    result = SessionActivityResult(
-        session_id=session_id,
-        user_id=user.id,
-        activity_id=activity_id,
-        response=body.response,
-        is_correct=is_correct,
-        score=100 if is_correct else 0,
-    )
+    existing = (await db.execute(select(SessionPracticeAnswer).where(
+        SessionPracticeAnswer.session_id == session_id, SessionPracticeAnswer.question_id == question_id,
+        SessionPracticeAnswer.user_id == user.id,
+    ))).scalar_one_or_none()
+    if existing is not None:
+        raise HTTPException(409, "You already submitted an answer for this question.")
+    result = SessionPracticeAnswer(session_id=session_id, question_id=question_id, user_id=user.id,
+                                   response=body.response.strip(), is_correct=_is_correct_answer(question, body.response))
     db.add(result)
     await db.commit()
     await db.refresh(result)
 
     # Check if both participants answered
     all_results = (await db.execute(
-        select(SessionActivityResult).where(
-            SessionActivityResult.session_id == session_id,
-            SessionActivityResult.activity_id == activity_id,
+        select(SessionPracticeAnswer).where(
+            SessionPracticeAnswer.session_id == session_id,
+            SessionPracticeAnswer.question_id == question_id,
         )
     )).scalars().all()
 
     both_answered = len({r.user_id for r in all_results}) >= 2
 
-    response_data: dict[str, Any] = {"result": result.serialize(), "bothAnswered": both_answered}
+    response_data: dict[str, Any] = {"submitted": True, "bothAnswered": both_answered}
     if both_answered:
+        sess.workflow_state = "PRACTICE_REVEAL"
         response_data["reveal"] = {
             "correctAnswer": question.answer,
             "explanation": question.explanation,
@@ -737,12 +1001,53 @@ async def submit_practice_answer(
             ],
         }
 
+    await db.commit()
+    await session_ws_manager.broadcast(session_id, "practice_answer_submitted", {"userId": user.id})
+    if both_answered:
+        await session_ws_manager.broadcast(session_id, "practice_answers_revealed", response_data["reveal"])
     return response_data
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 11. POST /api/learning/sessions/{sessionId}/challenge
 # ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/learning/sessions/{session_id}/practice/next")
+async def next_practice_question(
+    session_id: int, user: User = Depends(current_user), db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    sess = await _session_or_404(db, session_id)
+    _require_teacher(sess, user)
+    _require_state(sess, "PRACTICE_REVEAL")
+    questions = await _practice_questions(db, sess.topic_id)
+    current = next((i for i, question in enumerate(questions) if question.id == sess.current_practice_question_id), -1)
+    if current < 0 or current + 1 >= len(questions):
+        raise HTTPException(409, "There are no further practice questions. Start role reversal instead.")
+    sess.current_practice_question_id = questions[current + 1].id
+    sess.workflow_state = "PRACTICE"
+    await db.commit()
+    await session_ws_manager.broadcast(session_id, "next_practice_question", {"questionId": sess.current_practice_question_id})
+    return sess.serialize()
+
+
+@router.post("/learning/sessions/{session_id}/role-reversal/start")
+async def start_role_reversal(
+    session_id: int, user: User = Depends(current_user), db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    sess = await _session_or_404(db, session_id)
+    _require_teacher(sess, user)
+    _require_state(sess, "PRACTICE_REVEAL")
+    questions = [question.id for question in await _practice_questions(db, sess.topic_id)]
+    answers = (await db.execute(select(SessionPracticeAnswer).where(
+        SessionPracticeAnswer.session_id == session_id
+    ))).scalars().all()
+    if any({answer.user_id for answer in answers if answer.question_id == question_id} != {sess.teacher_id, sess.learner_id}
+           for question_id in questions):
+        raise HTTPException(409, "All practice questions must be answered by both participants first.")
+    sess.phase, sess.workflow_state = "challenge", "ROLE_REVERSAL"
+    await db.commit()
+    await session_ws_manager.broadcast(session_id, "role_reversal_started", {})
+    return sess.serialize()
 
 @router.post("/learning/sessions/{session_id}/challenge")
 async def submit_challenge(
@@ -757,8 +1062,8 @@ async def submit_challenge(
     if sess is None:
         raise HTTPException(404, "Session not found.")
 
-    if user.id != sess.learner_id:
-        raise HTTPException(403, "Only the learner submits the challenge explanation.")
+    _require_learner(sess, user)
+    _require_state(sess, "ROLE_REVERSAL")
 
     topic = await _load_topic_full(db, sess.topic_id)
     subject_name = topic.subject.name if topic.subject else ""
@@ -800,17 +1105,41 @@ async def submit_challenge(
     )
     db.add(result)
 
-    # Move session to challenge phase
+    # The original learner is now the teacher.  Their explanation remains
+    # pending private review by the original teacher.
     sess.phase = "challenge"
+    sess.workflow_state = "TEACHER_REVIEW"
     await db.commit()
     await db.refresh(result)
 
-    return {"result": result.serialize(), "aiResult": ai_result}
+    await session_ws_manager.broadcast(session_id, "challenge_submitted", {})
+    return {"submitted": True, "workflowState": sess.workflow_state}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 12. POST /api/learning/sessions/{sessionId}/complete
 # ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/learning/sessions/{session_id}/role-reversal/feedback")
+async def review_role_reversal(
+    session_id: int, body: TeacherFeedbackRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db_session),
+) -> dict:
+    sess = await _session_or_404(db, session_id)
+    _require_teacher(sess, user)
+    _require_state(sess, "TEACHER_REVIEW")
+    result = (await db.execute(select(SessionActivityResult).where(
+        SessionActivityResult.session_id == session_id, SessionActivityResult.user_id == sess.learner_id,
+        SessionActivityResult.concept_id.is_(None), SessionActivityResult.teacher_verdict.is_(None),
+    ).order_by(SessionActivityResult.created_at.desc()).limit(1))).scalar_one_or_none()
+    if result is None:
+        raise HTTPException(409, "There is no role-reversal explanation awaiting review.")
+    result.teacher_verdict, result.teacher_comment = body.verdict, body.teacherComment.strip() or None
+    # A retry keeps the learner in the genuine role-reversal task.  Approval
+    # allows completion but does not complete it automatically.
+    sess.workflow_state = "ROLE_REVERSAL" if body.verdict == "retry" else "NEXT_CONCEPT"
+    await db.commit()
+    await session_ws_manager.broadcast(session_id, "teacher_feedback_sent", {"roleReversal": True, "verdict": body.verdict})
+    return {"reviewed": True, "workflowState": sess.workflow_state}
 
 @router.post("/learning/sessions/{session_id}/complete")
 async def complete_session(
@@ -823,13 +1152,31 @@ async def complete_session(
     )).scalar_one_or_none()
     if sess is None:
         raise HTTPException(404, "Session not found.")
-    await _assert_participant(sess, user.id)
+    _require_teacher(sess, user)
 
     if sess.status == "completed":
         return sess.serialize()
 
+    if sess.workflow_state != "NEXT_CONCEPT" or sess.phase != "challenge":
+        raise HTTPException(409, "The session cannot be completed until role reversal has been approved.")
+    concept_ids = set((await db.execute(select(Concept.id).where(Concept.topic_id == sess.topic_id))).scalars().all())
+    approved_concepts = set((await db.execute(select(SessionActivityResult.concept_id).where(
+        SessionActivityResult.session_id == session_id, SessionActivityResult.teacher_verdict == "approved",
+        SessionActivityResult.concept_id.isnot(None),
+    ))).scalars().all())
+    if not concept_ids.issubset(approved_concepts):
+        raise HTTPException(409, "Every concept must be approved before completion.")
+    question_ids = {question.id for question in await _practice_questions(db, sess.topic_id)}
+    practice_answers = (await db.execute(select(SessionPracticeAnswer).where(
+        SessionPracticeAnswer.session_id == session_id
+    ))).scalars().all()
+    for question_id in question_ids:
+        if {answer.user_id for answer in practice_answers if answer.question_id == question_id} != {sess.teacher_id, sess.learner_id}:
+            raise HTTPException(409, "Both participants must complete every practice question.")
+
     sess.status = "completed"
     sess.phase = "summary"
+    sess.workflow_state = "COMPLETED"
     sess.completed_at = _now()
 
     # Load all results
@@ -887,6 +1234,7 @@ async def complete_session(
         await progress_service.record_activity(db, uid)
         await progress_service.evaluate_badges(db, uid)
 
+    await session_ws_manager.broadcast(session_id, "session_completed", {"sessionId": session_id})
     return sess.serialize()
 
 

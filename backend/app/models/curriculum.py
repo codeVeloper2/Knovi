@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import (
-    Boolean, DateTime, ForeignKey, Index, Integer,
+    BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer,
     String, Text, UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -41,6 +41,15 @@ RESOURCE_TYPES   = {"video", "textbook", "pdf", "study_guide", "tutorial"}
 SESSION_STATUSES = {"pending", "active", "completed", "cancelled"}
 SESSION_STAGES   = {"learn", "explain", "practice", "challenge", "check", "completed"}
 SESSION_PHASES   = {"setup", "concepts", "practice", "challenge", "summary"}
+# The persisted, teacher-led workflow state.  `phase` and `current_stage` are
+# retained for the legacy client; `workflow_state` is authoritative for new
+# session actions.
+LEARNING_WORKFLOW_STATES = {
+    "LOBBY", "TEACHING_CONCEPT", "LEARNER_READING",
+    "EXPLAIN_BACK_REQUESTED", "LEARNER_EXPLAINING", "TEACHER_REVIEW",
+    "NEXT_CONCEPT", "PRACTICE", "PRACTICE_REVEAL", "ROLE_REVERSAL",
+    "COMPLETED",
+}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -361,6 +370,12 @@ class LearningSession(Base):
         Index("idx_learning_sessions_partner",  "partner_id"),
         Index("idx_learning_sessions_topic",    "topic_id"),
         Index("idx_learning_sessions_status",   "status"),
+        CheckConstraint(
+            "workflow_state IN ('LOBBY', 'TEACHING_CONCEPT', 'LEARNER_READING', "
+            "'EXPLAIN_BACK_REQUESTED', 'LEARNER_EXPLAINING', 'TEACHER_REVIEW', "
+            "'NEXT_CONCEPT', 'PRACTICE', 'PRACTICE_REVEAL', 'ROLE_REVERSAL', 'COMPLETED')",
+            name="ck_learning_sessions_workflow_state",
+        ),
     )
 
     id:            Mapped[int]               = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -382,6 +397,16 @@ class LearningSession(Base):
     current_concept_idx: Mapped[int]         = mapped_column(Integer, default=0, nullable=False)
     # Short human-readable join code, e.g. "NLM-4827"
     session_code:  Mapped[Optional[str]]     = mapped_column(String(12), unique=True, nullable=True, index=True)
+    # Existing accepted chat conversation for this exact connected pair.  A
+    # learning session never creates a parallel session-chat system.
+    conversation_id: Mapped[Optional[int]]   = mapped_column(BigInteger, ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True, index=True)
+    # Teacher authored description and explicit workflow state.
+    session_description: Mapped[str]          = mapped_column(Text, default="", nullable=False)
+    workflow_state: Mapped[str]               = mapped_column(String(40), default="LOBBY", nullable=False, index=True)
+    # Concept ID is stored as well as the legacy index so the current activity
+    # cannot be invalidated by a curriculum reorder.
+    current_concept_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("concepts.id", ondelete="SET NULL"), nullable=True)
+    current_practice_question_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("questions.id", ondelete="SET NULL"), nullable=True)
     started_at:    Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at:  Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     expires_at:    Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -425,12 +450,46 @@ class LearningSession(Base):
             "teacherReady": self.teacher_ready,
             "learnerReady": self.learner_ready,
             "sessionCode": self.session_code,
+            "conversationId": self.conversation_id,
+            "description": self.session_description,
+            "workflowState": self.workflow_state,
+            "currentConceptId": self.current_concept_id,
+            "currentPracticeQuestionId": self.current_practice_question_id,
             "startedAt": self.started_at.isoformat() if self.started_at else None,
             "completedAt": self.completed_at.isoformat() if self.completed_at else None,
             "expiresAt": self.expires_at.isoformat() if self.expires_at else None,
             "createdAt": self.created_at.isoformat(),
             "updatedAt": self.updated_at.isoformat(),
         }
+
+
+class SessionTeachingExchange(Base):
+    """Teacher explanation and its learner acknowledgement for one concept."""
+    __tablename__ = "session_teaching_exchanges"
+    __table_args__ = (UniqueConstraint("session_id", "concept_id", name="uq_session_teaching_exchange_concept"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[int] = mapped_column(Integer, ForeignKey("learning_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    concept_id: Mapped[int] = mapped_column(Integer, ForeignKey("concepts.id", ondelete="CASCADE"), nullable=False, index=True)
+    teacher_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    explanation: Mapped[str] = mapped_column(Text, nullable=False)
+    learner_read_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    explain_back_requested_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
+
+
+class SessionPracticeAnswer(Base):
+    """One private answer per participant and question, revealed only together."""
+    __tablename__ = "session_practice_answers"
+    __table_args__ = (UniqueConstraint("session_id", "question_id", "user_id", name="uq_session_practice_answer"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[int] = mapped_column(Integer, ForeignKey("learning_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    question_id: Mapped[int] = mapped_column(Integer, ForeignKey("questions.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    response: Mapped[str] = mapped_column(Text, nullable=False)
+    is_correct: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

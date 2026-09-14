@@ -11,7 +11,8 @@ from app.models.progress import EarnedBadge, Certificate
 from app.models.curriculum import (
     Subject, Topic, LearningObjective, Concept, Misconception,
     LearningActivity, Question, Resource, LearningSession,
-    SessionActivityResult, TopicProgress, ResourceDownload,
+    SessionActivityResult, SessionPracticeAnswer, SessionTeachingExchange,
+    TopicProgress, ResourceDownload,
 )
 
 __all__ = [
@@ -22,5 +23,6 @@ __all__ = [
     # Curriculum / Learning Session
     "Subject", "Topic", "LearningObjective", "Concept", "Misconception",
     "LearningActivity", "Question", "Resource", "LearningSession",
-    "SessionActivityResult", "TopicProgress", "ResourceDownload",
+    "SessionActivityResult", "SessionPracticeAnswer", "SessionTeachingExchange",
+    "TopicProgress", "ResourceDownload",
 ]
