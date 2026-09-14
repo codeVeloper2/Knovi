@@ -399,10 +399,12 @@ class LearningSession(Base):
         "User", back_populates="learning_sessions_as_partner", foreign_keys=[partner_id]
     )
     teacher:          Mapped[Optional["User"]]              = relationship(  # type: ignore[name-defined]
-        "User", foreign_keys=[teacher_id]
+        "User", foreign_keys=[teacher_id], viewonly=True,
+        overlaps="creator,partner,learner"
     )
     learner:          Mapped[Optional["User"]]              = relationship(  # type: ignore[name-defined]
-        "User", foreign_keys=[learner_id]
+        "User", foreign_keys=[learner_id], viewonly=True,
+        overlaps="creator,partner,teacher"
     )
     topic:            Mapped["Topic"]                       = relationship("Topic", back_populates="learning_sessions")
     activity_results: Mapped[list["SessionActivityResult"]] = relationship("SessionActivityResult", back_populates="session", cascade="all, delete-orphan")
