@@ -22,7 +22,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.database import get_session
+from app.core.database import get_session as get_db_session
 from app.core.security import current_user
 from app.models.curriculum import (
     Concept, LearningActivity, LearningObjective,
@@ -184,7 +184,7 @@ class ChallengeRequest(BaseModel):
 @router.get("/learning/topics")
 async def list_learning_topics(
     _user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db_session),
 ) -> list[dict]:
     topics = (await db.execute(
         select(Topic)
@@ -230,7 +230,7 @@ async def list_learning_topics(
 async def create_session(
     body: CreateSessionRequest,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db_session),
 ) -> dict:
     # Verify topic — eager-load subject to avoid lazy-load after commit
     topic = (await db.execute(
@@ -303,7 +303,7 @@ async def create_session(
 async def validate_code(
     code: str,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db_session),
 ) -> dict:
     sess = (await db.execute(
         select(LearningSession).where(LearningSession.session_code == code.upper())
@@ -350,7 +350,7 @@ async def validate_code(
 async def join_session(
     session_id: int,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db_session),
 ) -> dict:
     sess = (await db.execute(
         select(LearningSession).where(LearningSession.id == session_id)
@@ -383,10 +383,10 @@ async def join_session(
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.get("/learning/sessions/{session_id}")
-async def get_session(
+async def get_learning_session(
     session_id: int,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db_session),
 ) -> dict:
     sess = (await db.execute(
         select(LearningSession).where(LearningSession.id == session_id)
@@ -412,7 +412,7 @@ async def get_session(
 async def mark_ready(
     session_id: int,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db_session),
 ) -> dict:
     sess = (await db.execute(
         select(LearningSession).where(LearningSession.id == session_id)
@@ -449,7 +449,7 @@ async def submit_explanation(
     concept_id: int,
     body: ExplanationRequest,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db_session),
 ) -> dict:
     sess = (await db.execute(
         select(LearningSession).where(LearningSession.id == session_id)
@@ -565,7 +565,7 @@ async def submit_verdict(
     concept_id: int,
     body: VerdictRequest,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db_session),
 ) -> dict:
     sess = (await db.execute(
         select(LearningSession).where(LearningSession.id == session_id)
@@ -632,7 +632,7 @@ async def submit_verdict(
 async def get_practice_questions(
     session_id: int,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db_session),
 ) -> dict:
     sess = (await db.execute(
         select(LearningSession).where(LearningSession.id == session_id)
@@ -665,7 +665,7 @@ async def submit_practice_answer(
     question_id: int,
     body: PracticeAnswerRequest,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db_session),
 ) -> dict:
     sess = (await db.execute(
         select(LearningSession).where(LearningSession.id == session_id)
@@ -749,7 +749,7 @@ async def submit_challenge(
     session_id: int,
     body: ChallengeRequest,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db_session),
 ) -> dict:
     sess = (await db.execute(
         select(LearningSession).where(LearningSession.id == session_id)
@@ -816,7 +816,7 @@ async def submit_challenge(
 async def complete_session(
     session_id: int,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db_session),
 ) -> dict:
     sess = (await db.execute(
         select(LearningSession).where(LearningSession.id == session_id)
@@ -898,7 +898,7 @@ async def complete_session(
 async def get_summary(
     session_id: int,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db_session),
 ) -> dict:
     sess = (await db.execute(
         select(LearningSession).where(LearningSession.id == session_id)
