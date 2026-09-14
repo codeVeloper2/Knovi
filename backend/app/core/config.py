@@ -96,6 +96,14 @@ class Settings:
     # Must be exactly 64 hex characters (32 bytes = 256-bit key).
     CHAT_ENCRYPTION_KEY: str = os.getenv("CHAT_ENCRYPTION_KEY", "")
 
+    # ── AI (Gemini primary, Groq fallback) ──
+    GEMINI_API_KEY:              str = os.getenv("GEMINI_API_KEY", "")
+    GEMINI_MODEL:                str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    GROQ_API_KEY:                str = os.getenv("GROQ_API_KEY", "")
+    GROQ_MODEL:                  str = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
+    AI_REQUEST_TIMEOUT:          int = int(os.getenv("AI_REQUEST_TIMEOUT", "30"))
+    AI_MAX_EXPLANATION_ATTEMPTS: int = int(os.getenv("AI_MAX_EXPLANATION_ATTEMPTS", "3"))
+
     # ── CORS ──
     CORS_ORIGINS: list[str] = [
         origin.strip()

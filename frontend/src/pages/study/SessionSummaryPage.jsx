@@ -1,11 +1,12 @@
 /**
- * SessionSummaryPage — /app/study-rooms/session/:sessionId/summary
+ * SessionSummaryPage — /app/rooms/summary/:sessionId
+ * Completed session results for both teacher and learner.
  */
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import * as api from "../../api";
 
-// ── Minimal confetti (reuses the pattern from StudyRoom.jsx) ─────────────────
+// ── Confetti ──────────────────────────────────────────────────────────────────
 function Confetti() {
   const particles = useMemo(() =>
     Array.from({ length: 50 }, (_, i) => ({
@@ -18,157 +19,181 @@ function Confetti() {
     })), []);
   return (
     <div className="confetti-container" aria-hidden="true">
-      {particles.map((p) => (
+      {particles.map(p => (
         <div key={p.id} className="confetti-particle" style={{
-          left: `${p.left}%`,
-          backgroundColor: p.color,
-          animationDelay: `${p.delay}s`,
-          animationDuration: `${p.duration}s`,
-          width: p.size,
-          height: p.size,
-          borderRadius: "2px",
+          left: `${p.left}%`, backgroundColor: p.color,
+          animationDelay: `${p.delay}s`, animationDuration: `${p.duration}s`,
+          width: p.size, height: p.size, borderRadius: "2px",
         }} />
       ))}
     </div>
   );
 }
 
-function StatCard({ icon, value, label }) {
+function ConceptPill({ result }) {
+  const cls = result.needsReview ? "pt-concept-review" : "pt-concept-understood";
+  const icon = result.needsReview ? "⚠️" : "✅";
   return (
-    <div className="ls-summary-stat">
-      <span className="ls-summary-stat-icon">{icon}</span>
-      <span className="ls-summary-stat-val">{value}</span>
-      <span className="ls-summary-stat-lbl">{label}</span>
+    <div className={`pt-concept-result ${cls}`}>
+      <span>{icon}</span>
+      <span className="pt-concept-result-name">{result.conceptName}</span>
+      {result.score != null && (
+        <span className="pt-concept-result-score">{result.score}/100</span>
+      )}
+      {result.needsReview && <span className="pt-concept-review-badge">Needs Review</span>}
     </div>
   );
 }
 
 export default function SessionSummaryPage() {
   const { sessionId } = useParams();
-  const navigate = useNavigate();
+  const navigate      = useNavigate();
   const [summary, setSummary] = useState(null);
-  const [error, setError] = useState("");
+  const [error,   setError]   = useState("");
 
   useEffect(() => {
     api.getSessionSummary(Number(sessionId))
       .then(setSummary)
-      .catch((e) => setError(e.message));
+      .catch(e => setError(e.message));
   }, [sessionId]);
 
   if (error) return (
-    <div className="ls-page ls-page-centered">
-      <div className="ls-error-card">
-        <p className="ls-error-text">⚠️ {error}</p>
-        <button className="ls-btn-ghost" onClick={() => navigate("/app/study-rooms/start")}>← Back</button>
+    <div className="pt-page pt-page-centered">
+      <div className="pt-error-card"><p className="pt-err-text">⚠️ {error}</p>
+        <button className="pt-btn-ghost" onClick={() => navigate("/app/rooms")}>← Back</button>
       </div>
     </div>
   );
-
-  if (!summary) return (
-    <div className="ls-page ls-page-centered">
-      <div className="ls-loading-spinner" aria-label="Loading" />
-    </div>
-  );
+  if (!summary) return <div className="pt-page pt-page-centered"><div className="pt-spinner" /></div>;
 
   const {
     topicName, subject, subjectIcon,
-    activitiesCompleted, totalActivities,
-    questionsAnswered, questionsCorrect,
-    xpEarned, understandingScore,
-    feedbackHighlights = [], hintsGiven = [],
+    teacher, learner,
+    conceptResults = [],
+    practiceTotal, practiceCorrect,
+    challengeResult, misconceptionsDetected = [],
+    learnerXpEarned, teacherXpEarned,
   } = summary;
 
+  const understood = conceptResults.filter(c => !c.needsReview).length;
+  const needsReview = conceptResults.filter(c => c.needsReview).length;
+  const practiceAcc = practiceTotal > 0 ? Math.round((practiceCorrect / practiceTotal) * 100) : null;
+
   return (
-    <div className="ls-summary-page">
+    <div className="pt-summary-page">
       <Confetti />
 
-      <div className="ls-summary-card">
-        {/* Trophy */}
-        <div className="ls-summary-trophy">🏆</div>
-
-        <h1 className="ls-summary-title">Learning Session Complete!</h1>
-        <p className="ls-summary-topic">
-          You've completed <strong>{topicName}</strong>.
-        </p>
-
-        {/* Stats */}
-        <div className="ls-summary-stats">
-          <StatCard
-            icon="🎓"
-            value={`${activitiesCompleted}/${totalActivities}`}
-            label="Activities Completed"
-          />
-          <StatCard
-            icon="❓"
-            value={`${questionsAnswered}/${questionsAnswered}`}
-            label="Questions Answered"
-          />
-          <StatCard
-            icon="⚡"
-            value={`+${xpEarned || 75} XP`}
-            label="Earned"
-          />
+      <div className="pt-summary-card">
+        {/* Header */}
+        <div className="pt-summary-hero">
+          <span className="pt-summary-trophy">🏆</span>
+          <h1 className="pt-summary-title">Learning Session Complete!</h1>
+          <p className="pt-summary-sub">
+            <strong>{subjectIcon} {topicName}</strong> · {subject}
+          </p>
         </div>
 
-        {/* Understanding score */}
-        {understandingScore != null && (
-          <div className="ls-summary-score">
-            <div className="ls-summary-score-header">
-              <span>Understanding Score</span>
-              <span>{understandingScore}%</span>
+        {/* Two columns: learner + teacher */}
+        <div className="pt-summary-grid">
+          {/* Learner column */}
+          <div className="pt-summary-col">
+            <div className="pt-summary-col-header">
+              {learner?.photoUrl
+                ? <img src={learner.photoUrl} alt={learner.name} className="pt-summary-avatar" referrerPolicy="no-referrer" />
+                : <div className="pt-summary-avatar pt-summary-avatar-fb">{learner?.name?.charAt(0) || "L"}</div>
+              }
+              <div>
+                <p className="pt-summary-role-name">{learner?.name || "Learner"}</p>
+                <span className="pt-summary-role-badge learner">Learner</span>
+              </div>
             </div>
-            <div className="ls-progress-bar-track">
-              <div
-                className="ls-progress-bar-fill"
-                style={{ width: `${understandingScore}%` }}
-              />
+
+            <div className="pt-summary-section">
+              <h3>Concept Results</h3>
+              {conceptResults.length === 0
+                ? <p className="pt-summary-empty">No concept results.</p>
+                : conceptResults.map(r => <ConceptPill key={r.conceptId} result={r} />)
+              }
+            </div>
+
+            {practiceTotal > 0 && (
+              <div className="pt-summary-stat-row">
+                <span>Practice</span>
+                <span className={practiceAcc >= 70 ? "pt-stat-good" : "pt-stat-warn"}>
+                  {practiceCorrect}/{practiceTotal} correct {practiceAcc != null && `(${practiceAcc}%)`}
+                </span>
+              </div>
+            )}
+
+            {challengeResult && (
+              <div className="pt-summary-stat-row">
+                <span>Challenge</span>
+                <span className={challengeResult.aiVerdict === "correct" ? "pt-stat-good" : "pt-stat-warn"}>
+                  {challengeResult.aiVerdict === "correct" ? "✅ Complete" : "⚠️ Needs work"}
+                </span>
+              </div>
+            )}
+
+            <div className="pt-xp-badge learner">
+              <span>⚡ XP Earned</span>
+              <span className="pt-xp-val">+{learnerXpEarned || 75} XP</span>
             </div>
           </div>
-        )}
 
-        {/* What you did well */}
-        {feedbackHighlights.length > 0 && (
-          <div className="ls-summary-section">
-            <h3>What you did well</h3>
-            <ul className="ls-takeaways">
-              {feedbackHighlights.map((f, i) => (
-                <li key={i} className="ls-takeaway-item">
-                  <span className="ls-takeaway-tick">✓</span>
-                  <span>{f}</span>
-                </li>
-              ))}
-            </ul>
+          {/* Teacher column */}
+          <div className="pt-summary-col">
+            <div className="pt-summary-col-header">
+              {teacher?.photoUrl
+                ? <img src={teacher.photoUrl} alt={teacher.name} className="pt-summary-avatar" referrerPolicy="no-referrer" />
+                : <div className="pt-summary-avatar pt-summary-avatar-fb">{teacher?.name?.charAt(0) || "T"}</div>
+              }
+              <div>
+                <p className="pt-summary-role-name">{teacher?.name || "Teacher"}</p>
+                <span className="pt-summary-role-badge teacher">Teacher</span>
+              </div>
+            </div>
+
+            <div className="pt-summary-section">
+              <h3>Teaching Quality</h3>
+              {understood > 0 && (
+                <p className="pt-teaching-good">
+                  ✓ Concepts explained well: {conceptResults.filter(c => !c.needsReview).map(c => c.conceptName).join(", ") || "—"}
+                </p>
+              )}
+              {needsReview > 0 && (
+                <p className="pt-teaching-review">
+                  ↩ {learner?.name || "Learner"} struggled with: {conceptResults.filter(c => c.needsReview).map(c => c.conceptName).join(", ")} — worth revisiting
+                </p>
+              )}
+            </div>
+
+            <div className="pt-xp-badge teacher">
+              <span>⚡ Teaching Bonus</span>
+              <span className="pt-xp-val">+{teacherXpEarned || 50} XP</span>
+            </div>
           </div>
-        )}
+        </div>
 
-        {/* Areas to review */}
-        {hintsGiven.length > 0 && (
-          <div className="ls-summary-section">
-            <h3>Areas to review</h3>
-            <ul className="ls-takeaways ls-takeaways-review">
-              {hintsGiven.map((h, i) => (
-                <li key={i} className="ls-takeaway-item">
-                  <span className="ls-takeaway-tick ls-tick-warn">💡</span>
-                  <span>{h}</span>
-                </li>
-              ))}
-            </ul>
+        {/* Misconceptions */}
+        {misconceptionsDetected.length > 0 && (
+          <div className="pt-summary-misconceptions">
+            <h3>⚠️ Misconceptions Detected</h3>
+            {misconceptionsDetected.map((m, i) => (
+              <div key={i} className="pt-misc-item">
+                <span className="pt-misc-name">{m.name || m}</span>
+                {m.correction && <span className="pt-misc-correction"> — {m.correction}</span>}
+              </div>
+            ))}
           </div>
         )}
 
         {/* Actions */}
-        <div className="ls-summary-actions">
-          <button
-            className="ls-btn-ghost"
-            onClick={() => navigate(`/app/study-rooms/session/${sessionId}`)}
-          >
-            Back to Topic
+        <div className="pt-summary-actions">
+          <button className="pt-btn-ghost" onClick={() => navigate("/app/chat")}>
+            Back to Chat
           </button>
-          <button
-            className="ls-btn-primary"
-            onClick={() => navigate("/app/study-rooms/start")}
-          >
-            Explore More Topics →
+          <button className="pt-btn-primary" onClick={() => navigate("/app/rooms")}>
+            Start Another Session →
           </button>
         </div>
       </div>

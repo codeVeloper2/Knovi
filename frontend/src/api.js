@@ -508,13 +508,17 @@ export const getTopicQuestions     = (id)       => request(`/api/topics/${id}/qu
 export const getTopicResources     = (id)       => request(`/api/topics/${id}/resources`,            { auth: true });
 export const getTopicLearningContent = (id)     => request(`/api/topics/${id}/learning-content`,     { auth: true });
 
-// ── Learning Sessions ────────────────────────────────────────────────────────
-export const getLearningTopics      = ()                         => request("/api/learning/topics",                                         { auth: true });
-export const createLearningSession  = (topicId)                  => request("/api/learning/sessions",                                       { method: "POST", body: { topicId }, auth: true });
-export const validateSessionCode    = (code)                     => request(`/api/learning/sessions/join/${code}`,                          { auth: true });
-export const joinLearningSession    = (sessionId)                => request(`/api/learning/sessions/${sessionId}/join`,                     { method: "POST", auth: true });
-export const getLearningSession     = (sessionId)                => request(`/api/learning/sessions/${sessionId}`,                          { auth: true });
-export const advanceSessionStage    = (sessionId, stage)         => request(`/api/learning/sessions/${sessionId}/stage`,                    { method: "PATCH", body: { stage }, auth: true });
-export const submitActivityResponse = (sessionId, activityId, body) => request(`/api/learning/sessions/${sessionId}/activities/${activityId}/submit`, { method: "POST", body, auth: true });
-export const completeSession        = (sessionId)                => request(`/api/learning/sessions/${sessionId}/complete`,                 { method: "POST", auth: true });
-export const getSessionSummary      = (sessionId)                => request(`/api/learning/sessions/${sessionId}/summary`,                  { auth: true });
+// ── Peer Teaching Learning Sessions ──────────────────────────────────────────
+export const getLearningTopics      = ()                              => request("/api/learning/topics", { auth: true });
+export const createLearningSession  = (topicId, partnerId)           => request("/api/learning/sessions", { method: "POST", body: { topicId, partnerId }, auth: true });
+export const validateSessionCode    = (code)                         => request(`/api/learning/sessions/join/${code}`, { auth: true });
+export const joinLearningSession    = (sessionId)                    => request(`/api/learning/sessions/${sessionId}/join`, { method: "POST", auth: true });
+export const getLearningSession     = (sessionId)                    => request(`/api/learning/sessions/${sessionId}`, { auth: true });
+export const setStudentReady        = (sessionId)                    => request(`/api/learning/sessions/${sessionId}/ready`, { method: "POST", auth: true });
+export const submitExplanation      = (sessionId, conceptId, body)  => request(`/api/learning/sessions/${sessionId}/concepts/${conceptId}/explanation`, { method: "POST", body, auth: true });
+export const submitTeacherVerdict   = (sessionId, conceptId, body)  => request(`/api/learning/sessions/${sessionId}/concepts/${conceptId}/verdict`, { method: "POST", body, auth: true });
+export const getPracticeQuestions   = (sessionId)                    => request(`/api/learning/sessions/${sessionId}/practice`, { auth: true });
+export const submitPracticeAnswer   = (sessionId, questionId, body) => request(`/api/learning/sessions/${sessionId}/practice/${questionId}/answer`, { method: "POST", body, auth: true });
+export const submitChallenge        = (sessionId, body)              => request(`/api/learning/sessions/${sessionId}/challenge`, { method: "POST", body, auth: true });
+export const completeSession        = (sessionId)                    => request(`/api/learning/sessions/${sessionId}/complete`, { method: "POST", auth: true });
+export const getSessionSummary      = (sessionId)                    => request(`/api/learning/sessions/${sessionId}/summary`, { auth: true });

@@ -35,11 +35,12 @@ def _now() -> datetime:
 
 # ── Valid enum-like constants (enforced in Pydantic, stored as plain strings) ──
 
-ACTIVITY_TYPES  = {"learn", "explain", "practice", "challenge", "check"}
-QUESTION_TYPES  = {"multiple_choice", "short_answer", "numeric", "explanation"}
-RESOURCE_TYPES  = {"video", "textbook", "pdf", "study_guide", "tutorial"}
+ACTIVITY_TYPES   = {"learn", "explain", "practice", "challenge", "check"}
+QUESTION_TYPES   = {"multiple_choice", "short_answer", "numeric", "explanation"}
+RESOURCE_TYPES   = {"video", "textbook", "pdf", "study_guide", "tutorial"}
 SESSION_STATUSES = {"pending", "active", "completed", "cancelled"}
 SESSION_STAGES   = {"learn", "explain", "practice", "challenge", "check", "completed"}
+SESSION_PHASES   = {"setup", "concepts", "practice", "challenge", "summary"}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -366,17 +367,27 @@ class LearningSession(Base):
     creator_id:    Mapped[int]               = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     # Nullable until a partner joins (status="pending" → partner_id is NULL)
     partner_id:    Mapped[Optional[int]]     = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    # Peer-teaching roles: teacher explains, learner asks questions and proves understanding
+    teacher_id:    Mapped[Optional[int]]     = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    learner_id:    Mapped[Optional[int]]     = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     topic_id:      Mapped[int]               = mapped_column(Integer, ForeignKey("topics.id", ondelete="CASCADE"), nullable=False)
     goal:          Mapped[str]               = mapped_column(Text, nullable=False)
     # pending | active | completed | cancelled
     status:        Mapped[str]               = mapped_column(String(20), default="pending", nullable=False)
-    # learn | explain | practice | challenge | check | completed
+    # learn | explain | practice | challenge | check | completed  (kept for backwards compat)
     current_stage: Mapped[str]               = mapped_column(String(20), default="learn", nullable=False)
+    # setup | concepts | practice | challenge | summary
+    phase:         Mapped[str]               = mapped_column(String(20), default="setup", nullable=False)
+    # Index into topic.concepts for the currently active concept (0-based)
+    current_concept_idx: Mapped[int]         = mapped_column(Integer, default=0, nullable=False)
     # Short human-readable join code, e.g. "NLM-4827"
     session_code:  Mapped[Optional[str]]     = mapped_column(String(12), unique=True, nullable=True, index=True)
     started_at:    Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at:  Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     expires_at:    Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Readiness flags for the setup phase
+    teacher_ready: Mapped[bool]              = mapped_column(Boolean, default=False, nullable=False)
+    learner_ready: Mapped[bool]              = mapped_column(Boolean, default=False, nullable=False)
     created_at:    Mapped[datetime]           = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
     updated_at:    Mapped[datetime]           = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now, nullable=False)
 
@@ -387,6 +398,12 @@ class LearningSession(Base):
     partner:          Mapped[Optional["User"]]              = relationship(  # type: ignore[name-defined]
         "User", back_populates="learning_sessions_as_partner", foreign_keys=[partner_id]
     )
+    teacher:          Mapped[Optional["User"]]              = relationship(  # type: ignore[name-defined]
+        "User", foreign_keys=[teacher_id]
+    )
+    learner:          Mapped[Optional["User"]]              = relationship(  # type: ignore[name-defined]
+        "User", foreign_keys=[learner_id]
+    )
     topic:            Mapped["Topic"]                       = relationship("Topic", back_populates="learning_sessions")
     activity_results: Mapped[list["SessionActivityResult"]] = relationship("SessionActivityResult", back_populates="session", cascade="all, delete-orphan")
 
@@ -395,10 +412,16 @@ class LearningSession(Base):
             "id": self.id,
             "creatorId": self.creator_id,
             "partnerId": self.partner_id,
+            "teacherId": self.teacher_id,
+            "learnerId": self.learner_id,
             "topicId": self.topic_id,
             "goal": self.goal,
             "status": self.status,
             "currentStage": self.current_stage,
+            "phase": self.phase,
+            "currentConceptIdx": self.current_concept_idx,
+            "teacherReady": self.teacher_ready,
+            "learnerReady": self.learner_ready,
             "sessionCode": self.session_code,
             "startedAt": self.started_at.isoformat() if self.started_at else None,
             "completedAt": self.completed_at.isoformat() if self.completed_at else None,
@@ -419,9 +442,19 @@ class SessionActivityResult(Base):
     session_id:     Mapped[int]           = mapped_column(Integer, ForeignKey("learning_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id:        Mapped[int]           = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     activity_id:    Mapped[int]           = mapped_column(Integer, ForeignKey("learning_activities.id", ondelete="CASCADE"), nullable=False, index=True)
+    # The concept this result is linked to (for concept explanation results)
+    concept_id:     Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("concepts.id", ondelete="SET NULL"), nullable=True, index=True)
     response:       Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_correct:     Mapped[Optional[bool]]= mapped_column(Boolean, nullable=True)
+    # AI result fields
     ai_feedback:    Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    ai_verdict:     Mapped[Optional[str]] = mapped_column(String(20), nullable=True)    # correct | partial | incorrect
+    ai_confidence:  Mapped[Optional[float]] = mapped_column(nullable=True)              # 0.0–1.0
+    ai_provider:    Mapped[Optional[str]] = mapped_column(String(20), nullable=True)    # gemini | groq
+    misconceptions_detected: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    # Teacher verdict fields
+    teacher_verdict: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # approved | retry
+    teacher_comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     hint:           Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     retry:          Mapped[bool]          = mapped_column(Boolean, default=False, nullable=False)
     attempt_number: Mapped[int]           = mapped_column(Integer, default=1, nullable=False)
@@ -442,9 +475,16 @@ class SessionActivityResult(Base):
             "sessionId": self.session_id,
             "userId": self.user_id,
             "activityId": self.activity_id,
+            "conceptId": self.concept_id,
             "response": self.response,
             "isCorrect": self.is_correct,
             "aiFeedback": self.ai_feedback,
+            "aiVerdict": self.ai_verdict,
+            "aiConfidence": float(self.ai_confidence) if self.ai_confidence is not None else None,
+            "aiProvider": self.ai_provider,
+            "misconceptionsDetected": self.misconceptions_detected or [],
+            "teacherVerdict": self.teacher_verdict,
+            "teacherComment": self.teacher_comment,
             "hint": self.hint,
             "retry": self.retry,
             "attemptNumber": self.attempt_number,
