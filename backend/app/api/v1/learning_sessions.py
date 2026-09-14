@@ -431,8 +431,12 @@ async def mark_ready(
         sess.phase = "concepts"
 
     await db.commit()
-    await db.refresh(sess)
-    return sess.serialize()
+
+    # Re-load with explicit columns only — avoid lazy relationship access
+    updated = (await db.execute(
+        select(LearningSession).where(LearningSession.id == session_id)
+    )).scalar_one()
+    return updated.serialize()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

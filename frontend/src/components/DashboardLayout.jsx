@@ -12,6 +12,7 @@ import {
   HomeIcon, DiscoverIcon, ChatIcon, RoomsIcon, LearnIcon,
   ProgressIcon, SettingsIcon, SearchIcon, MenuIcon, LogoutIcon,
   ChevronLeft, ChevronRight, ProfileIcon, SecurityIcon, BellIcon, BackIcon, MatchRequestsIcon,
+  JoinIcon,
 } from "./DashIcons";
 
 const LEARN_SUB = [
@@ -25,7 +26,7 @@ const MAIN_NAV = [
   { to: "/app/chat",           label: "Chat",           Icon: ChatIcon },
   { to: "/app/match-requests", label: "Friend Requests",Icon: MatchRequestsIcon },
   { to: "/app/rooms",          label: "Study Rooms",    Icon: RoomsIcon },
-  { to: "/app/rooms/join",     label: "Join Session",   Icon: RoomsIcon },
+  { to: "/app/rooms/join",     label: "Join Session",   Icon: JoinIcon },
   { to: "/app/learn",          label: "Learn",          Icon: LearnIcon },
   { to: "/app/progress",       label: "Progress",       Icon: ProgressIcon },
 ];
