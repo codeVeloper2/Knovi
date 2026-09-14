@@ -232,9 +232,11 @@ async def create_session(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ) -> dict:
-    # Verify topic
+    # Verify topic — eager-load subject to avoid lazy-load after commit
     topic = (await db.execute(
-        select(Topic).where(Topic.id == body.topicId, Topic.is_active == True)  # noqa: E712
+        select(Topic)
+        .where(Topic.id == body.topicId, Topic.is_active == True)  # noqa: E712
+        .options(selectinload(Topic.subject))
     )).scalar_one_or_none()
     if topic is None:
         raise HTTPException(404, "Topic not found or not available.")
