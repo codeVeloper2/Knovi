@@ -61,6 +61,13 @@ import SyncGapCheckPage    from "./pages/sync/SyncGapCheckPage";
 import SyncCompletePage    from "./pages/sync/SyncCompletePage";
 import SyncHistoryPage     from "./pages/sync/SyncHistoryPage";
 
+// On mobile shows the settings card list; on desktop redirects to /profile
+function SettingsIndex() {
+  const isMobile = window.innerWidth <= 820;
+  if (isMobile) return <SettingsMobile />;
+  return <Navigate to="/app/settings/profile" replace />;
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -114,7 +121,7 @@ function AppRoutes() {
 
         <Route path="progress" element={<Progress />} />
         <Route path="settings">
-          <Route index element={<SettingsMobile />} />
+          <Route index element={<SettingsIndex />} />
           <Route path="profile"       element={<SettingsProfile />} />
           <Route path="subjects"      element={<SettingsSubjects />} />
           <Route path="security"      element={<SettingsSecurity />} />

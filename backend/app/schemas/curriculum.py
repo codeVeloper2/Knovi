@@ -15,7 +15,6 @@ from pydantic import BaseModel, Field, field_validator
 from app.schemas.base import StrictModel
 from app.models.curriculum import (
     ACTIVITY_TYPES, QUESTION_TYPES, RESOURCE_TYPES,
-    SESSION_STATUSES, SESSION_STAGES,
 )
 
 

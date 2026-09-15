@@ -2045,6 +2045,15 @@ kbd {
 .dash-help:hover { border-color: var(--blue); }
 .dash-help kbd { border: 0; background: transparent; color: var(--text); font-size: 0.95rem; }
 
+/* notification bell in topbar */
+.dash-bell {
+  flex-shrink: 0;
+  width: 36px; height: 36px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
 /* modal */
 /* ── Shared full-screen modal overlay (used by match request, confirm dialogs, etc.) ── */
 .modal-overlay {
