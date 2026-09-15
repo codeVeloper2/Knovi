@@ -9786,18 +9786,17 @@ kbd {
 
   /* ── Title ───────────────────────────────────────────────────── */
   .disc-mobile-title-row {
-    position: sticky;
-    top: 56px; /* Below the fixed mobile-topbar */
-    background: var(--navy-bg);
-    padding: 14px 16px 12px;
-    z-index: 90;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
+    position: static; /* no longer sticky — flows normally */
+    background: transparent;
+    padding: 20px 16px 8px;
+    z-index: auto;
+    border-bottom: none;
   }
   .disc-mobile-title {
     font-size: 1.45rem;
     font-weight: 800;
     color: #fff;
-    margin: 0 0 2px;
+    margin: 0 0 4px;
     letter-spacing: -0.02em;
   }
   .disc-mobile-subtitle {
@@ -9810,7 +9809,7 @@ kbd {
   .disc-mobile-controls {
     display: flex;
     gap: 10px;
-    padding: 0 16px 14px;
+    padding: 12px 16px 14px;
     align-items: center;
   }
   .disc-mobile-search-wrap {
@@ -13548,9 +13547,9 @@ kbd {
     padding: 16px 16px 80px !important;
   }
   
-  /* Discover mobile - already has padding but ensure consistency */
+  /* Discover mobile - controls padding */
   .disc-mobile-controls {
-    padding: 0 16px 12px !important;
+    padding: 12px 16px 14px !important;
   }
   
   .disc-mobile-chips {
@@ -14073,15 +14072,15 @@ kbd {
 
   /* ── 2. Discover: title no longer overlaps search; add vertical gaps ── */
 
-  /* The title row is sticky — keep it, but give it proper bottom padding */
+  /* The title row is in normal flow, controls have top padding */
   .disc-mobile-title-row {
-    padding: 14px 16px 14px !important;
-    top: 56px !important;
+    padding: 20px 16px 8px !important;
+    position: static !important;
   }
 
-  /* Controls row (search + filter) — add top gap so it doesn't touch title */
+  /* Controls row (search + filter) */
   .disc-mobile-controls {
-    padding: 14px 16px 0 !important;
+    padding: 12px 16px 14px !important;
     margin-top: 0 !important;
   }
 
