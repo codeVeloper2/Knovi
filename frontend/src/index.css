@@ -14016,3 +14016,105 @@ kbd {
 
 /* Remove the search from topbar (search is now in sub-bar) */
 .desktop-topbar-search { display: none !important; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MOBILE LAYOUT SPACING FIXES  (Resources · Discover · Settings)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 820px) {
+
+  /* ── 1. Resources page: spacing between header / tabs / search / chips ── */
+
+  /* Wrap the whole resources page so padding applies uniformly */
+  .lh-page {
+    padding: 16px 16px 80px !important;
+  }
+
+  /* Page heading (📚 Resources + subtitle) */
+  .ln-page-head {
+    padding: 0 0 12px !important;
+    margin-bottom: 0 !important;
+  }
+
+  /* Tab bar (Tutorials | Courses) */
+  .ln-tabs {
+    padding: 0 !important;
+    margin-bottom: 14px !important;
+    border-bottom-width: 2px;
+  }
+
+  /* Search bar inside resources */
+  .ln-search-wrap {
+    margin: 0 0 14px !important;
+  }
+
+  /* Subject chips row */
+  .ln-chips {
+    padding: 0 0 14px !important;
+  }
+
+  /* Sort / section rows */
+  .ln-sort-row  { padding: 0 0 12px !important; }
+  .ln-sec       { padding: 0 !important; }
+  .ln-grid      { padding: 0 !important; gap: 12px !important; }
+  .ln-feature-row   { padding: 0 0 6px !important; }
+  .ln-continue-row  { padding: 0 0 6px !important; }
+  .ln-cta-banner    { margin: 10px 0 0 !important; }
+
+  /* Courses tab wrapper */
+  .ln-courses-wrap {
+    padding: 14px 0 80px !important;
+  }
+
+
+  /* ── 2. Discover: title no longer overlaps search; add vertical gaps ── */
+
+  /* The title row is sticky — keep it, but give it proper bottom padding */
+  .disc-mobile-title-row {
+    padding: 14px 16px 14px !important;
+    top: 56px !important;
+  }
+
+  /* Controls row (search + filter) — add top gap so it doesn't touch title */
+  .disc-mobile-controls {
+    padding: 14px 16px 0 !important;
+    margin-top: 0 !important;
+  }
+
+  /* Active filter chips — breathing room above and below */
+  .disc-mobile-chips {
+    padding: 10px 16px 4px !important;
+  }
+
+  /* Sort tabs row — gap below title area */
+  .disc-mobile-sort-tabs {
+    padding: 12px 16px 10px !important;
+  }
+
+  /* Count line */
+  .disc-mobile-count {
+    padding: 4px 16px 10px !important;
+    font-size: 0.82rem;
+  }
+
+
+  /* ── 3. Settings main (sm-wrap): keep cards away from screen edges ── */
+
+  .sm-wrap {
+    padding: 16px 16px 24px !important;
+  }
+
+  /* Hero card: no extra horizontal margin needed since wrap has padding */
+  .sm-hero {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  /* Section list: same — padding comes from wrapper */
+  .sm-sections {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    gap: 12px !important;
+  }
+
+}
