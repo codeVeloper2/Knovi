@@ -1,102 +1,133 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
-import { 
-  ProfileIcon, 
-  LearnIcon, 
-  SecurityIcon, 
-  BellIcon,
-  ChevronRight 
-} from "../../../components/DashIcons";
+import { ChevronRight, ProfileIcon, LearnIcon, SecurityIcon, BellIcon } from "../../../components/DashIcons";
 
-/**
- * SettingsMobile — Unified settings page for mobile
- * Shows user profile at top with all settings sections as navigable cards
- */
+const SECTIONS = [
+  {
+    icon: ProfileIcon,
+    label: "Profile",
+    desc: "Edit name, photo, bio and privacy",
+    route: "/app/settings/profile",
+    accent: "#5b6ef5",
+    emoji: "👤",
+  },
+  {
+    icon: LearnIcon,
+    label: "Subjects",
+    desc: "What you teach and what you need help with",
+    route: "/app/settings/subjects",
+    accent: "#0ea5e9",
+    emoji: "📚",
+  },
+  {
+    icon: SecurityIcon,
+    label: "Security",
+    desc: "Password and account settings",
+    route: "/app/settings/security",
+    accent: "#10b981",
+    emoji: "🔒",
+  },
+  {
+    icon: BellIcon,
+    label: "Notifications",
+    desc: "Choose what to be notified about",
+    route: "/app/settings/notifications",
+    accent: "#f59e0b",
+    emoji: "🔔",
+  },
+];
+
 export default function SettingsMobile() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
 
-  const name = profile?.displayName || user?.displayName || "User";
-  const photo = profile?.photoURL || user?.photoURL || "";
-  const initial = name.trim().slice(0, 1).toUpperCase();
-  const grade = profile?.grade || "";
-  const role = profile?.role || "Student";
+  const name    = profile?.displayName || user?.displayName || "Student";
+  const photo   = profile?.photoURL    || user?.photoURL    || "";
+  const initial = name.trim()[0]?.toUpperCase() || "S";
+  const grade   = profile?.grade   || "";
+  const role    = profile?.role    || "student";
+  const xp      = profile?.xp      || 0;
+  const streak  = profile?.streak  || 0;
 
-  const settingsSections = [
-    {
-      icon: ProfileIcon,
-      label: "Profile",
-      route: "/app/settings/profile",
-      description: "Edit your profile information"
-    },
-    {
-      icon: LearnIcon,
-      label: "Subjects",
-      route: "/app/settings/subjects",
-      description: "Manage your learning subjects"
-    },
-    {
-      icon: SecurityIcon,
-      label: "Account & Security",
-      route: "/app/settings/security",
-      description: "Password and security settings"
-    },
-    {
-      icon: BellIcon,
-      label: "Notifications",
-      route: "/app/settings/notifications",
-      description: "Notification preferences"
-    }
-  ];
+  function levelLabel(x) {
+    if (x >= 1000) return "Master";
+    if (x >= 600)  return "Expert";
+    if (x >= 300)  return "Scholar";
+    if (x >= 100)  return "Explorer";
+    return "Beginner";
+  }
 
   return (
-    <div className="settings-mobile">
-      {/* User Profile Card */}
-      <div className="settings-mobile-profile">
-        <div className="settings-mobile-avatar">
-          {photo ? (
-            <img src={photo} alt={name} referrerPolicy="no-referrer" />
-          ) : (
-            <span className="settings-mobile-avatar-text">{initial}</span>
-          )}
+    <div className="sm-wrap">
+
+      {/* ── Hero Card ── */}
+      <div className="sm-hero">
+        <div className="sm-hero-bg" />
+
+        <div className="sm-avatar-ring">
+          {photo
+            ? <img src={photo} alt={name} referrerPolicy="no-referrer" className="sm-avatar-img" />
+            : <span className="sm-avatar-initial">{initial}</span>
+          }
         </div>
-        <div className="settings-mobile-info">
-          <h2 className="settings-mobile-name">{name}</h2>
-          <p className="settings-mobile-meta">
-            {role}{grade ? ` • Grade ${grade}` : ""}
+
+        <div className="sm-hero-info">
+          <h1 className="sm-hero-name">{name}</h1>
+          <p className="sm-hero-meta">
+            {role.charAt(0).toUpperCase() + role.slice(1)}
+            {grade ? ` · ${grade}` : ""}
           </p>
+          <span className="sm-hero-level">{levelLabel(xp)}</span>
         </div>
+
+        <div className="sm-hero-stats">
+          <div className="sm-stat">
+            <span className="sm-stat-val">{xp}</span>
+            <span className="sm-stat-lbl">XP</span>
+          </div>
+          <div className="sm-stat-divider" />
+          <div className="sm-stat">
+            <span className="sm-stat-val">{streak}</span>
+            <span className="sm-stat-lbl">Streak 🔥</span>
+          </div>
+          <div className="sm-stat-divider" />
+          <div className="sm-stat">
+            <span className="sm-stat-val">{(profile?.subjectsGoodAt || []).length}</span>
+            <span className="sm-stat-lbl">Subjects</span>
+          </div>
+        </div>
+
         <button
           type="button"
-          className="settings-mobile-edit-btn"
+          className="sm-edit-btn"
           onClick={() => navigate("/app/settings/profile")}
         >
           Edit Profile
         </button>
       </div>
 
-      {/* Settings Sections */}
-      <div className="settings-mobile-sections">
-        {settingsSections.map((section) => (
+      {/* ── Section List ── */}
+      <div className="sm-sections">
+        {SECTIONS.map((s) => (
           <button
-            key={section.route}
+            key={s.route}
             type="button"
-            className="settings-mobile-section-card"
-            onClick={() => navigate(section.route)}
+            className="sm-section-row"
+            onClick={() => navigate(s.route)}
           >
-            <div className="settings-mobile-section-icon">
-              <section.icon width={20} height={20} />
+            <span className="sm-section-icon" style={{ "--accent": s.accent }}>
+              {s.emoji}
+            </span>
+            <div className="sm-section-body">
+              <span className="sm-section-label">{s.label}</span>
+              <span className="sm-section-desc">{s.desc}</span>
             </div>
-            <div className="settings-mobile-section-content">
-              <span className="settings-mobile-section-label">{section.label}</span>
-              {section.description && (
-                <span className="settings-mobile-section-desc">{section.description}</span>
-              )}
-            </div>
-            <ChevronRight width={18} height={18} className="settings-mobile-section-arrow" />
+            <ChevronRight width={18} height={18} className="sm-section-arrow" />
           </button>
         ))}
       </div>
+
+      <p className="sm-footer">PeerUP · Your learning community</p>
     </div>
   );
 }

@@ -3,120 +3,91 @@ import { useNavigate, useLocation } from "react-router-dom";
 import {
   PlusIcon,
   CloseIcon,
-  LearningIcon,
   FriendRequestsIcon,
-  SyncIcon,
   ProgressIcon,
-  SettingsIcon,
+  SyncIcon,
+  ResourcesIcon,
 } from "./DashIcons";
 
 /**
- * MobileFabMenu — Floating Action Button with expandable radial menu
- * 
- * Behavior:
- * - Shows current section icon when user is in a FAB section (Learning, Sync, etc.)
- * - Shows + when user is in a non-FAB section (Home, Discover, Chat, Resources)
- * - Shows × when menu is expanded
- * - Expands to show: Learning, Friend Requests, Sync, Progress, Settings
- * - Dims the page behind when expanded
+ * MobileFabMenu — Floating Action Button with 4-item diamond menu
+ *
+ * Layout when open:
+ *
+ *          Friend Requests
+ *   Progress               Sync
+ *            Resources
+ *
+ * The FAB itself shows:
+ *  - × when open
+ *  - current section icon when user is in one of the FAB sections
+ *  - + otherwise
  */
 
-// Menu items in the expandable radial menu
-const FAB_MENU_ITEMS = [
-  { to: "/app/solo", label: "Learning", Icon: LearningIcon },
-  { to: "/app/match-requests", label: "Friend Requests", Icon: FriendRequestsIcon },
-  { to: "/app/sync", label: "Sync", Icon: SyncIcon },
-  { to: "/app/progress", label: "Progress", Icon: ProgressIcon },
-  { to: "/app/settings", label: "Settings", Icon: SettingsIcon },
+const FAB_ITEMS = [
+  { to: "/app/match-requests", label: "Friend Requests", Icon: FriendRequestsIcon, pos: "top"    },
+  { to: "/app/progress",       label: "Progress",        Icon: ProgressIcon,       pos: "left"   },
+  { to: "/app/sync",           label: "Sync",            Icon: SyncIcon,           pos: "right"  },
+  { to: "/app/learn",          label: "Resources",       Icon: ResourcesIcon,      pos: "bottom" },
 ];
+
+function getCurrentSection(pathname) {
+  if (pathname.startsWith("/app/match-requests")) return FAB_ITEMS[0];
+  if (pathname.startsWith("/app/progress"))       return FAB_ITEMS[1];
+  if (pathname.startsWith("/app/sync"))           return FAB_ITEMS[2];
+  if (pathname.startsWith("/app/learn") ||
+      pathname.startsWith("/app/solo"))           return FAB_ITEMS[3];
+  return null;
+}
 
 export default function MobileFabMenu() {
   const [isOpen, setIsOpen] = useState(false);
-  const navigate = useNavigate();
-  const location = useLocation();
+  const navigate  = useNavigate();
+  const location  = useLocation();
+  const current   = getCurrentSection(location.pathname);
 
-  // Determine current section based on route
-  const currentSection = getCurrentSection(location.pathname);
+  // Close on route change
+  useEffect(() => { setIsOpen(false); }, [location.pathname]);
 
-  // Close menu when route changes
+  // Close on Escape
   useEffect(() => {
-    setIsOpen(false);
-  }, [location.pathname]);
+    function onKey(e) { if (e.key === "Escape") setIsOpen(false); }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
-  // Close menu on escape key
+  // Lock body scroll while open
   useEffect(() => {
-    function handleEscape(e) {
-      if (e.key === "Escape" && isOpen) {
-        setIsOpen(false);
-      }
-    }
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
+    document.body.style.overflow = isOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
   }, [isOpen]);
 
-  // Prevent body scroll when menu is open
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [isOpen]);
+  const FabIcon = isOpen ? CloseIcon : (current?.Icon || PlusIcon);
 
-  function handleFabClick() {
-    setIsOpen(!isOpen);
-  }
-
-  function handleMenuItemClick(to) {
-    navigate(to);
-    setIsOpen(false);
-  }
-
-  function handleOverlayClick() {
-    setIsOpen(false);
-  }
-
-  // Determine which icon to show in the FAB
-  let FabIcon = PlusIcon;
-  if (isOpen) {
-    FabIcon = CloseIcon;
-  } else if (currentSection) {
-    // Show the current section's icon
-    const currentItem = FAB_MENU_ITEMS.find((item) => item.to === currentSection.to);
-    if (currentItem) {
-      FabIcon = currentItem.Icon;
-    }
-  }
+  function go(to) { navigate(to); setIsOpen(false); }
 
   return (
     <>
-      {/* Overlay — dims the page when menu is open */}
+      {/* Dim overlay */}
       {isOpen && (
-        <div
-          className="mobile-fab-overlay"
-          onClick={handleOverlayClick}
-          aria-hidden="true"
-        />
+        <div className="mobile-fab-overlay" onClick={() => setIsOpen(false)} aria-hidden="true" />
       )}
 
-      {/* Expandable radial menu */}
-      <div className={`mobile-fab-menu ${isOpen ? "open" : ""}`}>
-        {FAB_MENU_ITEMS.map((item, index) => {
-          const isActive = currentSection?.to === item.to;
+      {/* Diamond menu */}
+      <div className={`fab-diamond ${isOpen ? "open" : ""}`} aria-hidden={!isOpen}>
+        {FAB_ITEMS.map((item) => {
+          const isActive = current?.to === item.to;
           return (
             <button
               key={item.to}
               type="button"
-              className={`mobile-fab-menu-item ${isActive ? "active" : ""}`}
-              style={{ "--item-index": index }}
-              onClick={() => handleMenuItemClick(item.to)}
+              className={`fab-item fab-item--${item.pos} ${isActive ? "active" : ""}`}
+              onClick={() => go(item.to)}
               aria-label={item.label}
+              tabIndex={isOpen ? 0 : -1}
             >
-              <item.Icon width={20} height={20} />
-              <span className="mobile-fab-menu-label">{item.label}</span>
+              <span className="fab-item-icon"><item.Icon width={22} height={22} /></span>
+              <span className="fab-item-label">{item.label}</span>
             </button>
           );
         })}
@@ -125,41 +96,13 @@ export default function MobileFabMenu() {
       {/* FAB button */}
       <button
         type="button"
-        className={`mobile-fab ${isOpen ? "open" : ""} ${currentSection ? "has-section" : ""}`}
-        onClick={handleFabClick}
-        aria-label={isOpen ? "Close menu" : currentSection ? currentSection.label : "Open menu"}
+        className={`mobile-fab ${isOpen ? "open" : ""} ${current ? "has-section" : ""}`}
+        onClick={() => setIsOpen(o => !o)}
+        aria-label={isOpen ? "Close menu" : current ? current.label : "Open menu"}
         aria-expanded={isOpen}
       >
         <FabIcon width={24} height={24} />
       </button>
     </>
   );
-}
-
-/**
- * Determine the current section based on pathname
- * Returns { to, label } or null if not in a FAB section
- */
-function getCurrentSection(pathname) {
-  // Solo Learning routes
-  if (pathname.startsWith("/app/solo")) {
-    return { to: "/app/solo", label: "Learning" };
-  }
-  // Sync routes
-  if (pathname.startsWith("/app/sync")) {
-    return { to: "/app/sync", label: "Sync" };
-  }
-  // Progress
-  if (pathname.startsWith("/app/progress")) {
-    return { to: "/app/progress", label: "Progress" };
-  }
-  // Settings
-  if (pathname.startsWith("/app/settings")) {
-    return { to: "/app/settings", label: "Settings" };
-  }
-  // Friend Requests
-  if (pathname.startsWith("/app/match-requests")) {
-    return { to: "/app/match-requests", label: "Friend Requests" };
-  }
-  return null;
 }

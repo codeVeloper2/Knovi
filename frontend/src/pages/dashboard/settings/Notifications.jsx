@@ -39,7 +39,7 @@ export default function SettingsNotifications() {
 
   return (
     <div className="settings-page">
-      <SettingsMobileHeader />
+      <SettingsMobileHeader title="Notifications" />
       <h1>Notifications</h1>
       <p className="settings-sub">Choose what you want to be notified about.</p>
 

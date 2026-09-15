@@ -15,6 +15,7 @@ import {
   HomeIcon, DiscoverIcon, ChatIcon, LearnIcon,
   ProgressIcon, SettingsIcon, SearchIcon, MenuIcon, LogoutIcon,
   ChevronLeft, ChevronRight, ProfileIcon, SecurityIcon, BellIcon, BackIcon, MatchRequestsIcon,
+  UpSkillingIcon,
 } from "./DashIcons";
 
 // ── Inline nav icons for new system ──────────────────────────────────────────
@@ -43,10 +44,9 @@ function SyncIcon() {
 
 // "Learning" dropdown sub-items (shown when the Learning section is expanded)
 const LEARNING_SUB = [
-  { to: "/app/solo",            label: "Learning",  Icon: LearningIcon, end: true },
-  { to: "/app/sync",            label: "Sync",      Icon: SyncIcon },
-  { to: "/app/learn",           label: "Courses",   Icon: LearnIcon,    end: true },
-  { to: "/app/learn/tutorials", label: "Tutorials", Icon: LearnIcon },
+  { to: "/app/solo",            label: "UpSkilling", Icon: UpSkillingIcon, end: true },
+  { to: "/app/sync",            label: "Sync",       Icon: SyncIcon },
+  { to: "/app/learn",           label: "Resources",  Icon: LearnIcon, end: true },
 ];
 
 const MAIN_NAV = [
@@ -54,9 +54,9 @@ const MAIN_NAV = [
   { to: "/app/discover",       label: "Discover",        Icon: DiscoverIcon },
   { to: "/app/chat",           label: "Chat",            Icon: ChatIcon },
   { to: "/app/match-requests", label: "Friend Requests", Icon: MatchRequestsIcon },
-  { to: "/app/solo",           label: "Learning",        Icon: LearningIcon },
+  { to: "/app/solo",           label: "UpSkilling",      Icon: UpSkillingIcon },
   { to: "/app/sync",           label: "Sync",            Icon: SyncIcon },
-  { to: "/app/learn",          label: "Courses",         Icon: LearnIcon },
+  { to: "/app/learn",          label: "Resources",       Icon: LearnIcon },
   { to: "/app/progress",       label: "Progress",        Icon: ProgressIcon },
 ];
 
@@ -216,7 +216,7 @@ export default function DashboardLayout() {
           onClick={() => setMobileLearningOpen(o => !o)}
           title="Learning"
         >
-          <span className="dash-link-icon-wrap"><LearningIcon /></span>
+          <span className="dash-link-icon-wrap"><UpSkillingIcon /></span>
           <span className="dash-link-label">Learning</span>
           {(!isDesktop || !collapsed) && <ChevronDown open={mobileLearningOpen} />}
         </button>

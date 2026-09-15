@@ -58,7 +58,7 @@ export default function SettingsSubjects() {
 
   return (
     <div className="settings-page">
-      <SettingsMobileHeader />
+      <SettingsMobileHeader title="Subjects" />
       <h1>Subjects</h1>
       <p className="settings-sub">What you can teach and what you need help with.</p>
 

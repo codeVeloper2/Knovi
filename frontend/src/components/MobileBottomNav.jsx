@@ -1,14 +1,13 @@
 import { NavLink } from "react-router-dom";
-import { HomeIcon, DiscoverIcon, ChatIcon, ResourcesIcon } from "./DashIcons";
+import { HomeIcon, DiscoverIcon, ChatIcon, SettingsIcon } from "./DashIcons";
 
 /**
  * MobileBottomNav — fixed bottom navigation bar
- * Contains: Home, Discover, [FAB placeholder], Chat, Resources
- * The center slot is reserved for the FAB which is rendered separately
+ * Tabs: Home | Discover | [FAB placeholder] | Chat | Settings
  */
 export default function MobileBottomNav() {
   return (
-    <nav className="mobile-bottom-nav">
+    <nav className="mobile-bottom-nav" aria-label="Main navigation">
       <NavLink
         to="/app"
         end
@@ -28,7 +27,7 @@ export default function MobileBottomNav() {
         <span className="mobile-nav-label">Discover</span>
       </NavLink>
 
-      {/* Center placeholder for FAB */}
+      {/* Centre slot — occupied by the FAB rendered separately */}
       <div className="mobile-nav-item mobile-nav-fab-placeholder" aria-hidden="true" />
 
       <NavLink
@@ -41,12 +40,14 @@ export default function MobileBottomNav() {
       </NavLink>
 
       <NavLink
-        to="/app/learn"
-        className={({ isActive }) => `mobile-nav-item ${isActive ? "active" : ""}`}
-        aria-label="Resources"
+        to="/app/settings"
+        className={({ isActive }) =>
+          `mobile-nav-item ${isActive || location.pathname.startsWith("/app/settings") ? "active" : ""}`
+        }
+        aria-label="Settings"
       >
-        <ResourcesIcon width={22} height={22} />
-        <span className="mobile-nav-label">Resources</span>
+        <SettingsIcon width={22} height={22} />
+        <span className="mobile-nav-label">Settings</span>
       </NavLink>
     </nav>
   );

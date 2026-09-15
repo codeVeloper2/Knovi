@@ -87,7 +87,7 @@ export default function SettingsProfile() {
 
   return (
     <div className="settings-page">
-      <SettingsMobileHeader />
+      <SettingsMobileHeader title="Profile" />
       <h1>Profile</h1>
       <p className="settings-sub">Update your name, photo, and details.</p>
 

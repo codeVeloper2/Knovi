@@ -87,7 +87,7 @@ export default function SettingsSecurity() {
 
   return (
     <div className="settings-page">
-      <SettingsMobileHeader />
+      <SettingsMobileHeader title="Security" />
       <h1>Change Password</h1>
       <p className="settings-sub">Only available for email/password accounts.</p>
 
