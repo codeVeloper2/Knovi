@@ -20,9 +20,6 @@ export const DiscoverIcon = (p) => (
 export const ChatIcon = (p) => (
   <svg {...base} {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
 );
-export const RoomsIcon = (p) => (
-  <svg {...base} {...p}><rect x="3" y="4" width="18" height="14" rx="2" /><path d="M8 21h8M12 18v3" /></svg>
-);
 export const LearnIcon = (p) => (
   <svg {...base} {...p}><path d="M12 3 2 8l10 5 10-5-10-5z" /><path d="M6 10.5V16c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5.5" /></svg>
 );
@@ -62,11 +59,21 @@ export const BackIcon = (p) => (
 export const MatchRequestsIcon = (p) => (
   <svg {...base} {...p}><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
 );
-
-export const JoinIcon = (p) => (
-  <svg {...base} {...p} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
-    <polyline points="10 17 15 12 10 7"/>
-    <line x1="15" y1="12" x2="3" y2="12"/>
-  </svg>
+export const PlusIcon = (p) => (
+  <svg {...base} {...p}><path d="M12 5v14M5 12h14" /></svg>
+);
+export const CloseIcon = (p) => (
+  <svg {...base} {...p}><path d="M18 6 6 18M6 6l12 12" /></svg>
+);
+export const LearningIcon = (p) => (
+  <svg {...base} {...p}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+);
+export const SyncIcon = (p) => (
+  <svg {...base} {...p}><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+);
+export const ResourcesIcon = (p) => (
+  <svg {...base} {...p}><path d="M12 3 2 8l10 5 10-5-10-5z" /><path d="M6 10.5V16c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5.5" /></svg>
+);
+export const FriendRequestsIcon = (p) => (
+  <svg {...base} {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
 );

@@ -745,25 +745,6 @@ function ConversationList({ convs, activeId, onSelect, onNew }) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Study Room Notification
-// ─────────────────────────────────────────────────────────────────
-function StudyRoomNotif({ conv, notif, onJoin, onCancel }) {
-  return (
-    <div className="c-overlay" onClick={onCancel}>
-      <div className="c-modal" onClick={e => e.stopPropagation()}>
-        <h3 style={{ marginBottom: 8 }}>Study Room Invitation</h3>
-        <p><strong>{conv.partner.displayName}</strong> is in the study room!</p>
-        {notif.goal && <p style={{ color: "var(--text-dim)", fontSize: "0.85rem", marginTop: 6 }}>{notif.goal}</p>}
-        <div className="c-modal-actions" style={{ marginTop: 16 }}>
-          <button type="button" className="btn btn-ghost" onClick={onCancel}>Cancel</button>
-          <button type="button" className="btn btn-primary" onClick={onJoin}>Join</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────
 // Chat Room
 // ─────────────────────────────────────────────────────────────────
 function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
@@ -785,7 +766,6 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
   const [lightbox, setLightbox] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
-  const [studyRoomNotif, setStudyRoomNotif] = useState(null);
 
   const bottomRef   = useRef(null);
   const wsRef       = useRef(null);
@@ -864,8 +844,6 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
       setMessages(prev => prev.map(m => m.id === msg.msgId ? { ...m, deleted: true, body: "", attachmentUrl: null } : m));
     } else if (msg.type === "reaction") {
       setMessages(prev => prev.map(m => m.id === msg.msgId ? { ...m, reactions: msg.reactions } : m));
-    } else if (msg.type === "study_room_created") {
-      if (msg.creatorId !== myId) setStudyRoomNotif({ roomId: msg.roomId, creatorId: msg.creatorId, goal: msg.goal });
     }
   }
 
@@ -1183,15 +1161,6 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
       {comingSoon && <ComingSoonModal feature={comingSoon} onClose={() => setComingSoon(null)} />}
 
       {lightbox && <ImageLightbox url={lightbox.url} name={lightbox.name} onClose={() => setLightbox(null)} />}
-
-      {studyRoomNotif && (
-        <StudyRoomNotif
-          conv={conv}
-          notif={studyRoomNotif}
-          onJoin={() => { setStudyRoomNotif(null); navigate(`/app/rooms?convId=${conv.id}`); }}
-          onCancel={() => setStudyRoomNotif(null)}
-        />
-      )}
 
       {/* Delete modal */}
       {pendingDelete && (

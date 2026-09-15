@@ -149,7 +149,7 @@ export function LockIllustration() {
 const FEATURES = [
   { emoji: "🔍", text: "Find study partners" },
   { emoji: "📚", text: "Access learning resources" },
-  { emoji: "💬", text: "Join study rooms" },
+  { emoji: "💬", text: "Connect and collaborate" },
   { emoji: "📈", text: "Track your progress" },
 ];
 

@@ -92,15 +92,6 @@ class User(Base):
     created_resources: Mapped[list] = relationship(
         "Resource", back_populates="creator", foreign_keys="Resource.created_by"
     )
-    learning_sessions_as_creator: Mapped[list] = relationship(
-        "LearningSession", back_populates="creator", foreign_keys="LearningSession.creator_id"
-    )
-    learning_sessions_as_partner: Mapped[list] = relationship(
-        "LearningSession", back_populates="partner", foreign_keys="LearningSession.partner_id"
-    )
-    session_activity_results: Mapped[list] = relationship(
-        "SessionActivityResult", back_populates="user", foreign_keys="SessionActivityResult.user_id"
-    )
     topic_progress: Mapped[list] = relationship(
         "TopicProgress", back_populates="user"
     )

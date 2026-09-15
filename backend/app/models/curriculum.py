@@ -1,4 +1,4 @@
-"""Curriculum ORM models for PeerUP's guided Learning Session system.
+"""Curriculum ORM models for PeerUP.
 
 Tables (in creation / dependency order):
   subjects               — top-level academic subjects
@@ -9,8 +9,6 @@ Tables (in creation / dependency order):
   learning_activities    — ordered activity steps per topic
   questions              — assessments per topic / activity
   resources              — linked learning materials per topic
-  learning_sessions      — a live peer-learning session
-  session_activity_results — student responses inside a session
   topic_progress         — one progress record per user per topic
   resource_downloads     — log of user resource downloads
 """
@@ -20,7 +18,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import (
-    BigInteger, Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer,
+    Boolean, DateTime, ForeignKey, Index, Integer,
     String, Text, UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -38,18 +36,6 @@ def _now() -> datetime:
 ACTIVITY_TYPES   = {"learn", "explain", "practice", "challenge", "check"}
 QUESTION_TYPES   = {"multiple_choice", "short_answer", "numeric", "explanation"}
 RESOURCE_TYPES   = {"video", "textbook", "pdf", "study_guide", "tutorial"}
-SESSION_STATUSES = {"pending", "active", "completed", "cancelled"}
-SESSION_STAGES   = {"learn", "explain", "practice", "challenge", "check", "completed"}
-SESSION_PHASES   = {"setup", "concepts", "practice", "challenge", "summary"}
-# The persisted, teacher-led workflow state.  `phase` and `current_stage` are
-# retained for the legacy client; `workflow_state` is authoritative for new
-# session actions.
-LEARNING_WORKFLOW_STATES = {
-    "LOBBY", "TEACHING_CONCEPT", "LEARNER_READING",
-    "EXPLAIN_BACK_REQUESTED", "LEARNER_EXPLAINING", "TEACHER_REVIEW",
-    "NEXT_CONCEPT", "PRACTICE", "PRACTICE_REVEAL", "ROLE_REVERSAL",
-    "COMPLETED",
-}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -112,7 +98,6 @@ class Topic(Base):
     learning_activities:Mapped[list["LearningActivity"]]     = relationship("LearningActivity", back_populates="topic", cascade="all, delete-orphan", order_by="LearningActivity.order_index")
     questions:          Mapped[list["Question"]]             = relationship("Question", back_populates="topic", cascade="all, delete-orphan")
     resources:          Mapped[list["Resource"]]             = relationship("Resource", back_populates="topic")
-    learning_sessions:  Mapped[list["LearningSession"]]      = relationship("LearningSession", back_populates="topic")
     topic_progress:     Mapped[list["TopicProgress"]]        = relationship("TopicProgress", back_populates="topic", cascade="all, delete-orphan")
 
     def serialize(self) -> dict:
@@ -248,7 +233,6 @@ class LearningActivity(Base):
     # Relationships
     topic:    Mapped["Topic"]                       = relationship("Topic", back_populates="learning_activities")
     questions:Mapped[list["Question"]]              = relationship("Question", back_populates="activity")
-    results:  Mapped[list["SessionActivityResult"]] = relationship("SessionActivityResult", back_populates="activity")
 
     def serialize(self) -> dict:
         return {
@@ -360,203 +344,7 @@ class Resource(Base):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 9. LEARNING SESSIONS
-# ─────────────────────────────────────────────────────────────────────────────
-
-class LearningSession(Base):
-    __tablename__ = "learning_sessions"
-    __table_args__ = (
-        Index("idx_learning_sessions_creator",  "creator_id"),
-        Index("idx_learning_sessions_partner",  "partner_id"),
-        Index("idx_learning_sessions_topic",    "topic_id"),
-        Index("idx_learning_sessions_status",   "status"),
-        CheckConstraint(
-            "workflow_state IN ('LOBBY', 'TEACHING_CONCEPT', 'LEARNER_READING', "
-            "'EXPLAIN_BACK_REQUESTED', 'LEARNER_EXPLAINING', 'TEACHER_REVIEW', "
-            "'NEXT_CONCEPT', 'PRACTICE', 'PRACTICE_REVEAL', 'ROLE_REVERSAL', 'COMPLETED')",
-            name="ck_learning_sessions_workflow_state",
-        ),
-    )
-
-    id:            Mapped[int]               = mapped_column(Integer, primary_key=True, autoincrement=True)
-    creator_id:    Mapped[int]               = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    # Nullable until a partner joins (status="pending" → partner_id is NULL)
-    partner_id:    Mapped[Optional[int]]     = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
-    # Peer-teaching roles: teacher explains, learner asks questions and proves understanding
-    teacher_id:    Mapped[Optional[int]]     = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
-    learner_id:    Mapped[Optional[int]]     = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
-    topic_id:      Mapped[int]               = mapped_column(Integer, ForeignKey("topics.id", ondelete="CASCADE"), nullable=False)
-    goal:          Mapped[str]               = mapped_column(Text, nullable=False)
-    # pending | active | completed | cancelled
-    status:        Mapped[str]               = mapped_column(String(20), default="pending", nullable=False)
-    # learn | explain | practice | challenge | check | completed  (kept for backwards compat)
-    current_stage: Mapped[str]               = mapped_column(String(20), default="learn", nullable=False)
-    # setup | concepts | practice | challenge | summary
-    phase:         Mapped[str]               = mapped_column(String(20), default="setup", nullable=False)
-    # Index into topic.concepts for the currently active concept (0-based)
-    current_concept_idx: Mapped[int]         = mapped_column(Integer, default=0, nullable=False)
-    # Short human-readable join code, e.g. "NLM-4827"
-    session_code:  Mapped[Optional[str]]     = mapped_column(String(12), unique=True, nullable=True, index=True)
-    # Existing accepted chat conversation for this exact connected pair.  A
-    # learning session never creates a parallel session-chat system.
-    conversation_id: Mapped[Optional[int]]   = mapped_column(BigInteger, ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True, index=True)
-    # Teacher authored description and explicit workflow state.
-    session_description: Mapped[str]          = mapped_column(Text, default="", nullable=False)
-    workflow_state: Mapped[str]               = mapped_column(String(40), default="LOBBY", nullable=False, index=True)
-    # Concept ID is stored as well as the legacy index so the current activity
-    # cannot be invalidated by a curriculum reorder.
-    current_concept_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("concepts.id", ondelete="SET NULL"), nullable=True)
-    current_practice_question_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("questions.id", ondelete="SET NULL"), nullable=True)
-    started_at:    Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_at:  Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    expires_at:    Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    # Readiness flags for the setup phase
-    teacher_ready: Mapped[bool]              = mapped_column(Boolean, default=False, nullable=False)
-    learner_ready: Mapped[bool]              = mapped_column(Boolean, default=False, nullable=False)
-    created_at:    Mapped[datetime]           = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
-    updated_at:    Mapped[datetime]           = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now, nullable=False)
-
-    # Relationships
-    creator:          Mapped["User"]                        = relationship(  # type: ignore[name-defined]
-        "User", back_populates="learning_sessions_as_creator", foreign_keys=[creator_id]
-    )
-    partner:          Mapped[Optional["User"]]              = relationship(  # type: ignore[name-defined]
-        "User", back_populates="learning_sessions_as_partner", foreign_keys=[partner_id]
-    )
-    teacher:          Mapped[Optional["User"]]              = relationship(  # type: ignore[name-defined]
-        "User", foreign_keys=[teacher_id], viewonly=True,
-        overlaps="creator,partner,learner"
-    )
-    learner:          Mapped[Optional["User"]]              = relationship(  # type: ignore[name-defined]
-        "User", foreign_keys=[learner_id], viewonly=True,
-        overlaps="creator,partner,teacher"
-    )
-    topic:            Mapped["Topic"]                       = relationship("Topic", back_populates="learning_sessions")
-    activity_results: Mapped[list["SessionActivityResult"]] = relationship("SessionActivityResult", back_populates="session", cascade="all, delete-orphan")
-
-    def serialize(self) -> dict:
-        return {
-            "id": self.id,
-            "creatorId": self.creator_id,
-            "partnerId": self.partner_id,
-            "teacherId": self.teacher_id,
-            "learnerId": self.learner_id,
-            "topicId": self.topic_id,
-            "goal": self.goal,
-            "status": self.status,
-            "currentStage": self.current_stage,
-            "phase": self.phase,
-            "currentConceptIdx": self.current_concept_idx,
-            "teacherReady": self.teacher_ready,
-            "learnerReady": self.learner_ready,
-            "sessionCode": self.session_code,
-            "conversationId": self.conversation_id,
-            "description": self.session_description,
-            "workflowState": self.workflow_state,
-            "currentConceptId": self.current_concept_id,
-            "currentPracticeQuestionId": self.current_practice_question_id,
-            "startedAt": self.started_at.isoformat() if self.started_at else None,
-            "completedAt": self.completed_at.isoformat() if self.completed_at else None,
-            "expiresAt": self.expires_at.isoformat() if self.expires_at else None,
-            "createdAt": self.created_at.isoformat(),
-            "updatedAt": self.updated_at.isoformat(),
-        }
-
-
-class SessionTeachingExchange(Base):
-    """Teacher explanation and its learner acknowledgement for one concept."""
-    __tablename__ = "session_teaching_exchanges"
-    __table_args__ = (UniqueConstraint("session_id", "concept_id", name="uq_session_teaching_exchange_concept"),)
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    session_id: Mapped[int] = mapped_column(Integer, ForeignKey("learning_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
-    concept_id: Mapped[int] = mapped_column(Integer, ForeignKey("concepts.id", ondelete="CASCADE"), nullable=False, index=True)
-    teacher_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    explanation: Mapped[str] = mapped_column(Text, nullable=False)
-    learner_read_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    explain_back_requested_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
-
-
-class SessionPracticeAnswer(Base):
-    """One private answer per participant and question, revealed only together."""
-    __tablename__ = "session_practice_answers"
-    __table_args__ = (UniqueConstraint("session_id", "question_id", "user_id", name="uq_session_practice_answer"),)
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    session_id: Mapped[int] = mapped_column(Integer, ForeignKey("learning_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
-    question_id: Mapped[int] = mapped_column(Integer, ForeignKey("questions.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    response: Mapped[str] = mapped_column(Text, nullable=False)
-    is_correct: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 10. SESSION ACTIVITY RESULTS
-# ─────────────────────────────────────────────────────────────────────────────
-
-class SessionActivityResult(Base):
-    __tablename__ = "session_activity_results"
-
-    id:             Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
-    session_id:     Mapped[int]           = mapped_column(Integer, ForeignKey("learning_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id:        Mapped[int]           = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    activity_id:    Mapped[int]           = mapped_column(Integer, ForeignKey("learning_activities.id", ondelete="CASCADE"), nullable=False, index=True)
-    # The concept this result is linked to (for concept explanation results)
-    concept_id:     Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("concepts.id", ondelete="SET NULL"), nullable=True, index=True)
-    response:       Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    is_correct:     Mapped[Optional[bool]]= mapped_column(Boolean, nullable=True)
-    # AI result fields
-    ai_feedback:    Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    ai_verdict:     Mapped[Optional[str]] = mapped_column(String(20), nullable=True)    # correct | partial | incorrect
-    ai_confidence:  Mapped[Optional[float]] = mapped_column(nullable=True)              # 0.0–1.0
-    ai_provider:    Mapped[Optional[str]] = mapped_column(String(20), nullable=True)    # gemini | groq
-    misconceptions_detected: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
-    # Teacher verdict fields
-    teacher_verdict: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # approved | retry
-    teacher_comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    hint:           Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    retry:          Mapped[bool]          = mapped_column(Boolean, default=False, nullable=False)
-    attempt_number: Mapped[int]           = mapped_column(Integer, default=1, nullable=False)
-    score:          Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    created_at:     Mapped[datetime]      = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
-    updated_at:     Mapped[datetime]      = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now, nullable=False)
-
-    # Relationships
-    session:  Mapped["LearningSession"]  = relationship("LearningSession", back_populates="activity_results")
-    user:     Mapped["User"]             = relationship(  # type: ignore[name-defined]
-        "User", back_populates="session_activity_results", foreign_keys=[user_id]
-    )
-    activity: Mapped["LearningActivity"] = relationship("LearningActivity", back_populates="results")
-
-    def serialize(self) -> dict:
-        return {
-            "id": self.id,
-            "sessionId": self.session_id,
-            "userId": self.user_id,
-            "activityId": self.activity_id,
-            "conceptId": self.concept_id,
-            "response": self.response,
-            "isCorrect": self.is_correct,
-            "aiFeedback": self.ai_feedback,
-            "aiVerdict": self.ai_verdict,
-            "aiConfidence": float(self.ai_confidence) if self.ai_confidence is not None else None,
-            "aiProvider": self.ai_provider,
-            "misconceptionsDetected": self.misconceptions_detected or [],
-            "teacherVerdict": self.teacher_verdict,
-            "teacherComment": self.teacher_comment,
-            "hint": self.hint,
-            "retry": self.retry,
-            "attemptNumber": self.attempt_number,
-            "score": self.score,
-            "createdAt": self.created_at.isoformat(),
-            "updatedAt": self.updated_at.isoformat(),
-        }
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 11. TOPIC PROGRESS
+# 9. TOPIC PROGRESS
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TopicProgress(Base):
@@ -596,7 +384,7 @@ class TopicProgress(Base):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 12. RESOURCE DOWNLOADS
+# 10. RESOURCE DOWNLOADS
 # ─────────────────────────────────────────────────────────────────────────────
 
 class ResourceDownload(Base):

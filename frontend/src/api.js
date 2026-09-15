@@ -186,9 +186,6 @@ export function getPendingRequestCount() {
 export function getAcceptedMatchPartners() {
   return request("/api/match/accepted-partners", { auth: true });
 }
-export function getPendingStudyInvitationCount() {
-  return request("/api/rooms/pending/count", { auth: true });
-}
 
 // ── Chat ─────────────────────────────────────────────────────────
 export function listConversations() {
@@ -263,77 +260,6 @@ export function openChatSocket(convId, onMessage, onClose) {
   ws.onmessage = (e) => { try { onMessage(JSON.parse(e.data)); } catch { /* ignore */ } };
   ws.onclose = onClose || (() => {});
   return ws;
-}
-
-// ── Study Rooms ───────────────────────────────────────────────────────────
-export function createRoom(conversationId, goal, role, subject) {
-  return request("/api/rooms", { method: "POST", body: { conversationId, goal, role, subject }, auth: true });
-}
-export function getActiveRoom(conversationId) {
-  return request(`/api/rooms/active?conversationId=${conversationId}`, { auth: true });
-}
-export function getRecentRooms() {
-  return request("/api/rooms/recent", { auth: true });
-}
-export function deleteRoom(roomId) {
-  return request(`/api/rooms/${roomId}`, { method: "DELETE", auth: true });
-}
-export function getRoom(roomId) {
-  return request(`/api/rooms/${roomId}`, { auth: true });
-}
-export function joinRoom(roomId) {
-  return request(`/api/rooms/${roomId}/join`, { method: "POST", auth: true });
-}
-export function endRoom(roomId, rating = null) {
-  return request(`/api/rooms/${roomId}/end`, { method: "POST", body: { rating }, auth: true });
-}
-export function updateRoomNotes(roomId, notes) {
-  return request(`/api/rooms/${roomId}/notes`, { method: "PATCH", body: { notes }, auth: true });
-}
-export function updateWhiteboard(roomId, strokes) {
-  return request(`/api/rooms/${roomId}/whiteboard`, { method: "PATCH", body: { strokes }, auth: true });
-}
-export function addMaterialLink(roomId, name, url) {
-  return request(`/api/rooms/${roomId}/materials/link`, { method: "POST", body: { name, url }, auth: true });
-}
-export function deleteMaterial(roomId, materialId) {
-  return request(`/api/rooms/${roomId}/materials/${materialId}`, { method: "DELETE", auth: true });
-}
-export async function uploadRoomMaterial(roomId, file) {
-  const form = new FormData();
-  form.append("file", file);
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 60000);
-  let res;
-  try {
-    res = await fetch(`${API_BASE}/api/rooms/${roomId}/materials/upload`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${getToken()}` },
-      body: form,
-      signal: controller.signal,
-    });
-  } catch (err) {
-    clearTimeout(timer);
-    throw new Error(err.name === "AbortError" ? "Upload timed out. Please try again." : "Couldn't upload. Please check your connection.");
-  }
-  clearTimeout(timer);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) { const e = new Error(data.detail || "Upload failed."); e.status = res.status; throw e; }
-  return data;
-}
-export function openRoomSocket(roomId, onMessage, onClose) {
-  const wsBase = (API_BASE || "").replace(/^http/, "ws") || `ws://${window.location.host}`;
-  const token = getToken();
-  const ws = new WebSocket(`${wsBase}/api/rooms/ws/${roomId}?token=${token}`);
-  ws.onmessage = (e) => { try { onMessage(JSON.parse(e.data)); } catch { /* ignore */ } };
-  ws.onclose = onClose || (() => {});
-  return ws;
-}
-export function getPendingStudyInvitations() {
-  return request("/api/rooms/pending", { auth: true });
-}
-export function declineStudyInvitation(roomId) {
-  return request(`/api/rooms/${roomId}/decline`, { method: "POST", auth: true });
 }
 
 // ── Learn ─────────────────────────────────────────────────────────────────
@@ -507,21 +433,6 @@ export const getTopicActivities    = (id)       => request(`/api/topics/${id}/ac
 export const getTopicQuestions     = (id)       => request(`/api/topics/${id}/questions`,            { auth: true });
 export const getTopicResources     = (id)       => request(`/api/topics/${id}/resources`,            { auth: true });
 export const getTopicLearningContent = (id)     => request(`/api/topics/${id}/learning-content`,     { auth: true });
-
-// ── Peer Teaching Learning Sessions ──────────────────────────────────────────
-export const getLearningTopics      = ()                              => request("/api/learning/topics", { auth: true });
-export const createLearningSession  = (topicId, partnerId)           => request("/api/learning/sessions", { method: "POST", body: { topicId, partnerId }, auth: true });
-export const validateSessionCode    = (code)                         => request(`/api/learning/sessions/join/${code}`, { auth: true });
-export const joinLearningSession    = (sessionId)                    => request(`/api/learning/sessions/${sessionId}/join`, { method: "POST", auth: true });
-export const getLearningSession     = (sessionId)                    => request(`/api/learning/sessions/${sessionId}`, { auth: true });
-export const setStudentReady        = (sessionId)                    => request(`/api/learning/sessions/${sessionId}/ready`, { method: "POST", auth: true });
-export const submitExplanation      = (sessionId, conceptId, body)  => request(`/api/learning/sessions/${sessionId}/concepts/${conceptId}/explanation`, { method: "POST", body, auth: true });
-export const submitTeacherVerdict   = (sessionId, conceptId, body)  => request(`/api/learning/sessions/${sessionId}/concepts/${conceptId}/verdict`, { method: "POST", body, auth: true });
-export const getPracticeQuestions   = (sessionId)                    => request(`/api/learning/sessions/${sessionId}/practice`, { auth: true });
-export const submitPracticeAnswer   = (sessionId, questionId, body) => request(`/api/learning/sessions/${sessionId}/practice/${questionId}/answer`, { method: "POST", body, auth: true });
-export const submitChallenge        = (sessionId, body)              => request(`/api/learning/sessions/${sessionId}/challenge`, { method: "POST", body, auth: true });
-export const completeSession        = (sessionId)                    => request(`/api/learning/sessions/${sessionId}/complete`, { method: "POST", auth: true });
-export const getSessionSummary      = (sessionId)                    => request(`/api/learning/sessions/${sessionId}/summary`, { auth: true });
 
 // ── Solo Learning ─────────────────────────────────────────────────────────────
 export const soloGetSubjects          = ()              => request("/api/solo/subjects",                               { auth: true });

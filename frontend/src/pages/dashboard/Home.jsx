@@ -86,7 +86,7 @@ function ProgressBar({ pct, className = "mdash-progress-bar" }) {
 
 // ── Mobile Home ──────────────────────────────────────────────────────────────
 
-function MobileHome({ profile, user, connections, learning, learnHome, recentRooms, soloDashboard, loading, navigate, onOpenMenu }) {
+function MobileHome({ profile, user, connections, learning, learnHome, soloDashboard, loading, navigate, onOpenMenu }) {
   const name = profile?.displayName || user?.displayName || "";
   const firstName = name.split(" ")[0] || "there";
   const photo = profile?.photoURL || user?.photoURL || "";
@@ -172,10 +172,6 @@ function MobileHome({ profile, user, connections, learning, learnHome, recentRoo
         <button className="mdash-qa-btn" onClick={() => navigate("/app/discover")}>
           <span className="mdash-qa-icon mdash-qa-icon--blue"><DiscoverSvg /></span>
           <span>Find Study Partners</span>
-        </button>
-        <button className="mdash-qa-btn" onClick={() => navigate("/app/rooms")}>
-          <span className="mdash-qa-icon mdash-qa-icon--indigo"><RoomSvg /></span>
-          <span>Join Study Room</span>
         </button>
         <button className="mdash-qa-btn" onClick={() => navigate("/app/learn")}>
           <span className="mdash-qa-icon mdash-qa-icon--purple"><LearnSvg /></span>
@@ -386,52 +382,6 @@ function MobileHome({ profile, user, connections, learning, learnHome, recentRoo
         </section>
       )}
 
-      {/* ── Recent Study Rooms ── */}
-      <section className="mdash-section">
-        <div className="mdash-section-head">
-          <h2 className="mdash-section-title">Recent Study Rooms</h2>
-          <Link to="/app/rooms" className="mdash-see-all">See all →</Link>
-        </div>
-        {loading ? (
-          <div className="mdash-shimmer-list">
-            <div className="mdash-shimmer-row" /><div className="mdash-shimmer-row" />
-          </div>
-        ) : recentRooms.length === 0 ? (
-          <div className="mdash-empty">
-            <p>No recent study rooms.</p>
-            <button className="mdash-empty-btn" onClick={() => navigate("/app/rooms")}>Browse rooms</button>
-          </div>
-        ) : (
-          <div className="mdash-events-list">
-            {recentRooms.slice(0, 3).map((room) => (
-              <div key={room.id} className="mdash-event-row"
-                onClick={() => navigate(`/app/rooms`)}>
-                <div className="mdash-event-date">
-                  <span className="mdash-event-month">
-                    {room.subject?.slice(0, 3).toUpperCase() || "STD"}
-                  </span>
-                  <span className="mdash-event-day-icon">🏠</span>
-                </div>
-                <div className="mdash-event-info">
-                  <strong className="mdash-event-title">
-                    {room.subject || "Study Room"} {room.goal ? `— ${room.goal}` : ""}
-                  </strong>
-                  <span className="mdash-event-meta">
-                    {room.partnerName ? `With ${room.partnerName}` : ""}
-                    {room.role ? ` · ${room.role}` : ""}
-                  </span>
-                </div>
-                <button className="mdash-event-join-btn"
-                  onClick={(e) => { e.stopPropagation(); navigate("/app/rooms"); }}>
-                  Open
-                </button>
-                <ChevronRight width={14} height={14} className="mdash-event-arrow" />
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
       {/* ── Become a Creator CTA ── */}
       <div className="mdash-creator-cta" onClick={() => navigate("/app/learn")}>
         <div className="mdash-creator-icon">⚡</div>
@@ -452,7 +402,7 @@ function MobileHome({ profile, user, connections, learning, learnHome, recentRoo
 
 // ── Desktop Home ─────────────────────────────────────────────────────────────
 
-function DesktopHome({ profile, user, connections, learning, learnHome, recentRooms, soloDashboard, loading }) {
+function DesktopHome({ profile, user, connections, learning, learnHome, soloDashboard, loading }) {
   const navigate = useNavigate();
   const name = profile?.displayName || user?.displayName || "there";
   const firstName = name.split(" ")[0];
@@ -738,36 +688,6 @@ function DesktopHome({ profile, user, connections, learning, learnHome, recentRo
           </section>
         )}
 
-        {/* ── Recent Study Rooms ── */}
-        <section className="home-block">
-          <div className="home-block-head">
-            <h2>Recent Study Rooms</h2>
-            <Link to="/app/rooms" className="link-btn">View all</Link>
-          </div>
-          {loading ? (
-            <div className="learn-empty">Loading…</div>
-          ) : recentRooms.length === 0 ? (
-            <div className="learn-empty">No recent study rooms. Join or create one!</div>
-          ) : (
-            <ul className="match-list">
-              {recentRooms.slice(0, 4).map((room) => (
-                <li key={room.id} className="match-row" style={{ cursor: "pointer" }}
-                  onClick={() => navigate("/app/rooms")}>
-                  <span className="match-av" style={{ background: "#1e3a5f", fontSize: "1.1rem" }}>🏠</span>
-                  <div className="match-info">
-                    <strong>{room.subject || "Study Room"}{room.goal ? ` — ${room.goal}` : ""}</strong>
-                    <span>
-                      {room.partnerName ? `With ${room.partnerName}` : ""}
-                      {room.role ? ` · ${room.role}` : ""}
-                    </span>
-                  </div>
-                  <ChevronRight width={16} height={16} className="match-arrow" />
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
       </div>
     </div>
   );
@@ -783,25 +703,22 @@ export default function Home() {
   const [connections, setConnections] = useState([]);
   const [learning, setLearning] = useState(null);
   const [learnHome, setLearnHome] = useState(null);
-  const [recentRooms, setRecentRooms] = useState([]);
   const [soloDashboard, setSoloDashboard] = useState(null);
   const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
     async function load() {
-      const [connRes, learningRes, homeRes, roomsRes, soloRes] = await Promise.allSettled([
+      const [connRes, learningRes, homeRes, soloRes] = await Promise.allSettled([
         api.getAcceptedMatchPartners(),
         api.getMyLearning(),
         api.getLearnHome(),
-        api.getRecentRooms(),
         api.soloGetDashboard(),
       ]);
       if (!active) return;
       if (connRes.status    === "fulfilled") setConnections(connRes.value || []);
       if (learningRes.status === "fulfilled") setLearning(learningRes.value);
       if (homeRes.status    === "fulfilled") setLearnHome(homeRes.value);
-      if (roomsRes.status   === "fulfilled") setRecentRooms(roomsRes.value || []);
       if (soloRes.status    === "fulfilled") setSoloDashboard(soloRes.value);
       setDataLoading(false);
     }
@@ -814,7 +731,6 @@ export default function Home() {
     connections,
     learning,
     learnHome,
-    recentRooms,
     soloDashboard,
     loading: dataLoading,
   };

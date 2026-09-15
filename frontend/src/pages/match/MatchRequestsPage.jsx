@@ -231,7 +231,7 @@ export default function MatchRequestsPage() {
       <div className="fr-page-header">
         <div className="fr-page-title-block">
           <h1 className="fr-page-title">Friend Requests</h1>
-          <p className="fr-page-subtitle">Accept a request to unlock chat and study rooms with that student.</p>
+          <p className="fr-page-subtitle">Accept a request to unlock chat and learning sessions with that student.</p>
         </div>
       </div>
 

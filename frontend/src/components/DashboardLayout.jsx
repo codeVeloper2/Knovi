@@ -7,16 +7,19 @@ import { LogoMark } from "./Logo";
 import ShortcutsModal from "./ShortcutsModal";
 import ConfirmDialog from "./ConfirmDialog";
 import NotificationsBell from "./NotificationsPanel";
+import MobileTopBar from "./MobileTopBar";
+import MobileBottomNav from "./MobileBottomNav";
+import MobileFabMenu from "./MobileFabMenu";
 import * as api from "../api";
 import {
-  HomeIcon, DiscoverIcon, ChatIcon, RoomsIcon, LearnIcon,
+  HomeIcon, DiscoverIcon, ChatIcon, LearnIcon,
   ProgressIcon, SettingsIcon, SearchIcon, MenuIcon, LogoutIcon,
   ChevronLeft, ChevronRight, ProfileIcon, SecurityIcon, BellIcon, BackIcon, MatchRequestsIcon,
-  JoinIcon,
 } from "./DashIcons";
 
-// Solo Learning icon
-function SoloLearnIcon() {
+// ── Inline nav icons for new system ──────────────────────────────────────────
+
+function LearningIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
@@ -25,44 +28,47 @@ function SoloLearnIcon() {
   );
 }
 
-// Sync icon
 function SyncIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/>
-      <path d="M9 12h6M12 9l3 3-3 3"/>
+      <path d="M21 2v6h-6"/>
+      <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+      <path d="M3 22v-6h6"/>
+      <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
     </svg>
   );
 }
 
-const LEARN_SUB = [
-  { to: "/app/solo",           label: "Learn",       Icon: SoloLearnIcon, end: true },
-  { to: "/app/sync",           label: "Sync",        Icon: SyncIcon },
-  { to: "/app/learn",          label: "Courses",     Icon: LearnIcon,  end: true },
-  { to: "/app/learn/tutorials",label: "Tutorials",   Icon: LearnIcon },
+// ── Nav configuration ─────────────────────────────────────────────────────────
+
+// "Learning" dropdown sub-items (shown when the Learning section is expanded)
+const LEARNING_SUB = [
+  { to: "/app/solo",            label: "Learning",  Icon: LearningIcon, end: true },
+  { to: "/app/sync",            label: "Sync",      Icon: SyncIcon },
+  { to: "/app/learn",           label: "Courses",   Icon: LearnIcon,    end: true },
+  { to: "/app/learn/tutorials", label: "Tutorials", Icon: LearnIcon },
 ];
 
 const MAIN_NAV = [
-  { to: "/app",                label: "Home",           Icon: HomeIcon,           end: true },
-  { to: "/app/discover",       label: "Discover",       Icon: DiscoverIcon },
-  { to: "/app/chat",           label: "Chat",           Icon: ChatIcon },
-  { to: "/app/match-requests", label: "Friend Requests",Icon: MatchRequestsIcon },
-  { to: "/app/solo",           label: "Learn",          Icon: SoloLearnIcon },
-  { to: "/app/sync",           label: "Sync",           Icon: SyncIcon },
-  { to: "/app/rooms",          label: "Study Rooms",    Icon: RoomsIcon },
-  { to: "/app/rooms/join",     label: "Join Session",   Icon: JoinIcon },
-  { to: "/app/learn",          label: "Courses",        Icon: LearnIcon },
-  { to: "/app/progress",       label: "Progress",       Icon: ProgressIcon },
+  { to: "/app",                label: "Home",            Icon: HomeIcon,          end: true },
+  { to: "/app/discover",       label: "Discover",        Icon: DiscoverIcon },
+  { to: "/app/chat",           label: "Chat",            Icon: ChatIcon },
+  { to: "/app/match-requests", label: "Friend Requests", Icon: MatchRequestsIcon },
+  { to: "/app/solo",           label: "Learning",        Icon: LearningIcon },
+  { to: "/app/sync",           label: "Sync",            Icon: SyncIcon },
+  { to: "/app/learn",          label: "Courses",         Icon: LearnIcon },
+  { to: "/app/progress",       label: "Progress",        Icon: ProgressIcon },
 ];
 
-// Desktop main nav includes Settings (it swaps to subnav when in settings)
+// Desktop nav adds Settings at the bottom
 const DESKTOP_MAIN_NAV = [
   ...MAIN_NAV,
   { to: "/app/settings", label: "Settings", Icon: SettingsIcon },
 ];
 
-// Mobile main nav does NOT include Settings (handled by dropdown below)
+// Mobile nav (Settings handled by its own dropdown)
 const MOBILE_MAIN_NAV = MAIN_NAV;
+
 const SETTINGS_NAV = [
   { to: "/app/settings",               label: "Profile",       Icon: ProfileIcon,  end: true },
   { to: "/app/settings/subjects",      label: "Subjects",      Icon: LearnIcon },
@@ -72,7 +78,6 @@ const SETTINGS_NAV = [
 
 const STORAGE_KEY = "peerup_sidebar_collapsed";
 
-// Chevron for mobile dropdown
 function ChevronDown({ open }) {
   return (
     <svg
@@ -93,24 +98,24 @@ export default function DashboardLayout() {
   const { user, profile, logout } = useAuth();
   const navigate  = useNavigate();
   const location  = useLocation();
-  const isMobileRef = useRef(window.innerWidth <= 768);
 
-  const [collapsed,   setCollapsed]   = useState(() => localStorage.getItem(STORAGE_KEY) === "1");
-  const [mobileOpen,  setMobileOpen]  = useState(false);
-  const [scOpen,      setScOpen]      = useState(false);
-  const [logoutOpen,  setLogoutOpen]  = useState(false);
-  const [loggingOut,  setLoggingOut]  = useState(false);
-  // Mobile-only: settings dropdown open state
+  const [collapsed,          setCollapsed]          = useState(() => localStorage.getItem(STORAGE_KEY) === "1");
+  const [mobileOpen,         setMobileOpen]         = useState(false);
+  const [scOpen,             setScOpen]             = useState(false);
+  const [logoutOpen,         setLogoutOpen]         = useState(false);
+  const [loggingOut,         setLoggingOut]         = useState(false);
   const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
-  const [mobileLearnOpen,    setMobileLearnOpen]    = useState(false);
-  const [pendingMatchCount, setPendingMatchCount] = useState(0);
-  const [pendingStudyCount, setPendingStudyCount] = useState(0);
+  const [mobileLearningOpen, setMobileLearningOpen] = useState(false);
+  const [pendingMatchCount,  setPendingMatchCount]  = useState(0);
   const searchRef = useRef(null);
 
   const inSettings = location.pathname.startsWith("/app/settings");
+  const inLearning = (
+    location.pathname.startsWith("/app/solo") ||
+    location.pathname.startsWith("/app/sync") ||
+    location.pathname.startsWith("/app/learn")
+  );
 
-  // On desktop: sidebar shows settings subnav when in settings (original behaviour)
-  // On mobile: main nav always shows, settings has a dropdown
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   useEffect(() => {
     function onResize() { setIsMobile(window.innerWidth <= 768); }
@@ -118,33 +123,32 @@ export default function DashboardLayout() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // Desktop: use the original subnav swap for Settings only
-  // Learn now uses dropdown on both desktop and mobile
-  const inLearn = location.pathname.startsWith("/app/learn");
-  const desktopNav = SETTINGS_NAV; // only used when inSettings
-  const mobileNav  = MOBILE_MAIN_NAV.filter(n => n.to !== "/app/learn");
+  // Desktop: subnav swap only for Settings; Learning uses dropdown
+  const desktopNav = SETTINGS_NAV; // used when inSettings
+  const mobileNav  = MOBILE_MAIN_NAV.filter(
+    n => n.to !== "/app/learn" && n.to !== "/app/solo" && n.to !== "/app/sync"
+  );
 
-  // Auto-open learn dropdown when navigating into learn
+  // Auto-open Learning dropdown when navigating into any learning route
   useEffect(() => {
-    if (inLearn) setMobileLearnOpen(true);
-  }, [inLearn]);
+    if (inLearning) setMobileLearningOpen(true);
+  }, [inLearning]);
+
   useEffect(() => {
     const handler = () => setMobileOpen(true);
     window.addEventListener("peerup:open-nav", handler);
     return () => window.removeEventListener("peerup:open-nav", handler);
   }, []);
 
-  // Poll badge counts every 30s
+  // Poll badge counts every 30 s
   useEffect(() => {
     let active = true;
     async function fetchCounts() {
-      const [matchRes, studyRes] = await Promise.allSettled([
+      const [matchRes] = await Promise.allSettled([
         api.getPendingRequestCount(),
-        api.getPendingStudyInvitationCount(),
       ]);
       if (!active) return;
       if (matchRes.status === "fulfilled") setPendingMatchCount(matchRes.value.count ?? 0);
-      if (studyRes.status === "fulfilled") setPendingStudyCount(studyRes.value.count ?? 0);
     }
     fetchCounts();
     const interval = setInterval(fetchCounts, 30000);
@@ -164,8 +168,8 @@ export default function DashboardLayout() {
     ...Object.entries(SETTINGS_SHORTCUTS).map(([to, s]) => ({ combo: s.combo, run: () => navigate(to) })),
     { combo: BACK_SHORTCUT.combo, run: () => navigate("/app") },
     { combo: "mod+b", run: () => toggle() },
-    { combo: "/", run: () => searchRef.current?.focus() },
-    { combo: "?", run: () => setScOpen(true), allowInInputs: false },
+    { combo: "/",     run: () => searchRef.current?.focus() },
+    { combo: "?",     run: () => setScOpen(true), allowInInputs: false },
   ]);
 
   const name    = profile?.displayName || user?.displayName || "peer";
@@ -178,13 +182,9 @@ export default function DashboardLayout() {
     finally { setLoggingOut(false); setLogoutOpen(false); }
   }
 
-  // ── Shared nav link renderer ──
   function NavItem({ to, label, Icon, end, inSettingsNav }) {
     const sc    = inSettingsNav ? SETTINGS_SHORTCUTS[to] : NAV_SHORTCUTS[to];
-    const badge =
-      (to === "/app/match-requests" && pendingMatchCount > 0) ? pendingMatchCount :
-      (to === "/app/rooms"           && pendingStudyCount > 0) ? pendingStudyCount :
-      null;
+    const badge = (to === "/app/match-requests" && pendingMatchCount > 0) ? pendingMatchCount : null;
     return (
       <NavLink
         to={to} end={end}
@@ -206,14 +206,55 @@ export default function DashboardLayout() {
     );
   }
 
+  // ── Learning dropdown (shared between desktop and mobile) ──
+  function LearningDropdown({ isDesktop }) {
+    return (
+      <div key="learning-dropdown">
+        <button
+          type="button"
+          className={`dash-link dash-settings-toggle ${inLearning ? "active" : ""}`}
+          onClick={() => setMobileLearningOpen(o => !o)}
+          title="Learning"
+        >
+          <span className="dash-link-icon-wrap"><LearningIcon /></span>
+          <span className="dash-link-label">Learning</span>
+          {(!isDesktop || !collapsed) && <ChevronDown open={mobileLearningOpen} />}
+        </button>
+        {mobileLearningOpen && (!isDesktop || !collapsed) && (
+          <div className="dash-settings-dropdown">
+            {LEARNING_SUB.map(({ to: subTo, label: subLabel, Icon: SubIcon, end: subEnd }) => (
+              <NavLink
+                key={subTo} to={subTo} end={subEnd}
+                className={({ isActive }) => `dash-link dash-sub-link ${isActive ? "active" : ""}`}
+                onClick={() => setMobileOpen(false)}
+                title={subLabel}
+              >
+                <span className="dash-link-icon-wrap"><SubIcon /></span>
+                <span className="dash-link-label">{subLabel}</span>
+              </NavLink>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className={`dash ${collapsed ? "dash--collapsed" : ""} ${mobileOpen ? "dash--mobile-open" : ""}`}>
       <div className="dash-overlay" onClick={() => setMobileOpen(false)} />
 
+      {/* ── Mobile Navigation (shown only on mobile) ── */}
+      {isMobile && (
+        <>
+          <MobileTopBar />
+          <MobileBottomNav />
+          <MobileFabMenu />
+        </>
+      )}
+
       {/* ── Sidebar ── */}
       <aside className="dash-side">
         <div className="dash-side-top">
-          {/* Desktop: show "Back to menu" when in settings. Mobile: always show logo. */}
           {!isMobile && inSettings ? (
             <button className="dash-back" type="button" onClick={() => navigate("/app")} title="Back to menu">
               <BackIcon width={18} height={18} />
@@ -229,111 +270,61 @@ export default function DashboardLayout() {
             </div>
           )}
 
-          {/* Close — mobile drawer */}
           <button className="dash-side-close" type="button" onClick={() => setMobileOpen(false)} aria-label="Close menu">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <path d="M18 6 6 18M6 6l12 12"/>
             </svg>
           </button>
 
-          {/* Collapse — desktop */}
           <button className="dash-collapse" type="button" onClick={toggle}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
             {collapsed ? <ChevronRight width={18} height={18} /> : <ChevronLeft width={18} height={18} />}
           </button>
         </div>
 
-        {/* Desktop: show "SETTINGS" heading when in settings */}
         {!isMobile && inSettings && <div className="dash-side-heading">Settings</div>}
 
         <nav className="dash-nav">
-          {/* ── DESKTOP: subnav swap for Settings, dropdown for Learn ── */}
+          {/* ── DESKTOP ── */}
           {!isMobile && (
             <>
               {inSettings ? (
-                /* In settings: show settings subnav only */
                 desktopNav.map(({ to, label, Icon, end }) => (
                   <NavItem key={to} to={to} label={label} Icon={Icon} end={end} inSettingsNav={true} />
                 ))
               ) : (
-                /* Normal nav: render each item, injecting the Learn dropdown in place of the Learn slot */
-                DESKTOP_MAIN_NAV.map(({ to, label, Icon, end }) => {
-                  if (to === "/app/learn") {
+                DESKTOP_MAIN_NAV
+                  // Skip the individual solo / sync / learn / courses entries — the dropdown handles them
+                  .filter(({ to }) => !["/app/solo", "/app/sync", "/app/learn"].includes(to))
+                  .map(({ to, label, Icon, end }) => {
+                    // Inject the Learning dropdown after Friend Requests (progress slot)
+                    if (to === "/app/progress") {
+                      return (
+                        <span key="learning-desktop-group">
+                          <LearningDropdown isDesktop={true} />
+                          <NavItem to={to} label={label} Icon={Icon} end={end} inSettingsNav={false} />
+                        </span>
+                      );
+                    }
                     return (
-                      <div key="learn-dropdown">
-                        <button
-                          type="button"
-                          className={`dash-link dash-settings-toggle ${inLearn ? "active" : ""}`}
-                          onClick={() => setMobileLearnOpen(o => !o)}
-                          title="Learn"
-                        >
-                          <span className="dash-link-icon-wrap"><LearnIcon /></span>
-                          <span className="dash-link-label">Learn</span>
-                          {!collapsed && <ChevronDown open={mobileLearnOpen} />}
-                        </button>
-                        {mobileLearnOpen && !collapsed && (
-                          <div className="dash-settings-dropdown">
-                            {LEARN_SUB.map(({ to: subTo, label: subLabel, Icon: SubIcon, end: subEnd }) => (
-                              <NavLink
-                                key={subTo} to={subTo} end={subEnd}
-                                className={({ isActive }) => `dash-link dash-sub-link ${isActive ? "active" : ""}`}
-                                title={subLabel}
-                              >
-                                <span className="dash-link-icon-wrap"><SubIcon /></span>
-                                <span className="dash-link-label">{subLabel}</span>
-                              </NavLink>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      <NavItem key={to} to={to} label={label} Icon={Icon} end={end} inSettingsNav={false} />
                     );
-                  }
-                  return (
-                    <NavItem key={to} to={to} label={label} Icon={Icon} end={end} inSettingsNav={false} />
-                  );
-                })
+                  })
               )}
             </>
           )}
 
-          {/* ── MOBILE: main nav always + learn + settings dropdowns ── */}
+          {/* ── MOBILE ── */}
           {isMobile && (
             <>
-              {/* All main nav items except Learn (Learn gets its own dropdown) */}
-              {mobileNav.filter(n => n.to !== "/app/learn").map(({ to, label, Icon, end }) => (
+              {mobileNav.map(({ to, label, Icon, end }) => (
                 <NavItem key={to} to={to} label={label} Icon={Icon} end={end} inSettingsNav={false} />
               ))}
 
-              {/* Learn dropdown trigger */}
-              <button
-                type="button"
-                className={`dash-link dash-settings-toggle ${inLearn ? "active" : ""}`}
-                onClick={() => setMobileLearnOpen(o => !o)}
-                title="Learn"
-              >
-                <span className="dash-link-icon-wrap"><LearnIcon /></span>
-                <span className="dash-link-label">Learn</span>
-                <ChevronDown open={mobileLearnOpen} />
-              </button>
+              {/* Learning dropdown */}
+              <LearningDropdown isDesktop={false} />
 
-              {/* Learn sub-items: Home + Tutorials */}
-              {mobileLearnOpen && (
-                <div className="dash-settings-dropdown">
-                  {LEARN_SUB.map(({ to, label, Icon, end }) => (
-                    <NavLink
-                      key={to} to={to} end={end}
-                      className={({ isActive }) => `dash-link dash-sub-link ${isActive ? "active" : ""}`}
-                      onClick={() => setMobileOpen(false)}
-                      title={label}
-                    >
-                      <span className="dash-link-icon-wrap"><Icon /></span>
-                      <span className="dash-link-label">{label}</span>
-                    </NavLink>
-                  ))}
-                </div>
-              )}
-
-              {/* Settings dropdown trigger */}
+              {/* Settings dropdown */}
               <button
                 type="button"
                 className={`dash-link dash-settings-toggle ${inSettings ? "active" : ""}`}
@@ -345,7 +336,6 @@ export default function DashboardLayout() {
                 <ChevronDown open={mobileSettingsOpen} />
               </button>
 
-              {/* Settings sub-items */}
               {mobileSettingsOpen && (
                 <div className="dash-settings-dropdown">
                   {SETTINGS_NAV.map(({ to, label, Icon, end }) => {

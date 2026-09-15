@@ -2,7 +2,6 @@
 from app.models.user import User
 from app.models.chat import Conversation, Message
 from app.models.match import MatchRequest
-from app.models.room import StudyRoom, RoomMaterial
 from app.models.learn import (
     Course, Lesson, Tutorial, VideoProgress,
     CourseEnrollment, SavedContent, LearnComment,
@@ -10,8 +9,7 @@ from app.models.learn import (
 from app.models.progress import EarnedBadge, Certificate
 from app.models.curriculum import (
     Subject, Topic, LearningObjective, Concept, Misconception,
-    LearningActivity, Question, Resource, LearningSession,
-    SessionActivityResult, SessionPracticeAnswer, SessionTeachingExchange,
+    LearningActivity, Question, Resource,
     TopicProgress, ResourceDownload,
 )
 from app.models.solo_learning import (
@@ -20,14 +18,13 @@ from app.models.solo_learning import (
 )
 
 __all__ = [
-    "User", "Conversation", "Message", "MatchRequest", "StudyRoom", "RoomMaterial",
+    "User", "Conversation", "Message", "MatchRequest",
     "Course", "Lesson", "Tutorial", "VideoProgress",
     "CourseEnrollment", "SavedContent", "LearnComment",
     "EarnedBadge", "Certificate",
-    # Curriculum / Learning Session
+    # Curriculum
     "Subject", "Topic", "LearningObjective", "Concept", "Misconception",
-    "LearningActivity", "Question", "Resource", "LearningSession",
-    "SessionActivityResult", "SessionPracticeAnswer", "SessionTeachingExchange",
+    "LearningActivity", "Question", "Resource",
     "TopicProgress", "ResourceDownload",
     # Solo Learning + Sync
     "ConceptProgress", "CheckpointAnswer", "ExplanationAttempt",

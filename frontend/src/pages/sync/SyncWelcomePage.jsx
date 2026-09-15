@@ -1,6 +1,6 @@
 /**
  * SyncWelcomePage — /app/sync
- * Study Room launch / welcome. Shows eligible concepts + how sync works.
+ * Sync session welcome. Shows eligible concepts + how sync works.
  */
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";

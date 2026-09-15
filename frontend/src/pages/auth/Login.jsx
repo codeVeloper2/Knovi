@@ -8,7 +8,7 @@ import { LogoMark } from "../../components/Logo";
    ──────────────────────────────────────────── */
 const FEATURES = [
   { icon: "users",  color: "blue",   title: "Find study partners", body: "Learn from people who get you" },
-  { icon: "chat",   color: "teal",   title: "Join study rooms",    body: "Chat, share notes, collaborate" },
+  { icon: "chat",   color: "teal",   title: "Connect & chat",      body: "Chat, share notes, collaborate" },
   { icon: "spark",  color: "gold",   title: "Use AI tools",        body: "Get help, create notes, build flashcards" },
   { icon: "chart",  color: "purple", title: "Track your progress", body: "Earn XP, unlock badges, reach your goals" },
 ];

@@ -1,4 +1,4 @@
-"""Notifications endpoint — aggregates pending friend requests, study room invites, and unread chats."""
+"""Notifications endpoint — aggregates pending friend requests and unread chats."""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -11,7 +11,6 @@ from app.core.database import get_session
 from app.core.security import current_user
 from app.models.chat import Conversation, Message
 from app.models.match import MatchRequest
-from app.models.room import StudyRoom
 from app.models.user import User
 
 router = APIRouter()
@@ -25,7 +24,6 @@ async def get_notifications(
     """
     Return aggregated notifications for the authenticated user:
     - Pending incoming friend requests
-    - Pending study room invitations (rooms created by partner, not yet joined)
     - Conversations with unread messages
     """
     notifications = []
@@ -57,8 +55,7 @@ async def get_notifications(
             "meta": {"requestId": req.id, "senderId": sender.id},
         })
 
-    # ── 2. Pending study room invitations ──────────────────────────────────
-    # Rooms where the user is NOT the creator and hasn't joined yet, not ended
+    # ── 2. Unread messages ─────────────────────────────────────────────────
     my_convs = (await session.execute(
         select(Conversation.id, Conversation.user_a_id, Conversation.user_b_id).where(
             or_(Conversation.user_a_id == user.id, Conversation.user_b_id == user.id)
@@ -66,36 +63,6 @@ async def get_notifications(
     )).all()
 
     conv_ids = [row[0] for row in my_convs]
-    if conv_ids:
-        pending_rooms = (await session.execute(
-            select(StudyRoom).where(
-                and_(
-                    StudyRoom.conversation_id.in_(conv_ids),
-                    StudyRoom.creator_id != user.id,
-                    StudyRoom.partner_joined.is_(False),
-                    StudyRoom.ended_at.is_(None),
-                )
-            ).order_by(StudyRoom.started_at.desc()).limit(5)
-        )).scalars().all()
-
-        for room in pending_rooms:
-            creator = (await session.execute(
-                select(User).where(User.id == room.creator_id)
-            )).scalar_one_or_none()
-            if not creator:
-                continue
-            notifications.append({
-                "id": f"room_{room.id}",
-                "type": "study_invite",
-                "title": f"{creator.full_name or creator.email} invited you to a study session",
-                "body": f"{room.subject}{(' — ' + room.goal) if room.goal else ''}",
-                "photoURL": creator.photo_url or "",
-                "linkTo": f"/app/rooms",
-                "createdAt": room.started_at.isoformat(),
-                "meta": {"roomId": room.id},
-            })
-
-    # ── 3. Unread messages ─────────────────────────────────────────────────
     if conv_ids:
         for conv_row in my_convs:
             conv_id, user_a, user_b = conv_row
@@ -114,14 +81,12 @@ async def get_notifications(
             if unread_count == 0:
                 continue
 
-            # Get partner info
             partner = (await session.execute(
                 select(User).where(User.id == partner_id)
             )).scalar_one_or_none()
             if not partner:
                 continue
 
-            # Get latest unread message for preview
             latest_msg = (await session.execute(
                 select(Message).where(
                     and_(

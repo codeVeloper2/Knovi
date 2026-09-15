@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.learn import Course, CourseEnrollment, Lesson, Tutorial, VideoProgress
 from app.models.progress import BADGE_CATALOGUE, BADGE_MAP, Certificate, EarnedBadge
-from app.models.room import StudyRoom
 from app.models.user import User, _xp_level
 
 
@@ -140,58 +139,13 @@ async def _count_completed_learn_activities(session: AsyncSession, user_id: int)
 
 
 async def _count_ended_rooms(session: AsyncSession, user_id: int) -> int:
-    """Count all ended study rooms this user participated in (as creator or partner)."""
-    from app.models.chat import Conversation
-    convs = (await session.execute(
-        select(Conversation.id).where(
-            (Conversation.user_a_id == user_id) | (Conversation.user_b_id == user_id)
-        )
-    )).scalars().all()
-    if not convs:
-        return 0
-    result = await session.execute(
-        select(func.count()).where(
-            StudyRoom.conversation_id.in_(convs),
-            StudyRoom.ended_at.is_not(None),
-        )
-    )
-    return result.scalar_one() or 0
+    """Study rooms removed in V2. Always returns 0."""
+    return 0
 
 
 async def _count_rooms_as_teacher(session: AsyncSession, user_id: int) -> int:
-    """
-    Count rooms where this user was in a teaching/helper role.
-    Creator with creator_role='teaching', or partner when creator_role='learning'.
-    """
-    from app.models.chat import Conversation
-    convs_map = {
-        row[0]: (row[1], row[2])
-        for row in (await session.execute(
-            select(Conversation.id, Conversation.user_a_id, Conversation.user_b_id).where(
-                (Conversation.user_a_id == user_id) | (Conversation.user_b_id == user_id)
-            )
-        )).all()
-    }
-    if not convs_map:
-        return 0
-
-    rooms = (await session.execute(
-        select(StudyRoom).where(
-            StudyRoom.conversation_id.in_(list(convs_map.keys())),
-            StudyRoom.ended_at.is_not(None),
-        )
-    )).scalars().all()
-
-    count = 0
-    for room in rooms:
-        is_creator = room.creator_id == user_id
-        role = room.creator_role  # "teaching" | "learning" | None
-        if is_creator and role == "teaching":
-            count += 1
-        elif not is_creator and role == "learning":
-            # Partner is the teacher when creator declared "learning"
-            count += 1
-    return count
+    """Study rooms removed in V2. Always returns 0."""
+    return 0
 
 
 async def evaluate_badges(session: AsyncSession, user_id: int) -> list[str]:
@@ -208,8 +162,6 @@ async def evaluate_badges(session: AsyncSession, user_id: int) -> list[str]:
 
     xp = user.xp or 0
     learn_count = await _count_completed_learn_activities(session, user_id)
-    room_count = await _count_ended_rooms(session, user_id)
-    teacher_count = await _count_rooms_as_teacher(session, user_id)
     level_info = _level_info(xp)
     level_num = level_info["levelNum"]
 
@@ -220,11 +172,8 @@ async def evaluate_badges(session: AsyncSession, user_id: int) -> list[str]:
             await _award(session, user_id, badge_id)
             newly_awarded.append(badge_id)
 
-    # first_step — complete any learning activity (lesson, tutorial, or study room)
-    await maybe_award("first_step", learn_count >= 1 or room_count >= 1)
-
-    # study_buddy — complete first study room session
-    await maybe_award("study_buddy", room_count >= 1)
+    # first_step — complete any learning activity (lesson or tutorial)
+    await maybe_award("first_step", learn_count >= 1)
 
     # dedicated_learner — complete 5 learning activities
     await maybe_award("dedicated_learner", learn_count >= 5)
@@ -235,20 +184,11 @@ async def evaluate_badges(session: AsyncSession, user_id: int) -> list[str]:
     # streak_7 — 7-day streak
     await maybe_award("streak_7", streak >= 7)
 
-    # knowledge_sharer — helped in 5 sessions as teacher
-    await maybe_award("knowledge_sharer", teacher_count >= 5)
-
-    # peer_mentor — helped in 10 sessions as teacher
-    await maybe_award("peer_mentor", teacher_count >= 10)
-
-    # growing_learner — level 5 (300 XP threshold = Scholar level, level index 3)
+    # growing_learner — Scholar level (300 XP)
     await maybe_award("growing_learner", xp >= 300)
 
-    # consistent_learner — level 10 (1000 XP = Master level)
+    # consistent_learner — Master level (1000 XP)
     await maybe_award("consistent_learner", xp >= 1000)
-
-    # team_player — 10 collaborative study room sessions
-    await maybe_award("team_player", room_count >= 10)
 
     if newly_awarded:
         await session.commit()

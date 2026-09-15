@@ -34,20 +34,13 @@ import SettingsProfile from "./pages/dashboard/settings/Profile";
 import SettingsSubjects from "./pages/dashboard/settings/Subjects";
 import SettingsSecurity from "./pages/dashboard/settings/Security";
 import SettingsNotifications from "./pages/dashboard/settings/Notifications";
+import SettingsMobile from "./pages/dashboard/settings/SettingsMobile";
 import LearnLayout from "./pages/learn/LearnLayout";
 import LearnHome from "./pages/learn/LearnHome";
 import TutorialsPage from "./pages/learn/TutorialsPage";
 import TutorialDetailPage from "./pages/learn/TutorialDetailPage";
 import CreateTutorialPage from "./pages/learn/CreateTutorialPage";
 import MyTutorialsPage from "./pages/learn/MyTutorialsPage";
-
-// ── Peer Teaching / Study Rooms pages ──
-import StartSessionPage    from "./pages/study/StartSessionPage";
-import JoinSessionPage     from "./pages/study/JoinSessionPage";
-import SessionLobbyPage    from "./pages/study/SessionLobbyPage";
-import SetupPhasePage      from "./pages/study/SetupPhasePage";
-import SessionRoomPage     from "./pages/study/SessionRoomPage";
-import SessionSummaryPage  from "./pages/study/SessionSummaryPage";
 
 // ── Solo Learning pages ──
 import SoloHomePage        from "./pages/solo/SoloHomePage";
@@ -91,18 +84,6 @@ function AppRoutes() {
         <Route path="chat/:convId"   element={<ChatPage />} />
         <Route path="match-requests" element={<MatchRequestsPage />} />
 
-        {/* ── Study Rooms = Peer Teaching Learning Sessions ── */}
-        <Route path="rooms"                              element={<StartSessionPage />} />
-        <Route path="rooms/join"                         element={<JoinSessionPage />} />
-        <Route path="rooms/lobby/:sessionId"             element={<SessionLobbyPage />} />
-        <Route path="rooms/setup/:sessionId"             element={<SetupPhasePage />} />
-        <Route path="rooms/session/:sessionId"           element={<SessionRoomPage />} />
-        <Route path="rooms/summary/:sessionId"           element={<SessionSummaryPage />} />
-
-        {/* Redirect any old stage-based URLs to the room page */}
-        <Route path="rooms/session/:sessionId/*"         element={<Navigate to="/app/rooms" replace />} />
-        <Route path="study-rooms/*"                      element={<Navigate to="/app/rooms" replace />} />
-
         {/* ── Solo Learning ── */}
         <Route path="solo"                                    element={<SoloHomePage />} />
         <Route path="solo/subjects/:subjectId"                element={<SoloTopicsPage />} />
@@ -133,7 +114,8 @@ function AppRoutes() {
 
         <Route path="progress" element={<Progress />} />
         <Route path="settings">
-          <Route index element={<SettingsProfile />} />
+          <Route index element={<SettingsMobile />} />
+          <Route path="profile"       element={<SettingsProfile />} />
           <Route path="subjects"      element={<SettingsSubjects />} />
           <Route path="security"      element={<SettingsSecurity />} />
           <Route path="notifications" element={<SettingsNotifications />} />

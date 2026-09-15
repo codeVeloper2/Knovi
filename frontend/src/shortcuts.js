@@ -11,7 +11,7 @@
  *
  * We avoid combos the browser/OS reserves and can't be overridden
  * (Ctrl+T/W/N/Tab). We also avoid Ctrl+R since the user has no other way to
- * reload the page — Study Rooms uses Ctrl+O instead.
+ * reload the page.
  */
 
 // Main navigation shortcuts (Ctrl/Cmd + letter) — keyed by route.
@@ -20,8 +20,8 @@ export const NAV_SHORTCUTS = {
   "/app/discover":         { combo: "mod+d", keys: ["Ctrl", "D"], label: "Discover" },
   "/app/chat":             { combo: "mod+e", keys: ["Ctrl", "E"], label: "Chat" },
   "/app/match-requests":   { combo: "mod+k", keys: ["Ctrl", "K"], label: "Match Requests" },
-  "/app/rooms":            { combo: "mod+o", keys: ["Ctrl", "O"], label: "Study Rooms" },
-  "/app/learn":            { combo: "mod+l", keys: ["Ctrl", "L"], label: "Learn" },
+  "/app/solo":             { combo: "mod+l", keys: ["Ctrl", "L"], label: "Learning" },
+  "/app/sync":             { combo: "mod+o", keys: ["Ctrl", "O"], label: "Sync" },
   "/app/progress":         { combo: "mod+u", keys: ["Ctrl", "U"], label: "Progress" },
   "/app/settings":         { combo: "mod+s", keys: ["Ctrl", "S"], label: "Settings" },
 };
