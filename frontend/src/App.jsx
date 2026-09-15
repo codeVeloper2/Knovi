@@ -49,6 +49,25 @@ import SetupPhasePage      from "./pages/study/SetupPhasePage";
 import SessionRoomPage     from "./pages/study/SessionRoomPage";
 import SessionSummaryPage  from "./pages/study/SessionSummaryPage";
 
+// ── Solo Learning pages ──
+import SoloHomePage        from "./pages/solo/SoloHomePage";
+import SoloTopicsPage      from "./pages/solo/SoloTopicsPage";
+import SoloConceptsPage    from "./pages/solo/SoloConceptsPage";
+import SoloLessonPage      from "./pages/solo/SoloLessonPage";
+import SoloCheckpointPage  from "./pages/solo/SoloCheckpointPage";
+import SoloNotesPage       from "./pages/solo/SoloNotesPage";
+import SoloAskPage         from "./pages/solo/SoloAskPage";
+import SoloPassedPage      from "./pages/solo/SoloPassedPage";
+
+// ── Sync pages ──
+import SyncWelcomePage     from "./pages/sync/SyncWelcomePage";
+import SyncFindPartnerPage from "./pages/sync/SyncFindPartnerPage";
+import SyncLobbyPage       from "./pages/sync/SyncLobbyPage";
+import SyncSessionPage     from "./pages/sync/SyncSessionPage";
+import SyncGapCheckPage    from "./pages/sync/SyncGapCheckPage";
+import SyncCompletePage    from "./pages/sync/SyncCompletePage";
+import SyncHistoryPage     from "./pages/sync/SyncHistoryPage";
+
 function AppRoutes() {
   return (
     <Routes>
@@ -83,6 +102,25 @@ function AppRoutes() {
         {/* Redirect any old stage-based URLs to the room page */}
         <Route path="rooms/session/:sessionId/*"         element={<Navigate to="/app/rooms" replace />} />
         <Route path="study-rooms/*"                      element={<Navigate to="/app/rooms" replace />} />
+
+        {/* ── Solo Learning ── */}
+        <Route path="solo"                                    element={<SoloHomePage />} />
+        <Route path="solo/subjects/:subjectId"                element={<SoloTopicsPage />} />
+        <Route path="solo/topics/:topicId"                    element={<SoloConceptsPage />} />
+        <Route path="solo/concepts/:conceptId/lesson"         element={<SoloLessonPage />} />
+        <Route path="solo/concepts/:conceptId/checkpoint"     element={<SoloCheckpointPage />} />
+        <Route path="solo/concepts/:conceptId/notes"          element={<SoloNotesPage />} />
+        <Route path="solo/concepts/:conceptId/ask"            element={<SoloAskPage />} />
+        <Route path="solo/concepts/:conceptId/passed"         element={<SoloPassedPage />} />
+
+        {/* ── Sync ── */}
+        <Route path="sync"                                    element={<SyncWelcomePage />} />
+        <Route path="sync/find/:conceptId"                    element={<SyncFindPartnerPage />} />
+        <Route path="sync/lobby/:sessionId"                   element={<SyncLobbyPage />} />
+        <Route path="sync/session/:sessionId"                 element={<SyncSessionPage />} />
+        <Route path="sync/gap/:sessionId"                     element={<SyncGapCheckPage />} />
+        <Route path="sync/complete/:sessionId"                element={<SyncCompletePage />} />
+        <Route path="sync/history"                            element={<SyncHistoryPage />} />
 
         {/* ── Learn ── */}
         <Route path="learn" element={<LearnLayout />}>

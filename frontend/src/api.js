@@ -522,3 +522,46 @@ export const submitPracticeAnswer   = (sessionId, questionId, body) => request(`
 export const submitChallenge        = (sessionId, body)              => request(`/api/learning/sessions/${sessionId}/challenge`, { method: "POST", body, auth: true });
 export const completeSession        = (sessionId)                    => request(`/api/learning/sessions/${sessionId}/complete`, { method: "POST", auth: true });
 export const getSessionSummary      = (sessionId)                    => request(`/api/learning/sessions/${sessionId}/summary`, { auth: true });
+
+// ── Solo Learning ─────────────────────────────────────────────────────────────
+export const soloGetSubjects          = ()              => request("/api/solo/subjects",                               { auth: true });
+export const soloGetTopics            = (subjectId)     => request(`/api/solo/subjects/${subjectId}/topics`,           { auth: true });
+export const soloGetConcepts          = (topicId)       => request(`/api/solo/topics/${topicId}/concepts`,             { auth: true });
+export const soloGetLesson            = (conceptId)     => request(`/api/solo/concepts/${conceptId}/lesson`,           { auth: true });
+export const soloGetCheckpoint        = (conceptId)     => request(`/api/solo/concepts/${conceptId}/checkpoint`,       { auth: true });
+export const soloSubmitAnswer         = (conceptId, body) => request(`/api/solo/concepts/${conceptId}/checkpoint/answer`, { method: "POST", body, auth: true });
+export const soloGetProgress          = (conceptId)     => request(`/api/solo/concepts/${conceptId}/progress`,         { auth: true });
+export const soloSubmitExplanation    = (conceptId, body) => request(`/api/solo/concepts/${conceptId}/explanation`,    { method: "POST", body, auth: true });
+export const soloAskAI                = (conceptId, body) => request(`/api/solo/concepts/${conceptId}/ask`,            { method: "POST", body, auth: true });
+export const soloGetSuggestedQuestions = (conceptId)    => request(`/api/solo/concepts/${conceptId}/suggested-questions`, { auth: true });
+export const soloMarkComplete         = (conceptId)     => request(`/api/solo/concepts/${conceptId}/complete`,         { method: "POST", auth: true });
+export const soloGetDashboard         = ()              => request("/api/solo/dashboard",                              { auth: true });
+
+// ── Sync ──────────────────────────────────────────────────────────────────────
+export const syncGetEligible          = ()              => request("/api/sync/eligible",                               { auth: true });
+export const syncGetPartners          = (conceptId)     => request(`/api/sync/partners/${conceptId}`,                  { auth: true });
+export const syncCreateSession        = (body)          => request("/api/sync/sessions",                               { method: "POST", body, auth: true });
+export const syncValidateCode         = (code)          => request(`/api/sync/sessions/join/${code}`,                  { auth: true });
+export const syncJoinByCode           = (code)          => request(`/api/sync/sessions/join/${code}`,                  { method: "POST", auth: true });
+export const syncGetSession           = (id)            => request(`/api/sync/sessions/${id}`,                        { auth: true });
+export const syncMarkReady            = (id)            => request(`/api/sync/sessions/${id}/ready`,                  { method: "POST", auth: true });
+export const syncGetWarmup            = (id)            => request(`/api/sync/sessions/${id}/warmup`,                 { auth: true });
+export const syncSubmitWarmupAnswer   = (id, body)      => request(`/api/sync/sessions/${id}/warmup/answer`,          { method: "POST", body, auth: true });
+export const syncSubmitExplanation    = (id, body)      => request(`/api/sync/sessions/${id}/explain`,                { method: "POST", body, auth: true });
+export const syncReactToExplanation   = (id, body)      => request(`/api/sync/sessions/${id}/explain/react`,          { method: "POST", body, auth: true });
+export const syncAskQuestion          = (id, body)      => request(`/api/sync/sessions/${id}/quiz/question`,          { method: "POST", body, auth: true });
+export const syncAnswerQuestion       = (id, exchId, body) => request(`/api/sync/sessions/${id}/quiz/${exchId}/answer`, { method: "POST", body, auth: true });
+export const syncGetQuizSuggestions   = (id)            => request(`/api/sync/sessions/${id}/quiz/suggestions`,       { auth: true });
+export const syncRunGapCheck          = (id)            => request(`/api/sync/sessions/${id}/gap-check`,              { method: "POST", auth: true });
+export const syncComplete             = (id)            => request(`/api/sync/sessions/${id}/complete`,               { method: "POST", auth: true });
+export const syncGetHistory           = ()              => request("/api/sync/history",                               { auth: true });
+
+export function openSyncSocket(sessionId, onMessage, onClose) {
+  const token = getToken();
+  const base  = (API_BASE || "").replace(/^http/, "ws") || `ws://${window.location.host}`;
+  const ws = new WebSocket(`${base}/api/sync/ws/${sessionId}?token=${token}`);
+  ws.onmessage = (e) => { try { onMessage(JSON.parse(e.data)); } catch {} };
+  ws.onclose   = onClose || (() => {});
+  ws.onerror   = () => ws.close();
+  return ws;
+}

@@ -14,6 +14,10 @@ from app.models.curriculum import (
     SessionActivityResult, SessionPracticeAnswer, SessionTeachingExchange,
     TopicProgress, ResourceDownload,
 )
+from app.models.solo_learning import (
+    ConceptProgress, CheckpointAnswer, ExplanationAttempt,
+    SyncSession, SyncWarmupAnswer, SyncQuizExchange, SyncGap,
+)
 
 __all__ = [
     "User", "Conversation", "Message", "MatchRequest", "StudyRoom", "RoomMaterial",
@@ -25,4 +29,7 @@ __all__ = [
     "LearningActivity", "Question", "Resource", "LearningSession",
     "SessionActivityResult", "SessionPracticeAnswer", "SessionTeachingExchange",
     "TopicProgress", "ResourceDownload",
+    # Solo Learning + Sync
+    "ConceptProgress", "CheckpointAnswer", "ExplanationAttempt",
+    "SyncSession", "SyncWarmupAnswer", "SyncQuizExchange", "SyncGap",
 ]

@@ -9,7 +9,7 @@ import NotificationsBell from "../../components/NotificationsPanel";
 
 function greeting() {
   const h = new Date().getHours();
-  if (h < 12) return "Good morning";
+  if (h < 12) return "Good Morning";
   if (h < 18) return "Good afternoon";
   return "Good evening";
 }
@@ -86,7 +86,7 @@ function ProgressBar({ pct, className = "mdash-progress-bar" }) {
 
 // ── Mobile Home ──────────────────────────────────────────────────────────────
 
-function MobileHome({ profile, user, connections, learning, learnHome, recentRooms, loading, navigate, onOpenMenu }) {
+function MobileHome({ profile, user, connections, learning, learnHome, recentRooms, soloDashboard, loading, navigate, onOpenMenu }) {
   const name = profile?.displayName || user?.displayName || "";
   const firstName = name.split(" ")[0] || "there";
   const photo = profile?.photoURL || user?.photoURL || "";
@@ -129,7 +129,7 @@ function MobileHome({ profile, user, connections, learning, learnHome, recentRoo
         <h1 className="mdash-greeting-title">
           {greeting()}, <span className="mdash-greeting-name">{firstName}!</span> 👋
         </h1>
-        <p className="mdash-greeting-sub">Keep going — your goals are within reach.</p>
+        <p className="mdash-greeting-sub">Rise, shine and Keep going — your goals are within reach.</p>
       </div>
 
       {/* ── Profile / Level card ── */}
@@ -452,7 +452,7 @@ function MobileHome({ profile, user, connections, learning, learnHome, recentRoo
 
 // ── Desktop Home ─────────────────────────────────────────────────────────────
 
-function DesktopHome({ profile, user, connections, learning, learnHome, recentRooms, loading }) {
+function DesktopHome({ profile, user, connections, learning, learnHome, recentRooms, soloDashboard, loading }) {
   const navigate = useNavigate();
   const name = profile?.displayName || user?.displayName || "there";
   const firstName = name.split(" ")[0];
@@ -478,7 +478,7 @@ function DesktopHome({ profile, user, connections, learning, learnHome, recentRo
       {/* Greeting */}
       <div className="home-head">
         <h1>{greeting()}, {firstName}! 👋</h1>
-        <p>Keep going — your goals are within reach.</p>
+        <p>Rise, Shine and Keep going — your goals are within reach.</p>
       </div>
 
       {/* Stat cards */}
@@ -511,7 +511,91 @@ function DesktopHome({ profile, user, connections, learning, learnHome, recentRo
 
       <div className="home-grid">
 
-        {/* ── Continue Learning ── */}
+        {/* ── Solo: Continue Learning ── */}
+        {soloDashboard?.continueLearning && (
+          <section className="home-block">
+            <div className="home-block-head">
+              <h2>Continue Learning</h2>
+              <Link to="/app/solo" className="link-btn">View all</Link>
+            </div>
+            {(() => {
+              const cl = soloDashboard.continueLearning;
+              return (
+                <button
+                  className="learn-card"
+                  style={{ textAlign: "left", cursor: "pointer", border: "none", background: "none", width: "100%", padding: 0 }}
+                  onClick={() => navigate(`/app/solo/concepts/${cl.conceptId}/lesson`)}
+                >
+                  <div className="learn-icon" style={{ background: "rgba(79,110,247,0.15)", fontSize: "1.3rem" }}>📖</div>
+                  <div className="learn-info">
+                    <strong>{cl.subjectName}</strong>
+                    <span>{cl.topicName} · Concept {cl.conceptIndex} of {cl.totalConcepts}</span>
+                    <div style={{ marginTop: 6, height: 3, background: "#1e293b", borderRadius: 99, overflow: "hidden" }}>
+                      <div style={{ width: `${cl.progressPct}%`, height: "100%", background: "#4f6ef7", borderRadius: 99 }} />
+                    </div>
+                    <span style={{ fontSize: 11, color: "#64748b" }}>{cl.progressPct}%</span>
+                  </div>
+                </button>
+              );
+            })()}
+          </section>
+        )}
+
+        {/* ── Solo: Ready to Sync ── */}
+        {soloDashboard?.syncReady?.length > 0 && (
+          <section className="home-block">
+            <div className="home-block-head">
+              <h2>Ready to Sync</h2>
+              <Link to="/app/sync" className="link-btn">View all</Link>
+            </div>
+            {soloDashboard.syncReady.slice(0, 2).map(s => (
+              <button
+                key={s.conceptId}
+                className="learn-card"
+                style={{ textAlign: "left", cursor: "pointer", border: "none", background: "none", width: "100%", padding: 0 }}
+                onClick={() => navigate(`/app/sync/find/${s.conceptId}`)}
+              >
+                <div className="learn-icon" style={{ background: "rgba(34,197,94,0.12)", fontSize: "1.2rem" }}>⚡</div>
+                <div className="learn-info">
+                  <strong>{s.conceptName}</strong>
+                  <span>
+                    {s.availablePartners > 0
+                      ? `${s.availablePartners} student${s.availablePartners !== 1 ? "s" : ""} ready · ${s.subjectName}`
+                      : `No partners yet · ${s.subjectName}`}
+                  </span>
+                </div>
+                <span style={{ marginLeft: "auto", padding: "4px 10px", background: "rgba(34,197,94,0.1)", color: "#22c55e", borderRadius: 6, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
+                  Find a Partner
+                </span>
+              </button>
+            ))}
+          </section>
+        )}
+
+        {/* ── Solo: Recent Activity ── */}
+        {soloDashboard?.recentActivity?.length > 0 && (
+          <section className="home-block">
+            <div className="home-block-head">
+              <h2>Recent Activity</h2>
+              <Link to="/app/progress" className="link-btn">View all</Link>
+            </div>
+            <ul className="match-list">
+              {soloDashboard.recentActivity.slice(0, 5).map((item, i) => (
+                <li key={i} className="match-row">
+                  <span className="match-av" style={{ background: "#1e3a5f", fontSize: "1rem" }}>
+                    {item.type === "checkpoint_passed" ? "✓"
+                      : item.type === "sync_completed" ? "🔗"
+                      : "📖"}
+                  </span>
+                  <div className="match-info">
+                    <strong>{item.label}</strong>
+                    <span>{item.detail}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         <section className="home-block">
           <div className="home-block-head">
             <h2>Continue Learning</h2>
@@ -700,22 +784,25 @@ export default function Home() {
   const [learning, setLearning] = useState(null);
   const [learnHome, setLearnHome] = useState(null);
   const [recentRooms, setRecentRooms] = useState([]);
+  const [soloDashboard, setSoloDashboard] = useState(null);
   const [dataLoading, setDataLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
     async function load() {
-      const [connRes, learningRes, homeRes, roomsRes] = await Promise.allSettled([
+      const [connRes, learningRes, homeRes, roomsRes, soloRes] = await Promise.allSettled([
         api.getAcceptedMatchPartners(),
         api.getMyLearning(),
         api.getLearnHome(),
         api.getRecentRooms(),
+        api.soloGetDashboard(),
       ]);
       if (!active) return;
       if (connRes.status    === "fulfilled") setConnections(connRes.value || []);
       if (learningRes.status === "fulfilled") setLearning(learningRes.value);
       if (homeRes.status    === "fulfilled") setLearnHome(homeRes.value);
       if (roomsRes.status   === "fulfilled") setRecentRooms(roomsRes.value || []);
+      if (soloRes.status    === "fulfilled") setSoloDashboard(soloRes.value);
       setDataLoading(false);
     }
     load();
@@ -728,6 +815,7 @@ export default function Home() {
     learning,
     learnHome,
     recentRooms,
+    soloDashboard,
     loading: dataLoading,
   };
 
