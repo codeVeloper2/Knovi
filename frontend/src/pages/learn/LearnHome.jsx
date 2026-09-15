@@ -224,8 +224,8 @@ export default function LearnHome() {
   ].filter((t, i, arr) => arr.findIndex(x => x.id === t.id) === i);
 
   return (
-    <div className="ln-page">
-      <MobileHeader />
+    <div className="ln-page lh-page">
+      {/* MobileHeader is a duplicate — MobileTopBar handles this globally */}
 
       {/* ── Page heading ── */}
       <div className="ln-page-head">
