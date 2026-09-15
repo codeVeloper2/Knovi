@@ -13283,9 +13283,9 @@ kbd {
     bottom: calc(var(--bottom-nav-h, 72px) + 28px);
     left: 50%;
     transform: translateX(-50%);
-    /* diamond is ~220px wide × ~200px tall */
-    width: 220px;
-    height: 200px;
+    /* Expand for 5-item circle: ~280px × 280px */
+    width: 280px;
+    height: 280px;
     z-index: 1100;
     pointer-events: none;
     opacity: 0;
@@ -13347,56 +13347,56 @@ kbd {
     color: inherit;
   }
 
-  /* Diamond positions:
-       top    → centred, top
-       left   → left edge, middle
-       right  → right edge, middle
-       bottom → centred, bottom               */
+  /* 5-item circular layout around center
+     Each item positioned at radius ~110px from container center (140px, 140px)
+     Angles: 0° (top), 72°, 144°, 216°, 288° for even pentagon spacing
+     Formula: x = centerX + radius * sin(angle), y = centerY - radius * cos(angle)
+  */
+  
+  /* Friend Requests: top (0°) */
   .fab-item--top {
-    top: 0;
+    top: 15px;
     left: 50%;
     transform: translateX(-50%) scale(0.85);
   }
   .fab-diamond.open .fab-item--top {
     transform: translateX(-50%) scale(1);
   }
+
+  /* Progress: left side (288° ≈ -72° or 10 o'clock) */
   .fab-item--left {
-    top: 50%;
-    left: 0;
-    transform: translateY(-50%) scale(0.85);
+    top: 50px;
+    left: 20px;
+    transform: scale(0.85);
   }
   .fab-diamond.open .fab-item--left {
-    transform: translateY(-50%) scale(1);
-  }
-  .fab-item--right {
-    top: 50%;
-    right: 0;
-    transform: translateY(-50%) scale(0.85);
-  }
-  .fab-diamond.open .fab-item--right {
-    transform: translateY(-50%) scale(1);
-  }
-  .fab-item--bottom {
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%) scale(0.85);
-  }
-  .fab-diamond.open .fab-item--bottom {
-    transform: translateX(-50%) scale(1);
+    transform: scale(1);
   }
 
-  /* NEW: 5-item diamond — diagonal positions */
+  /* UpSkilling: top-right (72° or 2 o'clock) */
   .fab-item--top-right {
-    top: 20%;
-    right: 15%;
+    top: 50px;
+    right: 20px;
     transform: scale(0.85);
   }
   .fab-diamond.open .fab-item--top-right {
     transform: scale(1);
   }
+
+  /* Sync: bottom-left (216° or 7 o'clock) */
+  .fab-item--bottom {
+    bottom: 50px;
+    left: 20px;
+    transform: scale(0.85);
+  }
+  .fab-diamond.open .fab-item--bottom {
+    transform: scale(1);
+  }
+
+  /* Resources: bottom-right (144° or 5 o'clock) */
   .fab-item--bottom-right {
-    bottom: 20%;
-    right: 15%;
+    bottom: 50px;
+    right: 20px;
     transform: scale(0.85);
   }
   .fab-diamond.open .fab-item--bottom-right {
