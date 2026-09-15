@@ -1146,10 +1146,7 @@ body:has(.dash) { background: var(--navy-900); }
     height: 100%;
     object-fit: cover;
   }
-  /* Push settings page content below fixed header */
-  .settings-page {
-    padding-top: 56px;
-  }
+  /* Settings pages now use sticky headers, no extra padding needed */
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -7065,6 +7062,31 @@ kbd {
   .prog-grid { grid-template-columns: 1fr; }
   .seg-tabs  { overflow-x: auto; white-space: nowrap; }
 
+  /* Make Progress page title sticky on mobile */
+  @media (max-width: 768px) {
+    .home .home-head {
+      position: sticky;
+      top: 56px; /* Below prog-mob-header */
+      background: var(--navy-bg);
+      padding: 16px 18px 12px;
+      margin: 0 -18px;
+      padding-left: 18px;
+      padding-right: 18px;
+      z-index: 90;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    
+    .home .seg-tabs {
+      position: sticky;
+      top: 100px; /* Below home-head */
+      background: var(--navy-bg);
+      padding: 12px 18px;
+      margin: 0 -18px 16px;
+      z-index: 89;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+  }
+
   /* ── Settings ── */
   .settings-grid  { grid-template-columns: 1fr; }
   .settings-card  { padding: 20px 16px; }
@@ -9725,7 +9747,12 @@ kbd {
 
   /* ── Title ───────────────────────────────────────────────────── */
   .disc-mobile-title-row {
-    padding: 20px 18px 12px;
+    position: sticky;
+    top: 56px; /* Below the fixed mobile-topbar */
+    background: var(--navy-bg);
+    padding: 16px 18px 12px;
+    z-index: 90;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
   }
   .disc-mobile-title {
     font-size: 1.45rem;
@@ -12494,7 +12521,7 @@ kbd {
 
   /* Adjust dash-content to account for mobile top bar */
   .dash-content {
-    padding-top: 72px !important; /* 56px topbar + 16px spacing */
+    padding-top: 56px !important; /* Match topbar height exactly */
     padding-bottom: 90px !important; /* Extra space for bottom nav */
   }
 
@@ -13141,11 +13168,16 @@ kbd {
 
 @media (max-width: 820px) {
   .sph-wrap {
+    position: sticky;
+    top: 0;
+    background: var(--navy-bg);
+    z-index: 95;
     display: flex;
     align-items: center;
     gap: 0;
-    padding: 0 0 18px;
+    padding: 16px 18px;
     margin-bottom: 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
   }
 
   .sph-back {
