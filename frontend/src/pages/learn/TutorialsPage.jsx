@@ -119,8 +119,8 @@ export default function TutorialsPage() {
   }, [tab, subject, search]);
 
   return (
-    <div className="ln-page">
-      <MobileHeader />
+    <div className="ln-page lh-page">
+      {/* MobileHeader is a duplicate — MobileTopBar handles this globally */}
 
       {/* ── Back + title ── */}
       <div className="ln-topbar">

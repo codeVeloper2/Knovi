@@ -13283,9 +13283,9 @@ kbd {
     bottom: calc(var(--bottom-nav-h, 72px) + 28px);
     left: 50%;
     transform: translateX(-50%);
-    /* Large enough for 5 items in circle: 320px × 320px */
-    width: 320px;
-    height: 320px;
+    /* Smaller container for circular items: 260px × 260px */
+    width: 260px;
+    height: 260px;
     z-index: 1100;
     pointer-events: none;
     opacity: 0;
@@ -13302,12 +13302,15 @@ kbd {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 5px;
-    padding: 10px 14px;
-    min-width: 90px;
+    justify-content: center;
+    gap: 4px;
+    padding: 0;
+    /* Circular items: 72px diameter */
+    width: 72px;
+    height: 72px;
     background: var(--navy-panel);
     border: 1px solid var(--navy-line);
-    border-radius: 14px;
+    border-radius: 50%; /* CIRCULAR */
     color: var(--text);
     cursor: pointer;
     font-size: 0;           /* hide label until open */
@@ -13317,7 +13320,7 @@ kbd {
     opacity: 0;
   }
   .fab-diamond.open .fab-item {
-    font-size: 0.75rem;
+    font-size: 0.65rem; /* smaller for circular */
     font-weight: 600;
     opacity: 1;
     transform: scale(1);
@@ -13340,23 +13343,35 @@ kbd {
     align-items: center;
     justify-content: center;
     color: inherit;
+    /* Slightly smaller icons for circular */
+    width: 20px;
+    height: 20px;
+  }
+  .fab-item-icon svg {
+    width: 18px;
+    height: 18px;
   }
   .fab-item-label {
     white-space: nowrap;
-    line-height: 1.2;
+    line-height: 1.1;
     color: inherit;
+    text-align: center;
+    max-width: 68px; /* fit in circle */
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  /* 5-item circular layout - perfect circle spacing
-     Container: 320×320px, center at (160, 160)
-     Radius: 120px from center
+  /* 5-item circular layout - compact circles
+     Container: 260×260px, center at (130, 130)
+     Radius: 90px from center
      Pentagon angles: 0°, 72°, 144°, 216°, 288°
-     Each item: ~90px wide, centered on its position
+     Each item: 72px circle, positioned by top-left corner
   */
   
-  /* Friend Requests: top center (0° / 12 o'clock) */
+  /* Friend Requests: top center (0° / 12 o'clock) 
+     x = 130, y = 130 - 90 = 40, offset for 72px item = 40 - 36 = 4px */
   .fab-item--top {
-    top: 20px;
+    top: 4px;
     left: 50%;
     transform: translate(-50%, 0) scale(0.85);
   }
@@ -13365,11 +13380,12 @@ kbd {
   }
 
   /* Progress: upper-left (288° / 10 o'clock) 
-     x = 160 + 120*sin(288°) = 160 - 114 = 46px
-     y = 160 - 120*cos(288°) = 160 - 37 = 123px */
+     x = 130 + 90*sin(288°) = 130 - 86 = 44
+     y = 130 - 90*cos(288°) = 130 - 28 = 102
+     offset: (44-36, 102-36) = (8, 66) */
   .fab-item--left {
-    top: 75px;
-    left: 15px;
+    top: 66px;
+    left: 8px;
     transform: scale(0.85);
   }
   .fab-diamond.open .fab-item--left {
@@ -13377,11 +13393,12 @@ kbd {
   }
 
   /* UpSkilling: upper-right (72° / 2 o'clock)
-     x = 160 + 120*sin(72°) = 160 + 114 = 274px
-     y = 160 - 120*cos(72°) = 160 - 37 = 123px */
+     x = 130 + 90*sin(72°) = 130 + 86 = 216
+     y = 130 - 90*cos(72°) = 130 - 28 = 102
+     offset: (216-36, 102-36) = (180, 66) */
   .fab-item--top-right {
-    top: 75px;
-    right: 15px;
+    top: 66px;
+    right: 8px;
     transform: scale(0.85);
   }
   .fab-diamond.open .fab-item--top-right {
@@ -13389,11 +13406,12 @@ kbd {
   }
 
   /* Sync: lower-left (216° / 7 o'clock)
-     x = 160 + 120*sin(216°) = 160 - 71 = 89px
-     y = 160 - 120*cos(216°) = 160 + 97 = 257px */
+     x = 130 + 90*sin(216°) = 130 - 53 = 77
+     y = 130 - 90*cos(216°) = 130 + 73 = 203
+     offset: (77-36, 203-36) = (41, 167) */
   .fab-item--bottom {
-    bottom: 35px;
-    left: 50px;
+    bottom: 21px;
+    left: 41px;
     transform: scale(0.85);
   }
   .fab-diamond.open .fab-item--bottom {
@@ -13401,11 +13419,12 @@ kbd {
   }
 
   /* Resources: lower-right (144° / 5 o'clock)
-     x = 160 + 120*sin(144°) = 160 + 71 = 231px
-     y = 160 - 120*cos(144°) = 160 + 97 = 257px */
+     x = 130 + 90*sin(144°) = 130 + 53 = 183
+     y = 130 - 90*cos(144°) = 130 + 73 = 203
+     offset: (183-36, 203-36) = (147, 167) */
   .fab-item--bottom-right {
-    bottom: 35px;
-    right: 50px;
+    bottom: 21px;
+    right: 41px;
     transform: scale(0.85);
   }
   .fab-diamond.open .fab-item--bottom-right {
