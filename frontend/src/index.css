@@ -14132,3 +14132,36 @@ kbd {
 .ln-tab:hover {
   text-decoration: none !important;
 }
+
+/* ── Discover mobile: no duplicate header → remove its top offset ── */
+@media (max-width: 820px) {
+  /* The disc-mobile-header is removed from JSX — ensure no leftover spacing */
+  .disc-mobile-header { display: none !important; }
+
+  /* The disc-mobile-wrap no longer needs to offset for a fixed disc header */
+  .disc-mobile-wrap {
+    padding-top: 0 !important;
+  }
+
+  /* Full-width filter button (replaces search + filter row) */
+  .disc-mobile-filter-btn--full {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 20px;
+    border-radius: 10px;
+    border: 1px solid var(--navy-line);
+    background: var(--navy-panel);
+    color: var(--text-soft);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .disc-mobile-filter-btn--full:active {
+    background: rgba(91,110,245,0.1);
+    border-color: rgba(91,110,245,0.4);
+    color: #fff;
+  }
+}

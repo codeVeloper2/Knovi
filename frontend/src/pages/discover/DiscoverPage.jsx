@@ -86,21 +86,6 @@ function MobileDiscover({
   return (
     <div className="disc-mobile-wrap">
 
-      {/* ── Header ── */}
-      <div className="disc-mobile-header">
-        <div className="disc-mobile-header-left">
-          <button className="disc-menu-btn" aria-label="Open menu"
-            onClick={() => window.dispatchEvent(new CustomEvent("peerup:open-nav"))}>
-            <HamburgerIcon />
-          </button>
-          <span className="disc-logo-text">Peer<span className="disc-logo-accent">Up</span></span>
-        </div>
-        <div className="disc-mobile-header-right">
-          <NotificationsBell className="disc-bell-btn notif-bell-btn" />
-          <MobileAvatar name={name} photo={photo} size={34} />
-        </div>
-      </div>
-
       {/* ── Page title ── */}
       <div className="disc-mobile-title-row">
         <div>
@@ -109,23 +94,11 @@ function MobileDiscover({
         </div>
       </div>
 
-      {/* ── Sticky search + filter bar ── */}
+      {/* ── Filter button only (no search bar on mobile) ── */}
       <div className="disc-mobile-controls">
-        <div className="disc-mobile-search-wrap">
-          <SearchIcon />
-          <input
-            type="text"
-            placeholder="Search by name or subject…"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="disc-mobile-search-input"
-          />
-          {searchQuery && (
-            <button className="disc-mobile-search-clear" onClick={() => setSearchQuery("")}>✕</button>
-          )}
-        </div>
-        <button className="disc-mobile-filter-btn" onClick={() => setShowFilters(true)}>
+        <button className="disc-mobile-filter-btn disc-mobile-filter-btn--full" onClick={() => setShowFilters(true)}>
           <FilterIcon />
+          <span>Filter</span>
         </button>
       </div>
 
