@@ -44,7 +44,7 @@ function SyncIcon() {
 
 // "Learning" dropdown sub-items (shown when the Learning section is expanded)
 const LEARNING_SUB = [
-  { to: "/app/solo",            label: "UpSkilling", Icon: UpSkillingIcon, end: true },
+  { to: "/app/solo",            label: "Learning", Icon: UpSkillingIcon, end: true },
   { to: "/app/sync",            label: "Sync",       Icon: SyncIcon },
   { to: "/app/learn",           label: "Resources",  Icon: LearnIcon, end: true },
 ];
@@ -217,7 +217,7 @@ export default function DashboardLayout() {
           title="Learning"
         >
           <span className="dash-link-icon-wrap"><UpSkillingIcon /></span>
-          <span className="dash-link-label">Learning</span>
+          <span className="dash-link-label">UpSkilling</span>
           {(!isDesktop || !collapsed) && <ChevronDown open={mobileLearningOpen} />}
         </button>
         {mobileLearningOpen && (!isDesktop || !collapsed) && (
