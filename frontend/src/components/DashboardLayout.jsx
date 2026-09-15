@@ -106,6 +106,8 @@ export default function DashboardLayout() {
   const [loggingOut,         setLoggingOut]         = useState(false);
   const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
   const [mobileLearningOpen, setMobileLearningOpen] = useState(false);
+  const [desktopSettingsHover, setDesktopSettingsHover] = useState(false);
+  const [desktopLearningHover, setDesktopLearningHover] = useState(false);
   const [pendingMatchCount,  setPendingMatchCount]  = useState(0);
   const searchRef = useRef(null);
 
@@ -208,25 +210,33 @@ export default function DashboardLayout() {
 
   // ── Learning dropdown (shared between desktop and mobile) ──
   function LearningDropdown({ isDesktop }) {
+    const isOpen = isDesktop ? desktopLearningHover : mobileLearningOpen;
+    const toggleOpen = isDesktop ? undefined : (() => setMobileLearningOpen(o => !o));
+    
     return (
-      <div key="learning-dropdown">
+      <div 
+        key="learning-dropdown"
+        className="dash-dropdown-container"
+        onMouseEnter={isDesktop ? () => setDesktopLearningHover(true) : undefined}
+        onMouseLeave={isDesktop ? () => setDesktopLearningHover(false) : undefined}
+      >
         <button
           type="button"
           className={`dash-link dash-settings-toggle ${inLearning ? "active" : ""}`}
-          onClick={() => setMobileLearningOpen(o => !o)}
+          onClick={toggleOpen}
           title="Learning"
         >
           <span className="dash-link-icon-wrap"><UpSkillingIcon /></span>
           <span className="dash-link-label">UpSkilling</span>
-          {(!isDesktop || !collapsed) && <ChevronDown open={mobileLearningOpen} />}
+          {(!isDesktop || !collapsed) && <ChevronDown open={isOpen} />}
         </button>
-        {mobileLearningOpen && (!isDesktop || !collapsed) && (
+        {isOpen && (!isDesktop || !collapsed) && (
           <div className="dash-settings-dropdown">
             {LEARNING_SUB.map(({ to: subTo, label: subLabel, Icon: SubIcon, end: subEnd }) => (
               <NavLink
                 key={subTo} to={subTo} end={subEnd}
                 className={({ isActive }) => `dash-link dash-sub-link ${isActive ? "active" : ""}`}
-                onClick={() => setMobileOpen(false)}
+                onClick={() => {setMobileOpen(false); if (isDesktop) setDesktopLearningHover(false);}}
                 title={subLabel}
               >
                 <span className="dash-link-icon-wrap"><SubIcon /></span>
@@ -239,10 +249,44 @@ export default function DashboardLayout() {
     );
   }
 
-  return (
-    <div className={`dash ${collapsed ? "dash--collapsed" : ""} ${mobileOpen ? "dash--mobile-open" : ""}`}>
-      <div className="dash-overlay" onClick={() => setMobileOpen(false)} />
+  // ── Settings dropdown (desktop hover version) ──
+  function DesktopSettingsDropdown() {
+    return (
+      <div 
+        className="dash-dropdown-container"
+        onMouseEnter={() => setDesktopSettingsHover(true)}
+        onMouseLeave={() => setDesktopSettingsHover(false)}
+      >
+        <NavLink
+          to="/app/settings"
+          className={({ isActive }) => `dash-link ${isActive ? "active" : ""}`}
+          title="Settings"
+        >
+          <span className="dash-link-icon-wrap"><SettingsIcon /></span>
+          <span className="dash-link-label">Settings</span>
+          {!collapsed && <ChevronDown open={desktopSettingsHover} />}
+        </NavLink>
+        {desktopSettingsHover && !collapsed && (
+          <div className="dash-settings-dropdown">
+            {SETTINGS_NAV.filter(s => s.to !== "/app/settings").map(({ to, label, Icon, end }) => (
+              <NavLink
+                key={to} to={to} end={end}
+                className={({ isActive }) => `dash-link dash-sub-link ${isActive ? "active" : ""}`}
+                onClick={() => setDesktopSettingsHover(false)}
+                title={label}
+              >
+                <span className="dash-link-icon-wrap"><Icon /></span>
+                <span className="dash-link-label">{label}</span>
+              </NavLink>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
+  return (
+    <div className={`dash ${isMobile ? "dash--mobile" : "dash--desktop"}`}>
       {/* ── Mobile Navigation (shown only on mobile) ── */}
       {isMobile && (
         <>
@@ -252,151 +296,146 @@ export default function DashboardLayout() {
         </>
       )}
 
-      {/* ── Sidebar ── */}
-      <aside className="dash-side">
-        <div className="dash-side-top">
-          {!isMobile && inSettings ? (
-            <button className="dash-back" type="button" onClick={() => navigate("/app")} title="Back to menu">
-              <BackIcon width={18} height={18} />
-              <span className="dash-back-label">Menu</span>
-              <span className="dash-kbd">
-                {BACK_SHORTCUT.keys.map((k, i) => <kbd key={i}>{displayKey(k)}</kbd>)}
-              </span>
-            </button>
-          ) : (
-            <div className="dash-side-brand">
-              <span className="dash-side-mark"><LogoMark size={26} /></span>
-              <span className="dash-side-name">Peer<span className="logo-accent">Up</span></span>
-            </div>
-          )}
+      {/* ── Desktop Top Navigation Bar (shown only on desktop) ── */}
+      {!isMobile && (
+        <header className="desktop-topbar">
+          {/* Logo */}
+          <div className="desktop-topbar-brand">
+            <LogoMark size={26} />
+            <span className="desktop-topbar-name">Peer<span className="logo-accent">Up</span></span>
+          </div>
 
-          <button className="dash-side-close" type="button" onClick={() => setMobileOpen(false)} aria-label="Close menu">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M18 6 6 18M6 6l12 12"/>
-            </svg>
-          </button>
-
-          <button className="dash-collapse" type="button" onClick={toggle}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
-            {collapsed ? <ChevronRight width={18} height={18} /> : <ChevronLeft width={18} height={18} />}
-          </button>
-        </div>
-
-        {!isMobile && inSettings && <div className="dash-side-heading">Settings</div>}
-
-        <nav className="dash-nav">
-          {/* ── DESKTOP ── */}
-          {!isMobile && (
-            <>
-              {inSettings ? (
-                desktopNav.map(({ to, label, Icon, end }) => (
-                  <NavItem key={to} to={to} label={label} Icon={Icon} end={end} inSettingsNav={true} />
-                ))
-              ) : (
-                DESKTOP_MAIN_NAV
-                  // Skip the individual solo / sync / learn / courses entries — the dropdown handles them
-                  .filter(({ to }) => !["/app/solo", "/app/sync", "/app/learn"].includes(to))
-                  .map(({ to, label, Icon, end }) => {
-                    // Inject the Learning dropdown after Friend Requests (progress slot)
-                    if (to === "/app/progress") {
-                      return (
-                        <span key="learning-desktop-group">
-                          <LearningDropdown isDesktop={true} />
-                          <NavItem to={to} label={label} Icon={Icon} end={end} inSettingsNav={false} />
-                        </span>
-                      );
-                    }
-                    return (
-                      <NavItem key={to} to={to} label={label} Icon={Icon} end={end} inSettingsNav={false} />
-                    );
-                  })
-              )}
-            </>
-          )}
-
-          {/* ── MOBILE ── */}
-          {isMobile && (
-            <>
-              {mobileNav.map(({ to, label, Icon, end }) => (
-                <NavItem key={to} to={to} label={label} Icon={Icon} end={end} inSettingsNav={false} />
-              ))}
-
-              {/* Learning dropdown */}
-              <LearningDropdown isDesktop={false} />
-
-              {/* Settings dropdown */}
-              <button
-                type="button"
-                className={`dash-link dash-settings-toggle ${inSettings ? "active" : ""}`}
-                onClick={() => setMobileSettingsOpen(o => !o)}
-                title="Settings"
-              >
-                <span className="dash-link-icon-wrap"><SettingsIcon /></span>
-                <span className="dash-link-label">Settings</span>
-                <ChevronDown open={mobileSettingsOpen} />
-              </button>
-
-              {mobileSettingsOpen && (
-                <div className="dash-settings-dropdown">
-                  {SETTINGS_NAV.map(({ to, label, Icon, end }) => {
-                    const sc = SETTINGS_SHORTCUTS[to];
-                    return (
+          {/* Main Navigation */}
+          <nav className="desktop-topbar-nav">
+            {DESKTOP_MAIN_NAV
+              .filter(({ to }) => !["/app/solo", "/app/sync", "/app/learn", "/app/settings"].includes(to))
+              .map(({ to, label, Icon, end }) => {
+                const badge = (to === "/app/match-requests" && pendingMatchCount > 0) ? pendingMatchCount : null;
+                
+                if (to === "/app/progress") {
+                  return (
+                    <span key="nav-with-dropdowns">
+                      {/* Learning Dropdown */}
+                      <div 
+                        className="desktop-nav-dropdown"
+                        onMouseEnter={() => setDesktopLearningHover(true)}
+                        onMouseLeave={() => setDesktopLearningHover(false)}
+                      >
+                        <NavLink
+                          to="/app/solo"
+                          className={({ isActive }) => `desktop-nav-item ${inLearning ? "active" : ""}`}
+                          title="Learning"
+                        >
+                          <UpSkillingIcon />
+                          <span>Learn</span>
+                          <ChevronDown open={desktopLearningHover} />
+                        </NavLink>
+                        {desktopLearningHover && (
+                          <div className="desktop-nav-dropdown-menu">
+                            {LEARNING_SUB.map(({ to: subTo, label: subLabel, Icon: SubIcon }) => (
+                              <NavLink
+                                key={subTo} 
+                                to={subTo}
+                                className="desktop-nav-dropdown-item"
+                                onClick={() => setDesktopLearningHover(false)}
+                              >
+                                <SubIcon />
+                                <span>{subLabel}</span>
+                              </NavLink>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Progress */}
                       <NavLink
-                        key={to} to={to} end={end}
-                        className={({ isActive }) => `dash-link dash-sub-link ${isActive ? "active" : ""}`}
-                        onClick={() => setMobileOpen(false)}
+                        to={to} 
+                        end={end}
+                        className={({ isActive }) => `desktop-nav-item ${isActive ? "active" : ""}`}
                         title={label}
                       >
-                        <span className="dash-link-icon-wrap"><Icon /></span>
-                        <span className="dash-link-label">{label}</span>
-                        {sc && (
-                          <span className="dash-kbd">
-                            {sc.keys.map((k, i) => <kbd key={i}>{displayKey(k)}</kbd>)}
-                          </span>
-                        )}
+                        <Icon />
+                        <span>{label}</span>
                       </NavLink>
-                    );
-                  })}
+                    </span>
+                  );
+                }
+                
+                return (
+                  <NavLink
+                    key={to} 
+                    to={to} 
+                    end={end}
+                    className={({ isActive }) => `desktop-nav-item ${isActive ? "active" : ""}`}
+                    title={label}
+                  >
+                    <div className="desktop-nav-icon-wrap">
+                      <Icon />
+                      {badge != null && <span className="desktop-nav-badge">{badge > 9 ? "9+" : badge}</span>}
+                    </div>
+                    <span>{label}</span>
+                  </NavLink>
+                );
+              })}
+          </nav>
+
+          {/* Right Side - Search, Settings, Profile */}
+          <div className="desktop-topbar-right">
+            <div className="desktop-topbar-search">
+              <SearchIcon width={18} height={18} />
+              <input ref={searchRef} type="search" placeholder="Search…" />
+            </div>
+
+            <NotificationsBell className="desktop-topbar-bell notif-bell-btn" />
+
+            {/* Settings Dropdown */}
+            <div 
+              className="desktop-nav-dropdown"
+              onMouseEnter={() => setDesktopSettingsHover(true)}
+              onMouseLeave={() => setDesktopSettingsHover(false)}
+            >
+              <NavLink
+                to="/app/settings"
+                className={({ isActive }) => `desktop-nav-item ${isActive ? "active" : ""}`}
+                title="Settings"
+              >
+                <SettingsIcon />
+                <span>Settings</span>
+                <ChevronDown open={desktopSettingsHover} />
+              </NavLink>
+              {desktopSettingsHover && (
+                <div className="desktop-nav-dropdown-menu">
+                  {SETTINGS_NAV.filter(s => s.to !== "/app/settings").map(({ to, label, Icon }) => (
+                    <NavLink
+                      key={to} 
+                      to={to}
+                      className="desktop-nav-dropdown-item"
+                      onClick={() => setDesktopSettingsHover(false)}
+                    >
+                      <Icon />
+                      <span>{label}</span>
+                    </NavLink>
+                  ))}
                 </div>
               )}
-            </>
-          )}
-        </nav>
+            </div>
 
-        <button className="dash-link dash-logout" type="button" onClick={() => setLogoutOpen(true)} title="Sign out">
-          <span className="dash-link-icon-wrap"><LogoutIcon /></span>
-          <span className="dash-link-label">Sign out</span>
-        </button>
-      </aside>
-
-      {/* ── Main ── */}
-      <div className="dash-body">
-        <header className="dash-topbar">
-          <button className="dash-hamburger" type="button" onClick={() => setMobileOpen(true)} aria-label="Open menu">
-            <MenuIcon />
-          </button>
-          <div className="dash-topbar-user">
-            <span className="dash-topbar-hello">Hi,</span>
-            <span className="dash-topbar-name">{name}</span>
+            {/* Profile */}
+            <button 
+              className="desktop-topbar-avatar" 
+              onClick={() => navigate("/app/settings")}
+              title={name}
+            >
+              {photo ? <img src={photo} alt={name} referrerPolicy="no-referrer" /> : <span>{initial}</span>}
+            </button>
           </div>
-          <div className="dash-search">
-            <SearchIcon width={18} height={18} />
-            <input ref={searchRef} type="search" placeholder="Search students, subjects, or topics…  ( / )" />
-          </div>
-          <button className="dash-help" type="button" onClick={() => setScOpen(true)} title="Keyboard shortcuts ( ? )" aria-label="Keyboard shortcuts">
-            <kbd>?</kbd>
-          </button>
-          <NotificationsBell className="dash-bell notif-bell-btn" />
-          <button className="dash-avatar" type="button" title={`${name} — open profile`}
-            aria-label="Open your profile settings" onClick={() => navigate("/app/settings")}>
-            {photo ? <img src={photo} alt={name} referrerPolicy="no-referrer" /> : <span>{initial}</span>}
-          </button>
         </header>
+      )}
 
-        <main className="dash-content">
-          <Outlet />
-        </main>
-      </div>
+      {/* ── Main Content ── */}
+      <main className={`dash-main ${isMobile ? "dash-main--mobile" : "dash-main--desktop"}`}>
+        <Outlet />
+      </main>
 
       <ShortcutsModal open={scOpen} onClose={() => setScOpen(false)} />
       <ConfirmDialog
