@@ -108,6 +108,13 @@ export default function DashboardLayout() {
   const [mobileLearningOpen, setMobileLearningOpen] = useState(false);
   const [desktopSettingsHover, setDesktopSettingsHover] = useState(false);
   const [desktopLearningHover, setDesktopLearningHover] = useState(false);
+  const settingsLeaveTimer = useRef(null);
+  const learningLeaveTimer = useRef(null);
+
+  function openSettings()  { clearTimeout(settingsLeaveTimer.current); setDesktopSettingsHover(true);  }
+  function closeSettings() { settingsLeaveTimer.current = setTimeout(() => setDesktopSettingsHover(false), 120); }
+  function openLearning()  { clearTimeout(learningLeaveTimer.current); setDesktopLearningHover(true);  }
+  function closeLearning() { learningLeaveTimer.current = setTimeout(() => setDesktopLearningHover(false), 120); }
   const [pendingMatchCount,  setPendingMatchCount]  = useState(0);
   const searchRef = useRef(null);
 
@@ -298,138 +305,154 @@ export default function DashboardLayout() {
 
       {/* ── Desktop Top Navigation Bar (shown only on desktop) ── */}
       {!isMobile && (
-        <header className="desktop-topbar">
-          {/* Logo */}
-          <div className="desktop-topbar-brand">
-            <LogoMark size={26} />
-            <span className="desktop-topbar-name">Peer<span className="logo-accent">Up</span></span>
-          </div>
+        <>
+          <header className="desktop-topbar">
+            {/* Logo */}
+            <div className="desktop-topbar-brand">
+              <LogoMark size={26} />
+              <span className="desktop-topbar-name">Peer<span className="logo-accent">Up</span></span>
+            </div>
 
-          {/* Main Navigation */}
-          <nav className="desktop-topbar-nav">
-            {DESKTOP_MAIN_NAV
-              .filter(({ to }) => !["/app/solo", "/app/sync", "/app/learn", "/app/settings"].includes(to))
-              .map(({ to, label, Icon, end }) => {
-                const badge = (to === "/app/match-requests" && pendingMatchCount > 0) ? pendingMatchCount : null;
-                
-                if (to === "/app/progress") {
-                  return (
-                    <span key="nav-with-dropdowns">
-                      {/* Learning Dropdown */}
-                      <div 
-                        className="desktop-nav-dropdown"
-                        onMouseEnter={() => setDesktopLearningHover(true)}
-                        onMouseLeave={() => setDesktopLearningHover(false)}
-                      >
-                        <NavLink
-                          to="/app/solo"
-                          className={({ isActive }) => `desktop-nav-item ${inLearning ? "active" : ""}`}
-                          title="Learning"
+            {/* Main Navigation */}
+            <nav className="desktop-topbar-nav">
+              {DESKTOP_MAIN_NAV
+                .filter(({ to }) => !["/app/solo", "/app/sync", "/app/learn", "/app/settings"].includes(to))
+                .map(({ to, label, Icon, end }) => {
+                  const badge = (to === "/app/match-requests" && pendingMatchCount > 0) ? pendingMatchCount : null;
+
+                  if (to === "/app/progress") {
+                    return (
+                      <span key="nav-with-dropdowns" style={{ display: "contents" }}>
+                        {/* Learning Dropdown */}
+                        <div
+                          className="desktop-nav-dropdown"
+                          onMouseEnter={openLearning}
+                          onMouseLeave={closeLearning}
                         >
-                          <UpSkillingIcon />
-                          <span>Learn</span>
-                          <ChevronDown open={desktopLearningHover} />
+                          <NavLink
+                            to="/app/solo"
+                            className={() => `desktop-nav-item ${inLearning ? "active" : ""}`}
+                            title="Learning"
+                          >
+                            <UpSkillingIcon />
+                            <span>Learn</span>
+                            <ChevronDown open={desktopLearningHover} />
+                          </NavLink>
+                          {desktopLearningHover && (
+                            <div className="desktop-nav-dropdown-menu">
+                              {LEARNING_SUB.map(({ to: subTo, label: subLabel, Icon: SubIcon }) => (
+                                <NavLink
+                                  key={subTo}
+                                  to={subTo}
+                                  className={({ isActive }) => `desktop-nav-dropdown-item${isActive ? " active" : ""}`}
+                                  onClick={() => setDesktopLearningHover(false)}
+                                >
+                                  <SubIcon />
+                                  <span>{subLabel}</span>
+                                </NavLink>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Progress */}
+                        <NavLink
+                          to={to}
+                          end={end}
+                          className={({ isActive }) => `desktop-nav-item${isActive ? " active" : ""}`}
+                          title={label}
+                        >
+                          <Icon />
+                          <span>{label}</span>
                         </NavLink>
-                        {desktopLearningHover && (
-                          <div className="desktop-nav-dropdown-menu">
-                            {LEARNING_SUB.map(({ to: subTo, label: subLabel, Icon: SubIcon }) => (
-                              <NavLink
-                                key={subTo} 
-                                to={subTo}
-                                className="desktop-nav-dropdown-item"
-                                onClick={() => setDesktopLearningHover(false)}
-                              >
-                                <SubIcon />
-                                <span>{subLabel}</span>
-                              </NavLink>
-                            ))}
-                          </div>
-                        )}
+                      </span>
+                    );
+                  }
+
+                  return (
+                    <NavLink
+                      key={to}
+                      to={to}
+                      end={end}
+                      className={({ isActive }) => `desktop-nav-item${isActive ? " active" : ""}`}
+                      title={label}
+                    >
+                      <div className="desktop-nav-icon-wrap">
+                        <Icon />
+                        {badge != null && <span className="desktop-nav-badge">{badge > 9 ? "9+" : badge}</span>}
                       </div>
-                      
-                      {/* Progress */}
+                      <span>{label}</span>
+                    </NavLink>
+                  );
+                })}
+            </nav>
+
+            {/* Right Side — Bell + Settings dropdown + Avatar (no search here) */}
+            <div className="desktop-topbar-right">
+              <NotificationsBell className="desktop-topbar-bell notif-bell-btn" />
+
+              {/* Settings Dropdown */}
+              <div
+                className="desktop-nav-dropdown"
+                onMouseEnter={openSettings}
+                onMouseLeave={closeSettings}
+              >
+                <NavLink
+                  to="/app/settings"
+                  className={({ isActive }) => `desktop-nav-item${isActive ? " active" : ""}`}
+                  title="Settings"
+                >
+                  <SettingsIcon />
+                  <span>Settings</span>
+                  <ChevronDown open={desktopSettingsHover} />
+                </NavLink>
+                {desktopSettingsHover && (
+                  <div className="desktop-nav-dropdown-menu">
+                    {SETTINGS_NAV.filter(s => s.to !== "/app/settings").map(({ to, label, Icon }) => (
                       <NavLink
-                        to={to} 
-                        end={end}
-                        className={({ isActive }) => `desktop-nav-item ${isActive ? "active" : ""}`}
-                        title={label}
+                        key={to}
+                        to={to}
+                        className={({ isActive }) => `desktop-nav-dropdown-item${isActive ? " active" : ""}`}
+                        onClick={() => setDesktopSettingsHover(false)}
                       >
                         <Icon />
                         <span>{label}</span>
                       </NavLink>
-                    </span>
-                  );
-                }
-                
-                return (
-                  <NavLink
-                    key={to} 
-                    to={to} 
-                    end={end}
-                    className={({ isActive }) => `desktop-nav-item ${isActive ? "active" : ""}`}
-                    title={label}
-                  >
-                    <div className="desktop-nav-icon-wrap">
-                      <Icon />
-                      {badge != null && <span className="desktop-nav-badge">{badge > 9 ? "9+" : badge}</span>}
-                    </div>
-                    <span>{label}</span>
-                  </NavLink>
-                );
-              })}
-          </nav>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-          {/* Right Side - Search, Settings, Profile */}
-          <div className="desktop-topbar-right">
-            <div className="desktop-topbar-search">
-              <SearchIcon width={18} height={18} />
-              <input ref={searchRef} type="search" placeholder="Search…" />
-            </div>
-
-            <NotificationsBell className="desktop-topbar-bell notif-bell-btn" />
-
-            {/* Settings Dropdown */}
-            <div 
-              className="desktop-nav-dropdown"
-              onMouseEnter={() => setDesktopSettingsHover(true)}
-              onMouseLeave={() => setDesktopSettingsHover(false)}
-            >
-              <NavLink
-                to="/app/settings"
-                className={({ isActive }) => `desktop-nav-item ${isActive ? "active" : ""}`}
-                title="Settings"
+              {/* Profile Avatar */}
+              <button
+                className="desktop-topbar-avatar"
+                onClick={() => navigate("/app/settings")}
+                title={name}
               >
-                <SettingsIcon />
-                <span>Settings</span>
-                <ChevronDown open={desktopSettingsHover} />
-              </NavLink>
-              {desktopSettingsHover && (
-                <div className="desktop-nav-dropdown-menu">
-                  {SETTINGS_NAV.filter(s => s.to !== "/app/settings").map(({ to, label, Icon }) => (
-                    <NavLink
-                      key={to} 
-                      to={to}
-                      className="desktop-nav-dropdown-item"
-                      onClick={() => setDesktopSettingsHover(false)}
-                    >
-                      <Icon />
-                      <span>{label}</span>
-                    </NavLink>
-                  ))}
-                </div>
-              )}
+                {photo ? <img src={photo} alt={name} referrerPolicy="no-referrer" /> : <span>{initial}</span>}
+                <span className="desktop-topbar-avatar-name">{name}</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ opacity: 0.6 }}>
+                  <path d="m6 9 6 6 6-6"/>
+                </svg>
+              </button>
             </div>
+          </header>
 
-            {/* Profile */}
-            <button 
-              className="desktop-topbar-avatar" 
-              onClick={() => navigate("/app/settings")}
-              title={name}
-            >
-              {photo ? <img src={photo} alt={name} referrerPolicy="no-referrer" /> : <span>{initial}</span>}
-            </button>
+          {/* ── Sub-bar: greeting + search ── */}
+          <div className="desktop-subbar">
+            <span className="desktop-subbar-greeting">
+              Hi, <strong>{name}</strong> 👋
+            </span>
+            <div className="desktop-subbar-search">
+              <SearchIcon width={16} height={16} />
+              <input
+                ref={searchRef}
+                type="search"
+                placeholder="Search students, subjects, or topics…"
+              />
+            </div>
           </div>
-        </header>
+        </>
       )}
 
       {/* ── Main Content ── */}

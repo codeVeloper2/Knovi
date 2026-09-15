@@ -13876,3 +13876,143 @@ kbd {
     padding-bottom: 90px;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   DESKTOP SUB-BAR (greeting + search, below topbar)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.desktop-subbar {
+  position: fixed;
+  top: 58px;          /* flush under the topbar */
+  left: 0;
+  right: 0;
+  height: 48px;
+  background: var(--navy-bg, #080f1e);
+  border-bottom: 1px solid var(--navy-line, rgba(255,255,255,0.06));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  z-index: 190;
+}
+
+.desktop-subbar-greeting {
+  font-size: 0.88rem;
+  color: var(--text-soft, #94a3b8);
+  white-space: nowrap;
+}
+.desktop-subbar-greeting strong {
+  color: #fff;
+  font-weight: 700;
+}
+
+.desktop-subbar-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 0 14px;
+  height: 34px;
+  width: 340px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.desktop-subbar-search:focus-within {
+  border-color: var(--blue-bright, #818cf8);
+  background: rgba(255,255,255,0.07);
+}
+.desktop-subbar-search svg  { color: var(--text-dim, #64748b); flex-shrink: 0; }
+.desktop-subbar-search input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fff;
+  font-size: 0.85rem;
+  width: 100%;
+}
+.desktop-subbar-search input::placeholder { color: var(--text-dim, #64748b); }
+
+/* Push main content below both bars (58 + 48 = 106px) */
+.dash-main--desktop {
+  margin-top: 106px !important;
+  padding: 24px 32px 40px;
+  min-height: calc(100vh - 106px);
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ── Avatar pill in top-bar (image + name + caret) ── */
+.desktop-topbar-avatar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px 0 4px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: border-color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.desktop-topbar-avatar:hover {
+  border-color: var(--blue-bright, #818cf8);
+  background: rgba(91,110,245,0.10);
+}
+.desktop-topbar-avatar > span:first-of-type:not(.desktop-topbar-avatar-name) {
+  /* fallback initial circle */
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--navy-input, #1e2d4d);
+  display: grid;
+  place-items: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.desktop-topbar-avatar img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.desktop-topbar-avatar-name {
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Fix dropdown gap so cursor can travel from trigger → menu ── */
+/* Add a transparent "bridge" above the menu panel */
+.desktop-nav-dropdown-menu {
+  /* Override: remove the arrow, add top padding as the bridge instead */
+  padding-top: 8px !important;
+  /* Shift up slightly so the bridge covers the gap */
+  top: calc(100% + 2px) !important;
+}
+.desktop-nav-dropdown-menu::before {
+  /* transparent hit-zone that bridges the gap between button and panel */
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background: transparent;
+}
+
+/* Remove the old visible arrow */
+.desktop-nav-dropdown-menu::after { display: none; }
+
+/* Remove the search from topbar (search is now in sub-bar) */
+.desktop-topbar-search { display: none !important; }
