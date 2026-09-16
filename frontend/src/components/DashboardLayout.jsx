@@ -419,6 +419,17 @@ export default function DashboardLayout() {
                         <span>{label}</span>
                       </NavLink>
                     ))}
+                    <button
+                      type="button"
+                      className="desktop-nav-dropdown-item logout-item"
+                      onClick={() => {
+                        setDesktopSettingsHover(false);
+                        setLogoutOpen(true);
+                      }}
+                    >
+                      <LogoutIcon />
+                      <span>Logout</span>
+                    </button>
                   </div>
                 )}
               </div>

@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
-import { ChevronRight, ProfileIcon, LearnIcon, SecurityIcon, BellIcon } from "../../../components/DashIcons";
+import { ChevronRight, ProfileIcon, LearnIcon, SecurityIcon, BellIcon, LogoutIcon } from "../../../components/DashIcons";
+import ConfirmDialog from "../../../components/ConfirmDialog";
 
 const SECTIONS = [
   {
@@ -38,8 +40,10 @@ const SECTIONS = [
 ];
 
 export default function SettingsMobile() {
-  const { user, profile } = useAuth();
+  const { user, profile, logout } = useAuth();
   const navigate = useNavigate();
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const name    = profile?.displayName || user?.displayName || "Student";
   const photo   = profile?.photoURL    || user?.photoURL    || "";
@@ -55,6 +59,17 @@ export default function SettingsMobile() {
     if (x >= 300)  return "Scholar";
     if (x >= 100)  return "Explorer";
     return "Beginner";
+  }
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    try {
+      await logout();
+      navigate("/login");
+    } finally {
+      setLoggingOut(false);
+      setLogoutOpen(false);
+    }
   }
 
   return (
@@ -125,9 +140,37 @@ export default function SettingsMobile() {
             <ChevronRight width={18} height={18} className="sm-section-arrow" />
           </button>
         ))}
+
+        {/* ── Logout Button ── */}
+        <button
+          type="button"
+          className="sm-section-row sm-logout-row"
+          onClick={() => setLogoutOpen(true)}
+        >
+          <span className="sm-section-icon" style={{ "--accent": "#ef4444" }}>
+            🚪
+          </span>
+          <div className="sm-section-body">
+            <span className="sm-section-label">Logout</span>
+            <span className="sm-section-desc">Sign out of your account</span>
+          </div>
+          <LogoutIcon width={18} height={18} className="sm-section-arrow" />
+        </button>
       </div>
 
       <p className="sm-footer">PeerUP · Your learning community</p>
+
+      {/* ── Logout Confirmation Dialog ── */}
+      <ConfirmDialog
+        open={logoutOpen}
+        onClose={() => setLogoutOpen(false)}
+        onConfirm={handleLogout}
+        title="Logout"
+        message="Are you sure you want to logout?"
+        confirmText={loggingOut ? "Logging out..." : "Logout"}
+        danger
+        disabled={loggingOut}
+      />
     </div>
   );
 }

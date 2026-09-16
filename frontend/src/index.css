@@ -13323,6 +13323,11 @@ kbd {
   border-color: rgba(91,110,245,0.4);
   transform: translateX(3px);
 }
+.sm-section-row.sm-logout-row:hover,
+.sm-section-row.sm-logout-row:active {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.4);
+}
 
 .sm-section-icon {
   width: 44px;
@@ -13979,6 +13984,16 @@ kbd {
 .desktop-nav-dropdown-item.active {
   color: var(--blue-bright, #818cf8);
   background: rgba(91,110,245,0.12);
+}
+.desktop-nav-dropdown-item.logout-item {
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  width: 100%;
+}
+.desktop-nav-dropdown-item.logout-item:hover {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.1);
 }
 
 /* ── Right side cluster ── */
