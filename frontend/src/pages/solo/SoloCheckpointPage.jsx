@@ -136,6 +136,20 @@ export default function SoloCheckpointPage() {
       setCurrentQIdx(i => i + 1);
     } else if (passed) {
       navigate(`/app/solo/concepts/${conceptId}/notes`);
+    } else {
+      // Try Again — reset all state and reload questions
+      setCurrentQIdx(0);
+      setSelected({});
+      setResults({});
+      setPassed(false);
+      setLoading(true);
+      api.soloGetCheckpoint(conceptId)
+        .then(d => {
+          setData(d);
+          if (d.checkpointPassed) setPassed(true);
+        })
+        .catch(() => {})
+        .finally(() => setLoading(false));
     }
   }
 
