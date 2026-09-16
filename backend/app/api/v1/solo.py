@@ -106,15 +106,22 @@ def _is_correct_answer(question: Question, response: str) -> bool:
     correct = (question.answer or "").strip().lower()
     resp = response.strip().lower()
     if question.question_type == "multiple_choice" and question.options:
-        # Accept matching by label (A, B, C…) or full option text
+        # Find the correct option — question.answer may be a label (A/B/C)
+        # or the full option text. Resolve to both.
+        correct_label = None
+        correct_text = None
         for opt in question.options:
-            label = opt.get("label", "").lower()
-            text = opt.get("text", "").lower()
-            if resp in (label, text) and text.lower() == correct:
-                return True
-            if resp == label and label == correct:
-                return True
-        return resp == correct
+            lbl = opt.get("label", "").lower()
+            txt = opt.get("text", "").lower()
+            if lbl == correct or txt == correct:
+                correct_label = lbl
+                correct_text = txt
+                break
+        if correct_label is None:
+            # Fallback: straight comparison
+            return resp == correct
+        # Student may submit a label (B) or the full text (Newton)
+        return resp in (correct_label, correct_text)
     # short_answer / numeric: exact or close match
     if question.question_type == "numeric":
         try:
@@ -460,11 +467,22 @@ async def submit_checkpoint_answer(
     await db.commit()
 
     # Return feedback including the correct answer now
+    # Resolve correctAnswer to the full option text (not just the label)
+    correct_answer_display = question.answer
+    if question.question_type == "multiple_choice" and question.options:
+        correct_lower = (question.answer or "").strip().lower()
+        for opt in question.options:
+            lbl = opt.get("label", "").lower()
+            txt = opt.get("text", "").lower()
+            if lbl == correct_lower or txt == correct_lower:
+                correct_answer_display = opt.get("text", question.answer)
+                break
+
     return {
         "questionId": body.question_id,
         "response": body.response,
         "isCorrect": is_correct,
-        "correctAnswer": question.answer,
+        "correctAnswer": correct_answer_display,
         "explanation": question.explanation,
         "hint": question.hint,
         "correctCount": correct_count,
