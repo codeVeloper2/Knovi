@@ -99,7 +99,7 @@ class User(Base):
         "ResourceDownload", back_populates="user"
     )
     concept_progress: Mapped[list] = relationship(
-        "ConceptProgress", back_populates="user"
+        "app.models.concept_progress.ConceptProgress", back_populates="user"
     )
 
     def serialize(self) -> dict:

@@ -93,7 +93,7 @@ class ConceptProgress(Base):
     updated_at:            Mapped[datetime]      = mapped_column(DateTime(timezone=True), default=_now, onupdate=_now, nullable=False)
 
     # Relationships
-    user:    Mapped["User"]    = relationship("User", back_populates="concept_progress")  # type: ignore[name-defined]
+    user:    Mapped["User"]    = relationship("app.models.user.User", back_populates="concept_progress")  # type: ignore[name-defined]
     concept: Mapped["Concept"] = relationship("Concept")  # type: ignore[name-defined]
 
     def serialize(self) -> dict:
