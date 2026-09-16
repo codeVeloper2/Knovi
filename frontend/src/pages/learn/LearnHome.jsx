@@ -150,7 +150,7 @@ function CourseCard({ subject, topicCount, navigate }) {
       type="button"
       className="ln-course-card"
       style={{ "--course-color": c }}
-      onClick={() => navigate(`/app/solo?subject=${subject.id}`)}
+      onClick={() => navigate(`/app/learn`)}
     >
       <div className="ln-course-icon" style={{ background:`${c}20`, borderColor:`${c}40` }}>
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round">
@@ -205,7 +205,7 @@ export default function LearnHome() {
   useEffect(() => {
     if (tab === "courses" && !coursesLoaded) {
       setCoursesLoading(true);
-      api.soloGetSubjects()
+      api.getSubjects()
         .then(data => setSubjects(Array.isArray(data) ? data : (data?.subjects || [])))
         .catch(() => {})
         .finally(() => { setCoursesLoading(false); setCoursesLoaded(true); });

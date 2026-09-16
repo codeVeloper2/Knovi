@@ -116,36 +116,6 @@ async def dashboard_stats(
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# SEED INITIAL SUBJECTS
-# ═════════════════════════════════════════════════════════════════════════════
-
-_INITIAL_SUBJECTS = [
-    {"name": "Mathematics",  "slug": "mathematics",  "icon": "📐", "description": "Numbers, algebra, geometry, calculus, and more."},
-    {"name": "Physics",      "slug": "physics",      "icon": "⚛️",  "description": "Forces, motion, energy, waves, and the laws of the universe."},
-    {"name": "Chemistry",    "slug": "chemistry",    "icon": "🧪", "description": "Elements, reactions, bonding, and the molecular world."},
-]
-
-
-@router.post("/seed-subjects", response_model=dict, status_code=201)
-async def seed_subjects(
-    _admin: User = Depends(admin_user),
-    session: AsyncSession = Depends(get_session),
-) -> dict:
-    """Idempotent: insert Mathematics, Physics, Chemistry if they don't exist."""
-    created = []
-    for data in _INITIAL_SUBJECTS:
-        existing = (await session.execute(
-            select(Subject).where(Subject.slug == data["slug"])
-        )).scalar_one_or_none()
-        if existing is None:
-            subj = Subject(**data, is_active=True)
-            session.add(subj)
-            created.append(data["name"])
-    await session.commit()
-    return {"created": created, "message": f"Seeded {len(created)} subject(s)."}
-
-
-# ═════════════════════════════════════════════════════════════════════════════
 # SUBJECTS
 # ═════════════════════════════════════════════════════════════════════════════
 

@@ -13,7 +13,6 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.api.v1 import ai, auth, chat, learn, match, notifications, profile, progress, users
 from app.api.v1 import admin_curriculum, curriculum
-from app.api.v1 import solo, sync, concept_learn, challenge
 from app.api.v1.auth import limiter
 from app.core.config import settings
 
@@ -47,15 +46,3 @@ app.include_router(admin_curriculum.router, prefix="/api/admin", tags=["admin-cu
 
 # ── Student read-only curriculum endpoints ──
 app.include_router(curriculum.router, prefix="/api", tags=["curriculum"])
-
-# ── Solo Learning ──
-app.include_router(solo.router, prefix="/api", tags=["solo-learning"])
-
-# ── Sync Sessions ──
-app.include_router(sync.router, prefix="/api", tags=["sync"])
-
-# ── Sequential Concept Learning ──
-app.include_router(concept_learn.router, prefix="/api/v1", tags=["concept-learning"])
-
-# ── Challenge (peer verification) ──
-app.include_router(challenge.router, prefix="/api/v1", tags=["challenge"])

@@ -13,50 +13,18 @@ import MobileFabMenu from "./MobileFabMenu";
 import * as api from "../api";
 import {
   HomeIcon, DiscoverIcon, ChatIcon, LearnIcon,
-  ProgressIcon, SettingsIcon, SearchIcon, MenuIcon, LogoutIcon,
-  ChevronLeft, ChevronRight, ProfileIcon, SecurityIcon, BellIcon, BackIcon, MatchRequestsIcon,
-  UpSkillingIcon,
+  ProgressIcon, SettingsIcon, SearchIcon, LogoutIcon,
+  ChevronRight, ProfileIcon, SecurityIcon, BellIcon, MatchRequestsIcon,
 } from "./DashIcons";
 
-// ── Inline nav icons for new system ──────────────────────────────────────────
-
-function LearningIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
-      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-    </svg>
-  );
-}
-
-function ChallengeIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 2v6h-6"/>
-      <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
-      <path d="M3 22v-6h6"/>
-      <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
-    </svg>
-  );
-}
-
 // ── Nav configuration ─────────────────────────────────────────────────────────
-
-// "Learning" dropdown sub-items (shown when the Learning section is expanded)
-const LEARNING_SUB = [
-  { to: "/app/solo",            label: "UpSkilling",   Icon: UpSkillingIcon, end: true },
-  { to: "/app/challenge",       label: "Challenge",  Icon: ChallengeIcon },
-  { to: "/app/learn",           label: "Resources",  Icon: LearnIcon, end: true },
-];
 
 const MAIN_NAV = [
   { to: "/app",                label: "Home",            Icon: HomeIcon,          end: true },
   { to: "/app/discover",       label: "Discover",        Icon: DiscoverIcon },
   { to: "/app/chat",           label: "Chat",            Icon: ChatIcon },
   { to: "/app/match-requests", label: "Friend Requests", Icon: MatchRequestsIcon },
-  { to: "/app/solo",           label: "UpSkilling",      Icon: UpSkillingIcon },
-  { to: "/app/challenge",      label: "Challenge",       Icon: ChallengeIcon },
-  { to: "/app/learn",          label: "Resources",       Icon: LearnIcon },
+  { to: "/app/learn",          label: "Learn",           Icon: LearnIcon },
   { to: "/app/progress",       label: "Progress",        Icon: ProgressIcon },
 ];
 
@@ -105,25 +73,15 @@ export default function DashboardLayout() {
   const [logoutOpen,         setLogoutOpen]         = useState(false);
   const [loggingOut,         setLoggingOut]         = useState(false);
   const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
-  const [mobileLearningOpen, setMobileLearningOpen] = useState(false);
   const [desktopSettingsHover, setDesktopSettingsHover] = useState(false);
-  const [desktopLearningHover, setDesktopLearningHover] = useState(false);
   const settingsLeaveTimer = useRef(null);
-  const learningLeaveTimer = useRef(null);
 
   function openSettings()  { clearTimeout(settingsLeaveTimer.current); setDesktopSettingsHover(true);  }
   function closeSettings() { settingsLeaveTimer.current = setTimeout(() => setDesktopSettingsHover(false), 120); }
-  function openLearning()  { clearTimeout(learningLeaveTimer.current); setDesktopLearningHover(true);  }
-  function closeLearning() { learningLeaveTimer.current = setTimeout(() => setDesktopLearningHover(false), 120); }
   const [pendingMatchCount,  setPendingMatchCount]  = useState(0);
   const searchRef = useRef(null);
 
   const inSettings = location.pathname.startsWith("/app/settings");
-  const inLearning = (
-    location.pathname.startsWith("/app/solo") ||
-    location.pathname.startsWith("/app/challenge") ||
-    location.pathname.startsWith("/app/learn")
-  );
 
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   useEffect(() => {
@@ -132,16 +90,9 @@ export default function DashboardLayout() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // Desktop: subnav swap only for Settings; Learning uses dropdown
+  // Desktop: subnav swap only for Settings
   const desktopNav = SETTINGS_NAV; // used when inSettings
-  const mobileNav  = MOBILE_MAIN_NAV.filter(
-    n => n.to !== "/app/learn" && n.to !== "/app/solo" && n.to !== "/app/challenge"
-  );
-
-  // Auto-open Learning dropdown when navigating into any learning route
-  useEffect(() => {
-    if (inLearning) setMobileLearningOpen(true);
-  }, [inLearning]);
+  const mobileNav  = MOBILE_MAIN_NAV;
 
   useEffect(() => {
     const handler = () => setMobileOpen(true);
@@ -215,47 +166,6 @@ export default function DashboardLayout() {
     );
   }
 
-  // ── Learning dropdown (shared between desktop and mobile) ──
-  function LearningDropdown({ isDesktop }) {
-    const isOpen = isDesktop ? desktopLearningHover : mobileLearningOpen;
-    const toggleOpen = isDesktop ? undefined : (() => setMobileLearningOpen(o => !o));
-    
-    return (
-      <div 
-        key="learning-dropdown"
-        className="dash-dropdown-container"
-        onMouseEnter={isDesktop ? () => setDesktopLearningHover(true) : undefined}
-        onMouseLeave={isDesktop ? () => setDesktopLearningHover(false) : undefined}
-      >
-        <button
-          type="button"
-          className={`dash-link dash-settings-toggle ${inLearning ? "active" : ""}`}
-          onClick={toggleOpen}
-          title="Learning"
-        >
-          <span className="dash-link-icon-wrap"><UpSkillingIcon /></span>
-          <span className="dash-link-label">UpSkilling</span>
-          {(!isDesktop || !collapsed) && <ChevronDown open={isOpen} />}
-        </button>
-        {isOpen && (!isDesktop || !collapsed) && (
-          <div className="dash-settings-dropdown">
-            {LEARNING_SUB.map(({ to: subTo, label: subLabel, Icon: SubIcon, end: subEnd }) => (
-              <NavLink
-                key={subTo} to={subTo} end={subEnd}
-                className={({ isActive }) => `dash-link dash-sub-link ${isActive ? "active" : ""}`}
-                onClick={() => {setMobileOpen(false); if (isDesktop) setDesktopLearningHover(false);}}
-                title={subLabel}
-              >
-                <span className="dash-link-icon-wrap"><SubIcon /></span>
-                <span className="dash-link-label">{subLabel}</span>
-              </NavLink>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   // ── Settings dropdown (desktop hover version) ──
   function DesktopSettingsDropdown() {
     return (
@@ -316,59 +226,9 @@ export default function DashboardLayout() {
             {/* Main Navigation */}
             <nav className="desktop-topbar-nav">
               {DESKTOP_MAIN_NAV
-                .filter(({ to }) => !["/app/solo", "/app/challenge", "/app/learn", "/app/settings"].includes(to))
+                .filter(({ to }) => to !== "/app/settings")
                 .map(({ to, label, Icon, end }) => {
                   const badge = (to === "/app/match-requests" && pendingMatchCount > 0) ? pendingMatchCount : null;
-
-                  if (to === "/app/progress") {
-                    return (
-                      <span key="nav-with-dropdowns" style={{ display: "contents" }}>
-                        {/* Learning Dropdown */}
-                        <div
-                          className="desktop-nav-dropdown"
-                          onMouseEnter={openLearning}
-                          onMouseLeave={closeLearning}
-                        >
-                          <NavLink
-                            to="/app/solo"
-                            className={() => `desktop-nav-item ${inLearning ? "active" : ""}`}
-                            title="Learning"
-                          >
-                            <UpSkillingIcon />
-                            <span>Learn</span>
-                            <ChevronDown open={desktopLearningHover} />
-                          </NavLink>
-                          {desktopLearningHover && (
-                            <div className="desktop-nav-dropdown-menu">
-                              {LEARNING_SUB.map(({ to: subTo, label: subLabel, Icon: SubIcon }) => (
-                                <NavLink
-                                  key={subTo}
-                                  to={subTo}
-                                  className={({ isActive }) => `desktop-nav-dropdown-item${isActive ? " active" : ""}`}
-                                  onClick={() => setDesktopLearningHover(false)}
-                                >
-                                  <SubIcon />
-                                  <span>{subLabel}</span>
-                                </NavLink>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Progress */}
-                        <NavLink
-                          to={to}
-                          end={end}
-                          className={({ isActive }) => `desktop-nav-item${isActive ? " active" : ""}`}
-                          title={label}
-                        >
-                          <Icon />
-                          <span>{label}</span>
-                        </NavLink>
-                      </span>
-                    );
-                  }
-
                   return (
                     <NavLink
                       key={to}

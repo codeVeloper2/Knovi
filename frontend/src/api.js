@@ -382,7 +382,6 @@ export function getNotifications() {
 
 // Dashboard
 export const adminGetDashboard  = ()        => request("/api/admin/dashboard",       { auth: true });
-export const adminSeedSubjects  = ()        => request("/api/admin/seed-subjects",   { method: "POST", auth: true });
 
 // Subjects
 export const adminGetSubjects   = ()            => request("/api/admin/subjects",           { auth: true });
@@ -451,72 +450,5 @@ export const getTopicQuestions     = (id)       => request(`/api/topics/${id}/qu
 export const getTopicResources     = (id)       => request(`/api/topics/${id}/resources`,            { auth: true });
 export const getTopicLearningContent = (id)     => request(`/api/topics/${id}/learning-content`,     { auth: true });
 
-// ── Solo Learning ─────────────────────────────────────────────────────────────
-export const soloGetSubjects          = ()              => request("/api/solo/subjects",                               { auth: true });
-export const soloGetTopics            = (subjectId)     => request(`/api/solo/subjects/${subjectId}/topics`,           { auth: true });
-export const soloGetConcepts          = (topicId)       => request(`/api/solo/topics/${topicId}/concepts`,             { auth: true });
-export const soloGetLesson            = (conceptId)     => request(`/api/solo/concepts/${conceptId}/lesson`,           { auth: true });
-export const soloGetCheckpoint        = (conceptId)     => request(`/api/solo/concepts/${conceptId}/checkpoint`,       { auth: true });
-export const soloSubmitAnswer         = (conceptId, body) => request(`/api/solo/concepts/${conceptId}/checkpoint/answer`, { method: "POST", body, auth: true });
-export const soloGetProgress          = (conceptId)     => request(`/api/solo/concepts/${conceptId}/progress`,         { auth: true });
-export const soloSubmitExplanation    = (conceptId, body) => request(`/api/solo/concepts/${conceptId}/explanation`,    { method: "POST", body, auth: true });
-export const soloAskAI                = (conceptId, body) => request(`/api/solo/concepts/${conceptId}/ask`,            { method: "POST", body, auth: true });
-export const soloGetSuggestedQuestions = (conceptId)    => request(`/api/solo/concepts/${conceptId}/suggested-questions`, { auth: true });
-export const soloMarkComplete         = (conceptId)     => request(`/api/solo/concepts/${conceptId}/complete`,         { method: "POST", auth: true });
-export const soloGetDashboard         = ()              => request("/api/solo/dashboard",                              { auth: true });
-
-// ── Sync ──────────────────────────────────────────────────────────────────────
-export const syncGetEligible          = ()              => request("/api/sync/eligible",                               { auth: true });
-export const syncGetPartners          = (conceptId)     => request(`/api/sync/partners/${conceptId}`,                  { auth: true });
-export const syncCreateSession        = (body)          => request("/api/sync/sessions",                               { method: "POST", body, auth: true });
-export const syncValidateCode         = (code)          => request(`/api/sync/sessions/join/${code}`,                  { auth: true });
-export const syncJoinByCode           = (code)          => request(`/api/sync/sessions/join/${code}`,                  { method: "POST", auth: true });
-export const syncGetSession           = (id)            => request(`/api/sync/sessions/${id}`,                        { auth: true });
-export const syncMarkReady            = (id)            => request(`/api/sync/sessions/${id}/ready`,                  { method: "POST", auth: true });
-export const syncGetWarmup            = (id)            => request(`/api/sync/sessions/${id}/warmup`,                 { auth: true });
-export const syncSubmitWarmupAnswer   = (id, body)      => request(`/api/sync/sessions/${id}/warmup/answer`,          { method: "POST", body, auth: true });
-export const syncSubmitExplanation    = (id, body)      => request(`/api/sync/sessions/${id}/explain`,                { method: "POST", body, auth: true });
-export const syncReactToExplanation   = (id, body)      => request(`/api/sync/sessions/${id}/explain/react`,          { method: "POST", body, auth: true });
-export const syncAskQuestion          = (id, body)      => request(`/api/sync/sessions/${id}/quiz/question`,          { method: "POST", body, auth: true });
-export const syncAnswerQuestion       = (id, exchId, body) => request(`/api/sync/sessions/${id}/quiz/${exchId}/answer`, { method: "POST", body, auth: true });
-export const syncGetQuizSuggestions   = (id)            => request(`/api/sync/sessions/${id}/quiz/suggestions`,       { auth: true });
-export const syncRunGapCheck          = (id)            => request(`/api/sync/sessions/${id}/gap-check`,              { method: "POST", auth: true });
-export const syncComplete             = (id)            => request(`/api/sync/sessions/${id}/complete`,               { method: "POST", auth: true });
-export const syncGetHistory           = ()              => request("/api/sync/history",                               { auth: true });
-
-export function openSyncSocket(sessionId, onMessage, onClose) {
-  const token = getToken();
-  const base  = (API_BASE || "").replace(/^http/, "ws") || `ws://${window.location.host}`;
-  const ws = new WebSocket(`${base}/api/sync/ws/${sessionId}?token=${token}`);
-  ws.onmessage = (e) => { try { onMessage(JSON.parse(e.data)); } catch {} };
-  ws.onclose   = onClose || (() => {});
-  ws.onerror   = () => ws.close();
-  return ws;
-}
-
-// ── Sequential Concept Learning ───────────────────────────────────────────────
-export const conceptGetProgress          = (cid)         => request(`/api/v1/concepts/${cid}/progress`,              { auth: true });
-export const conceptGenerateLesson       = (cid)         => request(`/api/v1/concepts/${cid}/generate-lesson`,        { method: "POST", auth: true });
-export const conceptCompleteLesson       = (cid)         => request(`/api/v1/concepts/${cid}/complete-lesson`,        { method: "POST", auth: true });
-export const conceptGenerateCheckpoint   = (cid)         => request(`/api/v1/concepts/${cid}/generate-checkpoint`,    { method: "POST", auth: true });
-export const conceptSubmitCheckpoint     = (cid, body)   => request(`/api/v1/concepts/${cid}/submit-checkpoint`,      { method: "POST", body, auth: true });
-export const conceptGenerateReteaching   = (cid, body)   => request(`/api/v1/concepts/${cid}/generate-reteaching`,    { method: "POST", body, auth: true });
-export const conceptSubmitExplanation    = (cid, body)   => request(`/api/v1/concepts/${cid}/submit-explanation`,     { method: "POST", body, auth: true });
-export const conceptAskAI                = (cid, body)   => request(`/api/v1/concepts/${cid}/ask-ai`,                 { method: "POST", body, auth: true });
-export const conceptVerify               = (cid, body)   => request(`/api/v1/concepts/${cid}/verify-concept`,         { method: "POST", body, auth: true });
-export const conceptChallengeFailed      = (cid, body)   => request(`/api/v1/concepts/${cid}/challenge-failed`,       { method: "POST", body, auth: true });
-export const conceptHistory              = (cid)         => request(`/api/v1/concepts/${cid}/history`,                { auth: true });
-export const topicConceptsWithProgress   = (tid)         => request(`/api/v1/concepts/topic/${tid}/concepts`,         { auth: true });
-
-// ── Challenge (peer verification) ────────────────────────────────────────────
-export const challengeFind               = (body)        => request(`/api/v1/challenge/find`,                        { method: "POST", body, auth: true });
-export const challengeGet                = (sid)         => request(`/api/v1/challenge/${sid}`,                      { auth: true });
-export const challengeReady              = (sid)         => request(`/api/v1/challenge/${sid}/ready`,                 { method: "POST", auth: true });
-export const challengeGenerateQuestions  = (sid)         => request(`/api/v1/challenge/${sid}/generate-questions`,    { method: "POST", auth: true });
-export const challengeSubmitAnswers      = (sid, body)   => request(`/api/v1/challenge/${sid}/submit-answers`,        { method: "POST", body, auth: true });
-export const challengeAskPeer            = (sid, body)   => request(`/api/v1/challenge/${sid}/ask-peer`,              { method: "POST", body, auth: true });
-export const challengeAnswerPeer         = (sid, body)   => request(`/api/v1/challenge/${sid}/answer-peer`,           { method: "POST", body, auth: true });
-export const challengeRequestHint        = (sid, body)   => request(`/api/v1/challenge/${sid}/request-hint`,          { method: "POST", body, auth: true });
-export const challengeEvaluate           = (sid)         => request(`/api/v1/challenge/${sid}/evaluate`,              { method: "POST", auth: true });
-export const challengeCancel             = (sid)         => request(`/api/v1/challenge/${sid}/cancel`,                { method: "POST", auth: true });
-export const challengeHeartbeat          = (sid)         => request(`/api/v1/challenge/${sid}/heartbeat`,             { method: "POST", auth: true });
+// ── (Old solo/sync/concept-pipeline/challenge API calls removed in clean reset) ──
+// New AI Learning Session API calls will be added here when the new system is built.

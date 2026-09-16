@@ -40,36 +40,20 @@ function QuickAction({ icon, label, to, onClick }) {
 }
 
 // ── Seed banner (shown when subject count is 0) ───────────────────────────────
-function SeedBanner({ onSeeded }) {
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState("");
-
-  async function handleSeed() {
-    setBusy(true);
-    try {
-      const res = await api.adminSeedSubjects();
-      setMsg(res.message);
-      onSeeded();
-    } catch (e) {
-      setMsg(e.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
+function SeedBanner() {
   return (
     <div className="adm-seed-banner">
       <span className="adm-seed-icon">🌱</span>
       <div>
         <p className="adm-seed-title">No subjects yet</p>
         <p className="adm-seed-sub">
-          Seed the initial subjects (Mathematics, Physics, Chemistry) to get started.
+          Use the{" "}
+          <a href="/admin/curriculum/subjects" className="adm-seed-link">
+            Subjects page
+          </a>{" "}
+          to create your first subject (e.g. Mathematics, Physics, Chemistry).
         </p>
-        {msg && <p className="adm-seed-msg">{msg}</p>}
       </div>
-      <button className="adm-seed-btn" onClick={handleSeed} disabled={busy}>
-        {busy ? "Seeding…" : "Seed Initial Subjects"}
-      </button>
     </div>
   );
 }
@@ -118,7 +102,7 @@ export default function AdminDashboard() {
 
       {/* Seed banner when no subjects */}
       {stats && stats.total_subjects === 0 && (
-        <SeedBanner onSeeded={loadDashboard} />
+        <SeedBanner />
       )}
 
       {/* Stat cards */}
