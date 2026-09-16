@@ -89,10 +89,29 @@ Discover → Send Match Request → Accept → Chat → Open Study Room → Stud
 - Study streak tracking
 - Session history
 
-### Learn
-- Courses and tutorials section
-- Student-created tutorial content
-- Saved learning content
+### Learn — Sequential Learning System ✨ NEW
+- **7-stage mastery pipeline** for concept-based learning
+- AI-generated personalized lessons using Google Gemini
+- Checkpoint quizzes generated from lesson content
+- Automated reteaching when students struggle
+- "Explain It" stage — students write explanations in their own words
+- AI verification of understanding (focuses on concepts, not grammar)
+- Curriculum-bound AI Q&A assistant
+- **Peer-to-peer Challenge system** — students verify each other's mastery
+- Challenge matching — finds peers at the same learning stage
+- 5-question independent assessment
+- Peer exchange phase — students ask each other questions
+- AI evaluation with hints and feedback
+- Progressive concept unlocking — must master prerequisites
+- Real-time progress tracking with stage indicators
+- Complete learning history and analytics
+
+**The Learning Flow:**
+```
+Lesson → Checkpoint → Explain It → AI Verification → Ask AI → Challenge → Verified ✓
+  ↓ fail         ↓ fail                                  ↓ fail
+Reteach    Retry Explanation                     Reset to Checkpoint
+```
 
 ### Settings
 - Profile settings
@@ -118,6 +137,7 @@ Discover → Send Match Request → Accept → Chat → Open Study Room → Stud
 | ORM | SQLAlchemy |
 | Migrations | Alembic |
 | Whiteboard | Excalidraw |
+| AI | Google Gemini 1.5 Flash |
 | Frontend Hosting | Cloudflare Pages |
 | Backend Hosting | Railway |
 
@@ -129,20 +149,74 @@ Discover → Send Match Request → Accept → Chat → Open Study Room → Stud
 PeerUP/
 ├── backend/
 │   ├── app/
-│   │   ├── api/v1/          # Route handlers (auth, profile, users, match, chat, rooms, ai, learn, progress)
+│   │   ├── api/v1/          # Route handlers
+│   │   │   ├── auth.py           # Authentication endpoints
+│   │   │   ├── profile.py        # User profile management
+│   │   │   ├── users.py          # User discovery and search
+│   │   │   ├── match.py          # Match request system
+│   │   │   ├── chat.py           # Real-time messaging
+│   │   │   ├── learn.py          # Study room WebSocket
+│   │   │   ├── concept_learn.py  # Sequential learning pipeline ✨
+│   │   │   ├── challenge.py      # Peer challenge system ✨
+│   │   │   ├── curriculum.py     # Learning content
+│   │   │   ├── admin_curriculum.py # Admin tools
+│   │   │   ├── progress.py       # XP and achievements
+│   │   │   ├── ai.py             # AI assistance
+│   │   │   └── notifications.py  # Push notifications
 │   │   ├── core/            # Config, security, database, dependencies
 │   │   ├── models/          # SQLAlchemy database models
+│   │   │   ├── user.py           # User and profile
+│   │   │   ├── match.py          # Match requests
+│   │   │   ├── chat.py           # Messages and rooms
+│   │   │   ├── learn.py          # Study sessions
+│   │   │   ├── curriculum.py     # Subjects, topics, concepts
+│   │   │   ├── progress.py       # XP and levels
+│   │   │   └── solo_learning.py  # Concept progress tracking ✨
 │   │   ├── schemas/         # Pydantic request and response schemas
-│   │   └── services/        # Business logic (auth, chat, match, room, email, storage, AI)
+│   │   └── services/        # Business logic
+│   │       ├── ai_service.py     # Google Gemini integration ✨
+│   │       ├── auth_service.py
+│   │       ├── chat_service.py
+│   │       ├── match_service.py
+│   │       ├── learn_service.py
+│   │       ├── progress_service.py
+│   │       ├── email_service.py
+│   │       ├── storage_service.py
+│   │       └── ws_manager.py     # WebSocket management
+│   ├── migrations/          # Database migrations ✨
+│   │   ├── 001_concept_progress.sql
+│   │   └── 002_challenge_sessions.sql
 │   ├── requirements.txt
 │   └── main.py
 ├── frontend/
 │   └── src/
-│       ├── pages/           # auth, onboarding, dashboard, discover, match, chat, study, learn
+│       ├── pages/           # Application pages
+│       │   ├── auth/            # Login, signup, password reset
+│       │   ├── onboarding/      # Profile setup wizard
+│       │   ├── dashboard/       # Main app layout
+│       │   ├── discover/        # Student discovery
+│       │   ├── match/           # Match requests
+│       │   ├── chat/            # Messaging
+│       │   ├── study/           # Study room
+│       │   ├── learn/           # Learning pages ✨
+│       │   │   ├── SubjectsPage.jsx
+│       │   │   ├── TopicConceptsPage.jsx
+│       │   │   ├── ConceptLearnPage.jsx  # 7-stage pipeline
+│       │   │   └── challenge/            # Challenge flow
+│       │   │       ├── ChallengeFindPartnerPage.jsx
+│       │   │       ├── ChallengeLobbyPage.jsx
+│       │   │       ├── ChallengeSessionPage.jsx
+│       │   │       └── ChallengeCompletePage.jsx
+│       │   └── admin/           # Admin curriculum tools
 │       ├── components/      # Shared UI components
 │       ├── context/         # Auth and Toast context providers
 │       └── hooks/           # Custom React hooks
 ├── docs/                    # Development notes and migration scripts
+│   ├── PROJECT_NOTES.md
+│   ├── STUDY_ROOM_ENHANCEMENTS.md
+│   ├── STUDY_ROOM_NEW_FLOW.md
+│   ├── CHAT_READ_RECEIPTS.md
+│   └── CHAT_TROUBLESHOOTING.md
 └── README.md
 ```
 
@@ -208,6 +282,9 @@ EMAIL_HOST=
 EMAIL_PORT=
 EMAIL_USER=
 EMAIL_PASSWORD=
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-1.5-flash
+AI_REQUEST_TIMEOUT=60
 ```
 
 ---

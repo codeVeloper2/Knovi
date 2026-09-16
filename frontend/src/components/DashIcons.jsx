@@ -68,9 +68,11 @@ export const CloseIcon = (p) => (
 export const LearningIcon = (p) => (
   <svg {...base} {...p}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
 );
-export const SyncIcon = (p) => (
+export const ChallengeIcon = (p) => (
   <svg {...base} {...p}><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
 );
+// Legacy alias
+export const SyncIcon = ChallengeIcon;
 export const ResourcesIcon = (p) => (
   <svg {...base} {...p}><path d="M12 3 2 8l10 5 10-5-10-5z" /><path d="M6 10.5V16c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5.5" /></svg>
 );

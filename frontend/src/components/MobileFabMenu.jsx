@@ -5,7 +5,7 @@ import {
   CloseIcon,
   FriendRequestsIcon,
   ProgressIcon,
-  SyncIcon,
+  ChallengeIcon,
   ResourcesIcon,
   UpSkillingIcon,
 } from "./DashIcons";
@@ -18,7 +18,7 @@ import {
  *      Friend Requests
  *                     UpSkilling
  *   Progress                     Resources
- *                       Sync
+ *                     Challenge
  *
  * The FAB itself shows:
  *  - × when open
@@ -30,7 +30,7 @@ const FAB_ITEMS = [
   { to: "/app/match-requests", label: "Friend Requests", Icon: FriendRequestsIcon, pos: "top"         },
   { to: "/app/progress",       label: "Progress",        Icon: ProgressIcon,       pos: "left"        },
   { to: "/app/solo",           label: "UpSkilling",      Icon: UpSkillingIcon,     pos: "top-right"   },
-  { to: "/app/sync",           label: "Sync",            Icon: SyncIcon,           pos: "bottom"      },
+  { to: "/app/challenge",      label: "Challenge",       Icon: ChallengeIcon,      pos: "bottom"      },
   { to: "/app/learn",          label: "Resources",       Icon: ResourcesIcon,      pos: "bottom-right"},
 ];
 
@@ -38,7 +38,7 @@ function getCurrentSection(pathname) {
   if (pathname.startsWith("/app/match-requests")) return FAB_ITEMS[0]; // Friend Requests
   if (pathname.startsWith("/app/progress"))       return FAB_ITEMS[1]; // Progress
   if (pathname.startsWith("/app/solo"))           return FAB_ITEMS[2]; // UpSkilling
-  if (pathname.startsWith("/app/sync"))           return FAB_ITEMS[3]; // Sync
+  if (pathname.startsWith("/app/challenge"))      return FAB_ITEMS[3]; // Challenge
   if (pathname.startsWith("/app/learn"))          return FAB_ITEMS[4]; // Resources
   return null;
 }

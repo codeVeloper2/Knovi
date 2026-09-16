@@ -41,6 +41,8 @@ import TutorialsPage from "./pages/learn/TutorialsPage";
 import TutorialDetailPage from "./pages/learn/TutorialDetailPage";
 import CreateTutorialPage from "./pages/learn/CreateTutorialPage";
 import MyTutorialsPage from "./pages/learn/MyTutorialsPage";
+import ConceptLearnPage from "./pages/learn/ConceptLearnPage";
+import TopicConceptsPage from "./pages/learn/TopicConceptsPage";
 
 // ── Solo Learning pages ──
 import SoloHomePage        from "./pages/solo/SoloHomePage";
@@ -52,14 +54,14 @@ import SoloNotesPage       from "./pages/solo/SoloNotesPage";
 import SoloAskPage         from "./pages/solo/SoloAskPage";
 import SoloPassedPage      from "./pages/solo/SoloPassedPage";
 
-// ── Sync pages ──
-import SyncWelcomePage     from "./pages/sync/SyncWelcomePage";
-import SyncFindPartnerPage from "./pages/sync/SyncFindPartnerPage";
-import SyncLobbyPage       from "./pages/sync/SyncLobbyPage";
-import SyncSessionPage     from "./pages/sync/SyncSessionPage";
-import SyncGapCheckPage    from "./pages/sync/SyncGapCheckPage";
-import SyncCompletePage    from "./pages/sync/SyncCompletePage";
-import SyncHistoryPage     from "./pages/sync/SyncHistoryPage";
+// ── Challenge pages ──
+import ChallengeWelcomePage     from "./pages/challenge/ChallengeWelcomePage";
+import ChallengeFindPartnerPage from "./pages/challenge/ChallengeFindPartnerPage";
+import ChallengeLobbyPage       from "./pages/challenge/ChallengeLobbyPage";
+import ChallengeSessionPage     from "./pages/challenge/ChallengeSessionPage";
+import ChallengeGapCheckPage    from "./pages/challenge/ChallengeGapCheckPage";
+import ChallengeCompletePage    from "./pages/challenge/ChallengeCompletePage";
+import ChallengeHistoryPage     from "./pages/challenge/ChallengeHistoryPage";
 
 // On mobile shows the settings card list; on desktop redirects to /profile
 function SettingsIndex() {
@@ -101,18 +103,20 @@ function AppRoutes() {
         <Route path="solo/concepts/:conceptId/ask"            element={<SoloAskPage />} />
         <Route path="solo/concepts/:conceptId/passed"         element={<SoloPassedPage />} />
 
-        {/* ── Sync ── */}
-        <Route path="sync"                                    element={<SyncWelcomePage />} />
-        <Route path="sync/find/:conceptId"                    element={<SyncFindPartnerPage />} />
-        <Route path="sync/lobby/:sessionId"                   element={<SyncLobbyPage />} />
-        <Route path="sync/session/:sessionId"                 element={<SyncSessionPage />} />
-        <Route path="sync/gap/:sessionId"                     element={<SyncGapCheckPage />} />
-        <Route path="sync/complete/:sessionId"                element={<SyncCompletePage />} />
-        <Route path="sync/history"                            element={<SyncHistoryPage />} />
+        {/* ── Challenge ── */}
+        <Route path="challenge"                               element={<ChallengeWelcomePage />} />
+        <Route path="challenge/find/:conceptId"               element={<ChallengeFindPartnerPage />} />
+        <Route path="challenge/lobby/:sessionId"              element={<ChallengeLobbyPage />} />
+        <Route path="challenge/session/:sessionId"            element={<ChallengeSessionPage />} />
+        <Route path="challenge/gap/:sessionId"                element={<ChallengeGapCheckPage />} />
+        <Route path="challenge/complete/:sessionId"           element={<ChallengeCompletePage />} />
+        <Route path="challenge/history"                       element={<ChallengeHistoryPage />} />
 
         {/* ── Learn ── */}
         <Route path="learn" element={<LearnLayout />}>
           <Route index element={<LearnHome />} />
+          <Route path="concept/:conceptId"    element={<ConceptLearnPage />} />
+          <Route path="topics/:topicId"       element={<TopicConceptsPage />} />
           <Route path="tutorials"             element={<TutorialsPage />} />
           <Route path="tutorials/:tutorialId" element={<TutorialDetailPage />} />
           <Route path="create"                element={<CreateTutorialPage />} />

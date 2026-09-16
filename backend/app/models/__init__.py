@@ -13,9 +13,11 @@ from app.models.curriculum import (
     TopicProgress, ResourceDownload,
 )
 from app.models.solo_learning import (
-    ConceptProgress, CheckpointAnswer, ExplanationAttempt,
+    ConceptProgress as SoloConceptProgress, CheckpointAnswer, ExplanationAttempt,
     SyncSession, SyncWarmupAnswer, SyncQuizExchange, SyncGap,
 )
+from app.models.concept_progress import ConceptProgress
+from app.models.challenge_session import ChallengeSession
 
 __all__ = [
     "User", "Conversation", "Message", "MatchRequest",
@@ -26,7 +28,10 @@ __all__ = [
     "Subject", "Topic", "LearningObjective", "Concept", "Misconception",
     "LearningActivity", "Question", "Resource",
     "TopicProgress", "ResourceDownload",
-    # Solo Learning + Sync
-    "ConceptProgress", "CheckpointAnswer", "ExplanationAttempt",
+    # Solo Learning + Sync (legacy)
+    "SoloConceptProgress", "CheckpointAnswer", "ExplanationAttempt",
     "SyncSession", "SyncWarmupAnswer", "SyncQuizExchange", "SyncGap",
+    # New Sequential Learning
+    "ConceptProgress",
+    "ChallengeSession",
 ]

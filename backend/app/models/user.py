@@ -98,6 +98,9 @@ class User(Base):
     resource_downloads: Mapped[list] = relationship(
         "ResourceDownload", back_populates="user"
     )
+    concept_progress: Mapped[list] = relationship(
+        "ConceptProgress", back_populates="user"
+    )
 
     def serialize(self) -> dict:
         """Shape returned to the frontend (matches the previous API contract)."""

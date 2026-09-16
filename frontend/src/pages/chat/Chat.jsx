@@ -4,45 +4,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import * as api from "../../api";
-import NotificationsBell from "../../components/NotificationsPanel";
-
-// ─────────────────────────────────────────────────────────────────
-// Shared mobile header — hamburger/notification/profile ONLY
-// ─────────────────────────────────────────────────────────────────
-function ChatMobileHeader() {
-  const { profile, user } = useAuth();
-  const navigate = useNavigate();
-  const name  = profile?.displayName || user?.displayName || "";
-  const photo = profile?.photoURL    || user?.photoURL    || "";
-  const initial = name.trim()[0]?.toUpperCase() || "?";
-
-  return (
-    <div className="chat-mob-header">
-      <div className="chat-mob-header-left">
-        <button className="chat-mob-menu-btn" aria-label="Open menu"
-          onClick={() => window.dispatchEvent(new CustomEvent("peerup:open-nav"))}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <line x1="3" y1="6"  x2="21" y2="6"/>
-            <line x1="3" y1="12" x2="21" y2="12"/>
-            <line x1="3" y1="18" x2="21" y2="18"/>
-          </svg>
-        </button>
-        <span className="chat-mob-logo">
-          Peer<span className="chat-mob-accent">Up</span>
-        </span>
-      </div>
-      <div className="chat-mob-header-right">
-        <NotificationsBell className="chat-mob-bell notif-bell-btn" />
-        <button className="chat-mob-avatar" onClick={() => navigate("/app/settings")} aria-label="Profile">
-          {photo
-            ? <img src={photo} alt={name} referrerPolicy="no-referrer" />
-            : <span>{initial}</span>
-          }
-        </button>
-      </div>
-    </div>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────
 // Icons
@@ -668,52 +629,114 @@ function MessageBubble({ msg, myId, partnerName, partnerUrl, onDelete, onReport,
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Conversation List
+// Conversation List (WhatsApp Style)
 // ─────────────────────────────────────────────────────────────────
-function ConversationList({ convs, activeId, onSelect, onNew }) {
+function ConversationList({ convs, activeId, onSelect, onNew, myId }) {
   const [search, setSearch] = useState("");
-  const filtered = convs.filter(c =>
-    c.partner.displayName.toLowerCase().includes(search.toLowerCase()) ||
-    c.subject.toLowerCase().includes(search.toLowerCase())
-  );
+  const [filter, setFilter] = useState("all"); // "all" | "unread"
+
+  const unreadTotal = convs.filter(c => c.unread > 0).length;
+
+  const filtered = convs.filter(c => {
+    const matchesSearch =
+      !search.trim() ||
+      c.partner.displayName.toLowerCase().includes(search.toLowerCase()) ||
+      c.subject.toLowerCase().includes(search.toLowerCase());
+    const matchesFilter = filter === "unread" ? c.unread > 0 : true;
+    return matchesSearch && matchesFilter;
+  });
 
   return (
     <div className="cl">
-      {/* Mobile-only top header with hamburger + notification + profile */}
-      <ChatMobileHeader />
-
-      {/* Header */}
+      {/* WhatsApp Header */}
       <div className="cl-head">
-        <h2 className="cl-title">Chats</h2>
-        <button type="button" className="cl-new-btn" onClick={onNew} title="New chat">
-          <PlusIcon />
-        </button>
+        <div className="cl-head-left">
+          <h2 className="cl-title">Chats</h2>
+          {unreadTotal > 0 && <span className="cl-head-badge">{unreadTotal}</span>}
+        </div>
+        <div className="cl-head-actions">
+          <button
+            type="button"
+            className="cl-new-btn"
+            onClick={onNew}
+            title="New chat"
+            aria-label="New chat"
+          >
+            <PlusIcon />
+          </button>
+        </div>
       </div>
 
-      {/* Search */}
+      {/* WhatsApp Search */}
       <div className="cl-search">
         <SearchIcon />
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Search chats…"
+          placeholder="Search or start new chat"
         />
+        {search && (
+          <button
+            type="button"
+            className="cl-search-clear"
+            onClick={() => setSearch("")}
+            aria-label="Clear search"
+          >
+            <CloseIcon />
+          </button>
+        )}
       </div>
 
-      {/* List */}
+      {/* WhatsApp Filter Pills */}
+      <div className="cl-filter-tabs">
+        <button
+          type="button"
+          className={`cl-filter-tab ${filter === "all" ? "active" : ""}`}
+          onClick={() => setFilter("all")}
+        >
+          All
+        </button>
+        <button
+          type="button"
+          className={`cl-filter-tab ${filter === "unread" ? "active" : ""}`}
+          onClick={() => setFilter("unread")}
+        >
+          Unread {unreadTotal > 0 && <span className="cl-tab-pill">{unreadTotal}</span>}
+        </button>
+      </div>
+
+      {/* Conversation Items List */}
       <div className="cl-list">
         {filtered.length === 0 && (
           <div className="cl-empty">
-            {convs.length === 0
-              ? <><p>No chats yet.</p><p>Tap + to start one.</p></>
-              : <p>No results for "{search}"</p>}
+            <div className="cl-empty-icon">💬</div>
+            {convs.length === 0 ? (
+              <>
+                <p style={{ fontWeight: 600, color: "var(--text)" }}>No conversations yet</p>
+                <p style={{ fontSize: "0.82rem", marginTop: 4 }}>Tap the + button to start a study chat.</p>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  style={{ marginTop: 14 }}
+                  onClick={onNew}
+                >
+                  Start new chat
+                </button>
+              </>
+            ) : (
+              <p>No results found for "{search}"</p>
+            )}
           </div>
         )}
+
         {filtered.map(c => {
+          const isMine = c.lastMessage?.senderId === myId;
           const preview = c.lastMessage
-            ? c.lastMessage.deleted ? "🗑️ Message deleted"
-              : c.lastMessage.body || (c.lastMessage.attachmentUrl ? "📎 File" : "No messages yet")
+            ? c.lastMessage.deleted
+              ? "🗑️ Message deleted"
+              : c.lastMessage.body || (c.lastMessage.attachmentUrl ? "📎 Attachment" : "No messages yet")
             : "No messages yet";
+
           return (
             <button
               key={c.id}
@@ -722,8 +745,12 @@ function ConversationList({ convs, activeId, onSelect, onNew }) {
               onClick={() => onSelect(c)}
             >
               <div className="cl-item-av">
-                <Avatar url={c.partner.photoURL} name={c.partner.displayName} size={50} online={c.partner.isOnline} />
-                {c.unread > 0 && <span className="cl-badge">{c.unread > 99 ? "99+" : c.unread}</span>}
+                <Avatar
+                  url={c.partner.photoURL}
+                  name={c.partner.displayName}
+                  size={50}
+                  online={c.partner.isOnline}
+                />
               </div>
               <div className="cl-item-body">
                 <div className="cl-item-top">
@@ -733,13 +760,47 @@ function ConversationList({ convs, activeId, onSelect, onNew }) {
                   </span>
                 </div>
                 <div className="cl-item-bottom">
-                  <span className="cl-item-preview">{preview}</span>
+                  <div className="cl-item-preview-wrap">
+                    {isMine && c.lastMessage && (
+                      <span className="cl-msg-tick">
+                        {c.lastMessage.isRead ? (
+                          <DoubleTickIcon read={true} />
+                        ) : c.lastMessage.isDelivered ? (
+                          <DoubleTickIcon read={false} />
+                        ) : (
+                          <TickIcon />
+                        )}
+                      </span>
+                    )}
+                    <span className="cl-item-preview">{preview}</span>
+                  </div>
+                  <div className="cl-item-badges">
+                    {c.subject && <span className="cl-subject-pill">{c.subject}</span>}
+                    {c.unread > 0 && (
+                      <span className="cl-badge">{c.unread > 99 ? "99+" : c.unread}</span>
+                    )}
+                  </div>
                 </div>
               </div>
             </button>
           );
         })}
       </div>
+
+      {/* WhatsApp Floating Action Button */}
+      <button
+        type="button"
+        className="cl-fab"
+        onClick={onNew}
+        aria-label="Start new chat"
+        title="Start new chat"
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          <line x1="12" y1="8" x2="12" y2="14"/>
+          <line x1="9" y1="11" x2="15" y2="11"/>
+        </svg>
+      </button>
     </div>
   );
 }
@@ -972,13 +1033,16 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
 
   return (
     <div className="cr">
-      {/* Mobile-only top header — hamburger + notification + profile (ALWAYS shows) */}
-      <ChatMobileHeader />
-
-      {/* ── Chat header (desktop + mobile second header) — back + partner + video/voice/menu ── */}
+      {/* ── WhatsApp chat header — single unified header for desktop and mobile ── */}
       <div className="cr-header">
-        <button type="button" className="cr-back" onClick={onBack} aria-label="Back">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <button
+          type="button"
+          className="cr-back"
+          onClick={onBack}
+          aria-label="Back to chats"
+          title="Back to chats"
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 12H5M12 19l-7-7 7-7"/>
           </svg>
         </button>
@@ -988,28 +1052,25 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
         <div className="cr-header-info">
           <div className="cr-header-name">{partner.displayName}</div>
           <div className="cr-header-sub">
-            {partner.isOnline
-              ? <><span className="cr-online-dot" />Online</>
-              : <span style={{ color: "var(--text-dim)" }}>Offline</span>
-            }
-            <span className="cr-sep">·</span>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
-              <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-            </svg>
-            {conv.subject}
+            {typing ? (
+              <span className="cr-status-typing">typing...</span>
+            ) : partner.isOnline ? (
+              <span className="cr-status-online"><span className="cr-online-dot" />Online</span>
+            ) : (
+              <span className="cr-status-offline">{conv.subject || "Offline"}</span>
+            )}
           </div>
         </div>
 
         <div className="cr-header-actions">
-          <button type="button" className="icon-btn" title="Voice call" onClick={() => setComingSoon("phone")}>
+          <button type="button" className="icon-btn" title="Voice call" onClick={() => setComingSoon("phone")} aria-label="Voice call">
             <PhoneIcon />
           </button>
-          <button type="button" className="icon-btn" title="Video call" onClick={() => setComingSoon("video")}>
+          <button type="button" className="icon-btn" title="Video call" onClick={() => setComingSoon("video")} aria-label="Video call">
             <VideoIcon />
           </button>
           <div ref={headerMenuRef} style={{ position: "relative" }}>
-            <button type="button" className="icon-btn" onClick={() => setShowHeaderMenu(v => !v)}>
+            <button type="button" className="icon-btn" onClick={() => setShowHeaderMenu(v => !v)} aria-label="More options">
               <DotsIcon />
             </button>
             {showHeaderMenu && (
@@ -1219,6 +1280,28 @@ export default function ChatPage() {
   const [loading, setLoading]       = useState(true);
   const [showNew, setShowNew]       = useState(false);
 
+  // Sync mobile full-screen state to document.body
+  useEffect(() => {
+    if (activeConv) {
+      document.body.classList.add("chat-active-mobile");
+    } else {
+      document.body.classList.remove("chat-active-mobile");
+    }
+    return () => {
+      document.body.classList.remove("chat-active-mobile");
+    };
+  }, [activeConv]);
+
+  // Handle hardware / browser back gesture on mobile
+  useEffect(() => {
+    if (!activeConv) return;
+    const handlePopState = () => {
+      setActiveConv(null);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [activeConv]);
+
   const loadConvs = useCallback(async () => {
     try { const data = await api.listConversations(); setConvs(data); return data; }
     catch { return []; } finally { setLoading(false); }
@@ -1242,8 +1325,12 @@ export default function ChatPage() {
   }, [convIdParam]);
 
   function handleSelect(conv) {
+    window.history.pushState({ inChat: true }, "");
     setActiveConv(conv);
     setConvs(prev => prev.map(c => c.id === conv.id ? { ...c, unread: 0 } : c));
+  }
+  function handleBack() {
+    setActiveConv(null);
   }
   function handleGoalUpdate(convId, goal) {
     setConvs(prev => prev.map(c => c.id === convId ? { ...c, sessionGoal: goal } : c));
@@ -1273,6 +1360,7 @@ export default function ChatPage() {
         activeId={activeConv?.id}
         onSelect={handleSelect}
         onNew={() => setShowNew(true)}
+        myId={myId}
       />
 
       {activeConv
@@ -1282,7 +1370,7 @@ export default function ChatPage() {
             myId={myId}
             onGoalUpdate={handleGoalUpdate}
             onConvUpdate={handleConvUpdate}
-            onBack={() => setActiveConv(null)}
+            onBack={handleBack}
           />
         : <EmptyState onNew={() => setShowNew(true)} />
       }

@@ -29,7 +29,7 @@ function LearningIcon() {
   );
 }
 
-function SyncIcon() {
+function ChallengeIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 2v6h-6"/>
@@ -44,8 +44,8 @@ function SyncIcon() {
 
 // "Learning" dropdown sub-items (shown when the Learning section is expanded)
 const LEARNING_SUB = [
-  { to: "/app/solo",            label: "Learning", Icon: UpSkillingIcon, end: true },
-  { to: "/app/sync",            label: "Sync",       Icon: SyncIcon },
+  { to: "/app/solo",            label: "Learning",   Icon: UpSkillingIcon, end: true },
+  { to: "/app/challenge",       label: "Challenge",  Icon: ChallengeIcon },
   { to: "/app/learn",           label: "Resources",  Icon: LearnIcon, end: true },
 ];
 
@@ -55,7 +55,7 @@ const MAIN_NAV = [
   { to: "/app/chat",           label: "Chat",            Icon: ChatIcon },
   { to: "/app/match-requests", label: "Friend Requests", Icon: MatchRequestsIcon },
   { to: "/app/solo",           label: "UpSkilling",      Icon: UpSkillingIcon },
-  { to: "/app/sync",           label: "Sync",            Icon: SyncIcon },
+  { to: "/app/challenge",      label: "Challenge",       Icon: ChallengeIcon },
   { to: "/app/learn",          label: "Resources",       Icon: LearnIcon },
   { to: "/app/progress",       label: "Progress",        Icon: ProgressIcon },
 ];
@@ -121,7 +121,7 @@ export default function DashboardLayout() {
   const inSettings = location.pathname.startsWith("/app/settings");
   const inLearning = (
     location.pathname.startsWith("/app/solo") ||
-    location.pathname.startsWith("/app/sync") ||
+    location.pathname.startsWith("/app/challenge") ||
     location.pathname.startsWith("/app/learn")
   );
 
@@ -135,7 +135,7 @@ export default function DashboardLayout() {
   // Desktop: subnav swap only for Settings; Learning uses dropdown
   const desktopNav = SETTINGS_NAV; // used when inSettings
   const mobileNav  = MOBILE_MAIN_NAV.filter(
-    n => n.to !== "/app/learn" && n.to !== "/app/solo" && n.to !== "/app/sync"
+    n => n.to !== "/app/learn" && n.to !== "/app/solo" && n.to !== "/app/challenge"
   );
 
   // Auto-open Learning dropdown when navigating into any learning route
@@ -316,7 +316,7 @@ export default function DashboardLayout() {
             {/* Main Navigation */}
             <nav className="desktop-topbar-nav">
               {DESKTOP_MAIN_NAV
-                .filter(({ to }) => !["/app/solo", "/app/sync", "/app/learn", "/app/settings"].includes(to))
+                .filter(({ to }) => !["/app/solo", "/app/challenge", "/app/learn", "/app/settings"].includes(to))
                 .map(({ to, label, Icon, end }) => {
                   const badge = (to === "/app/match-requests" && pendingMatchCount > 0) ? pendingMatchCount : null;
 

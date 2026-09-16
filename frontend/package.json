@@ -12,6 +12,7 @@
     "@excalidraw/excalidraw": "^0.18.1",
     "dompurify": "^3.4.15",
     "firebase": "^11.10.0",
+    "lucide-react": "^0.462.0",
     "react": "^19.1.0",
     "react-confetti": "^6.4.0",
     "react-dom": "^19.1.0",
