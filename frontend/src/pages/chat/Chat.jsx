@@ -512,6 +512,7 @@ function MessageBubble({ msg, myId, partnerName, partnerUrl, onDelete, onReport,
               src={msg.attachmentUrl}
               alt={msg.attachmentName || "image"}
               className="cb-img"
+              onClick={e => { e.stopPropagation(); onLightbox?.(msg.attachmentUrl, msg.attachmentName); }}
             />
           )}
 
@@ -1137,6 +1138,7 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
                 onDelete={id => setPendingDelete(id)}
                 onReport={reportMsg}
                 onReact={reactMsg}
+                onLightbox={(url, name) => setLightbox({ url, name })}
                 onReply={m => setReplyTo({
                   id: m.id,
                   body: m.body || (m.attachmentName ? `📎 ${m.attachmentName}` : ""),

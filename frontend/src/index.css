@@ -2875,6 +2875,40 @@ kbd {
   transform: scale(0.88);
 }
 
+/* ── Portal emoji picker (renders into document.body via React portal) ── */
+.emoji-picker-portal {
+  position: fixed;
+  z-index: 99999;
+  display: flex;
+  gap: 4px;
+  padding: 8px 10px;
+  background: #1f2c34;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 30px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4);
+  pointer-events: all;
+}
+.emoji-picker-btn {
+  width: 38px;
+  height: 38px;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  font-size: 1.4rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, transform 0.12s;
+  -webkit-tap-highlight-color: transparent;
+}
+.emoji-picker-btn:hover, .emoji-picker-btn:focus {
+  background: rgba(255,255,255,0.1);
+  transform: scale(1.25);
+  outline: none;
+}
+.emoji-picker-btn:active { transform: scale(0.95); }
+
 /* ── Old reaction styles (still used outside bubble) ── */
 .chat-reactions {
   display: flex;
@@ -5612,11 +5646,15 @@ kbd {
 .cb-img {
   width: 100%;
   max-width: 300px;
+  max-height: 260px;
+  object-fit: cover;
   border-radius: 6px;
   display: block;
   cursor: pointer;
   margin-bottom: 4px;
+  transition: opacity 0.15s;
 }
+.cb-img:hover { opacity: 0.88; }
 
 .cb-file {
   display: flex;
