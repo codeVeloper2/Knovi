@@ -9463,8 +9463,6 @@ kbd {
     padding: 0 !important;
     margin: 0 !important;
     max-width: 100vw !important;
-    height: calc(100dvh - 68px) !important;
-    height: calc(100vh - 68px) !important;
     overflow: hidden !important;
   }
 
@@ -9477,11 +9475,9 @@ kbd {
     bottom: 68px;   /* leave room for mobile bottom nav */
     margin: 0;
     padding: 0;
-    height: calc(100vh - 68px);
-    height: calc(100dvh - 68px);
     overflow: hidden;
     background: #111b21;
-    z-index: 100;
+    z-index: 101;
   }
 
   /* ── Conversation list on mobile ── */
