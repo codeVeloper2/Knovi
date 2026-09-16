@@ -44,7 +44,7 @@ function ChallengeIcon() {
 
 // "Learning" dropdown sub-items (shown when the Learning section is expanded)
 const LEARNING_SUB = [
-  { to: "/app/solo",            label: "Learning",   Icon: UpSkillingIcon, end: true },
+  { to: "/app/solo",            label: "UpSkilling",   Icon: UpSkillingIcon, end: true },
   { to: "/app/challenge",       label: "Challenge",  Icon: ChallengeIcon },
   { to: "/app/learn",           label: "Resources",  Icon: LearnIcon, end: true },
 ];

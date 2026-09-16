@@ -702,22 +702,31 @@ Respond with JSON: {{"answer": "...", "related_concepts": ["..."]}}"""
 
     if settings.GEMINI_API_KEY:
         try:
-            import google.generativeai as genai
+            from google import genai
+            from google.genai import types
             import asyncio
-            genai.configure(api_key=settings.GEMINI_API_KEY)
-            model = genai.GenerativeModel(
-                model_name=settings.GEMINI_MODEL,
+            
+            client = genai.Client(api_key=settings.GEMINI_API_KEY)
+            
+            config = types.GenerateContentConfig(
+                temperature=0.3,
+                response_mime_type="application/json",
                 system_instruction=_ASK_AI_SYSTEM,
-                generation_config=genai.GenerationConfig(
-                    temperature=0.3,
-                    response_mime_type="application/json",
-                ),
             )
-            response = await asyncio.wait_for(
-                asyncio.to_thread(model.generate_content, prompt),
+            
+            def _sync_call():
+                response = client.models.generate_content(
+                    model=settings.GEMINI_MODEL,
+                    contents=prompt,
+                    config=config,
+                )
+                return response.text.strip()
+            
+            text = await asyncio.wait_for(
+                asyncio.to_thread(_sync_call),
                 timeout=float(settings.AI_REQUEST_TIMEOUT),
             )
-            text = response.text.strip()
+            
             if text.startswith("```"):
                 text = text.split("```")[1]
                 if text.startswith("json"):

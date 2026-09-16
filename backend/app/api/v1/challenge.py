@@ -26,7 +26,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import and_, or_, select
@@ -110,15 +111,19 @@ async def _require_participant(sess: ChallengeSession, user_id: int) -> str:
 
 
 def _call_gemini_sync(prompt: str, temperature: float = 0.4, json_mode: bool = True) -> Any:
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    cfg: dict[str, Any] = {"temperature": temperature}
-    if json_mode:
-        cfg["response_mime_type"] = "application/json"
-    model = genai.GenerativeModel(
-        model_name=settings.GEMINI_MODEL,
-        generation_config=genai.GenerationConfig(**cfg),
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    
+    config = types.GenerateContentConfig(
+        temperature=temperature,
+        response_mime_type="application/json" if json_mode else "text/plain",
     )
-    response = model.generate_content(prompt)
+    
+    response = client.models.generate_content(
+        model=settings.GEMINI_MODEL,
+        contents=prompt,
+        config=config,
+    )
+    
     text = response.text.strip()
     if json_mode:
         if text.startswith("```"):

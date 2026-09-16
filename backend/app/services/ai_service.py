@@ -155,23 +155,31 @@ def _validate(raw: dict) -> dict:
 
 async def _call_gemini(prompt: str, timeout: int) -> dict:
     from app.core.config import settings
-    import google.generativeai as genai  # type: ignore
-
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    model = genai.GenerativeModel(
-        model_name=settings.GEMINI_MODEL,
-        system_instruction=_SYSTEM_PROMPT,
-        generation_config=genai.GenerationConfig(
-            temperature=0.2,
-            response_mime_type="application/json",
-        ),
-    )
+    from google import genai
+    from google.genai import types
     import asyncio
-    response = await asyncio.wait_for(
-        asyncio.to_thread(model.generate_content, prompt),
+
+    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    
+    config = types.GenerateContentConfig(
+        temperature=0.2,
+        response_mime_type="application/json",
+        system_instruction=_SYSTEM_PROMPT,
+    )
+    
+    def _sync_call():
+        response = client.models.generate_content(
+            model=settings.GEMINI_MODEL,
+            contents=prompt,
+            config=config,
+        )
+        return response.text.strip()
+    
+    text = await asyncio.wait_for(
+        asyncio.to_thread(_sync_call),
         timeout=float(timeout),
     )
-    text = response.text.strip()
+    
     # Strip markdown fences if present
     if text.startswith("```"):
         text = text.split("```")[1]

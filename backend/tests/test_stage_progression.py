@@ -15,15 +15,33 @@ import types
 
 # ── Minimal stubs so the modules can be imported without DB/google deps ───────
 
-# Stub google.generativeai
+# Stub google.genai (new package)
 google_pkg  = types.ModuleType("google")
-genai_pkg   = types.ModuleType("google.generativeai")
-genai_pkg.configure            = lambda **k: None
-genai_pkg.GenerativeModel      = lambda **k: None
-genai_pkg.GenerationConfig     = lambda **k: None
-google_pkg.generativeai        = genai_pkg
-sys.modules["google"]           = google_pkg
-sys.modules["google.generativeai"] = genai_pkg
+genai_pkg   = types.ModuleType("google.genai")
+genai_types = types.ModuleType("google.genai.types")
+
+# Create minimal stubs
+class FakeClient:
+    pass
+
+class FakeGenerateContentConfig:
+    def __init__(self, **kwargs):
+        pass
+
+genai_pkg.Client = FakeClient
+genai_types.GenerateContentConfig = FakeGenerateContentConfig
+
+google_pkg.genai = genai_pkg
+sys.modules["google"] = google_pkg
+sys.modules["google.genai"] = genai_pkg
+sys.modules["google.genai.types"] = genai_types
+
+# Keep old stub for backwards compatibility
+genai_old = types.ModuleType("google.generativeai")
+genai_old.configure = lambda **k: None
+genai_old.GenerativeModel = lambda **k: None
+genai_old.GenerationConfig = lambda **k: None
+sys.modules["google.generativeai"] = genai_old
 
 # Stub fastapi, sqlalchemy, pydantic just enough for imports
 for mod in ["fastapi","fastapi.exceptions","pydantic","sqlalchemy",
