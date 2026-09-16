@@ -34,12 +34,12 @@ def _now() -> datetime:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class ConceptProgress(Base):
-    """Per-user, per-concept solo learning progress."""
-    __tablename__ = "concept_progress"
+    """Per-user, per-concept solo learning progress (legacy solo/sync system)."""
+    __tablename__ = "solo_concept_progress"
     __table_args__ = (
-        UniqueConstraint("user_id", "concept_id", name="uq_concept_progress_user_concept"),
-        Index("idx_concept_progress_user", "user_id"),
-        Index("idx_concept_progress_topic", "topic_id"),
+        UniqueConstraint("user_id", "concept_id", name="uq_solo_concept_progress_user_concept"),
+        Index("idx_solo_concept_progress_user", "user_id"),
+        Index("idx_solo_concept_progress_topic", "topic_id"),
     )
 
     id:         Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

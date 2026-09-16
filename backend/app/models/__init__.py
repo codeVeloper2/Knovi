@@ -15,7 +15,7 @@ from app.models.curriculum import (
 from app.models.solo_learning import (
     ConceptProgress as SoloConceptProgress, CheckpointAnswer, ExplanationAttempt,
     SyncSession, SyncWarmupAnswer, SyncQuizExchange, SyncGap,
-)
+)  # SoloConceptProgress maps to solo_concept_progress table (legacy sync system)
 from app.models.concept_progress import ConceptProgress
 from app.models.challenge_session import ChallengeSession
 
