@@ -5,34 +5,33 @@ Pipeline: lesson → checkpoint → explain → ai_verification → ask_ai → c
 
 Every endpoint enforces backend stage authorization.
 The frontend is never the authority on progression.
+
+AI generation uses the centralized ai_service.py with Gemini→Groq fallback.
+Lesson content is persisted before the checkpoint is generated.
+Checkpoint questions are cached in DB so page refresh doesn't lose them.
 """
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Optional
 
-from google import genai
-from google.genai import types
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.database import get_session
 from app.core.dependencies import current_user as get_current_user
 from app.models.concept_progress import ConceptProgress
 from app.models.curriculum import Concept, LearningObjective, Misconception, Subject, Topic
 from app.models.user import User
-from app.services.ai_service import verify_explanation
+from app.services import ai_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/concepts", tags=["concept-learning"])
 
-# Stage order — never change the order; only append new stages at the end
+# Stage order — append-only; never reorder
 STAGE_ORDER = ["lesson", "checkpoint", "explain", "ai_verification", "ask_ai", "challenge", "verified"]
 
 
@@ -42,12 +41,11 @@ def _now() -> datetime:
 
 # ─── Pydantic request models ──────────────────────────────────────────────────
 
-class SubmitCheckpointRequest(BaseModel):
-    answers: dict[str, str]        # {"0": "A", "1": "B", ...}
-    checkpoint: dict               # The checkpoint data that was shown
-
 class GenerateReteachingRequest(BaseModel):
     missedKeyPoints: list[str] = []
+
+class SubmitCheckpointRequest(BaseModel):
+    answers: dict[str, str]   # {"0": "A", "1": "B", "2": "C"}
 
 class SubmitExplanationRequest(BaseModel):
     explanation: str
@@ -90,14 +88,16 @@ def _stage_index(stage: str) -> int:
 def _require_stage(progress: ConceptProgress, minimum_stage: str, action: str = "this action") -> None:
     """Raise 403 if user has not yet reached minimum_stage."""
     if progress.verified:
-        return  # verified users can re-access anything
+        return
     current_idx = _stage_index(progress.current_stage)
     required_idx = _stage_index(minimum_stage)
     if current_idx < required_idx:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"You must complete '{STAGE_ORDER[required_idx - 1]}' before {action}. "
-                   f"Current stage: '{progress.current_stage}'.",
+            detail=(
+                f"You must complete '{STAGE_ORDER[required_idx - 1]}' before {action}. "
+                f"Current stage: '{progress.current_stage}'."
+            ),
         )
 
 
@@ -108,13 +108,15 @@ def _require_current_stage(progress: ConceptProgress, expected_stage: str, actio
     if progress.current_stage != expected_stage:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"This action requires stage '{expected_stage}'. "
-                   f"Current stage: '{progress.current_stage}'.",
+            detail=(
+                f"This action requires stage '{expected_stage}'. "
+                f"Current stage: '{progress.current_stage}'."
+            ),
         )
 
 
 async def _get_concept_context(db: AsyncSession, concept_id: int):
-    """Load concept, topic, subject or raise 404."""
+    """Load concept + topic + subject or raise 404."""
     result = await db.execute(
         select(Concept, Topic, Subject)
         .join(Topic, Concept.topic_id == Topic.id)
@@ -127,51 +129,40 @@ async def _get_concept_context(db: AsyncSession, concept_id: int):
     return row  # (concept, topic, subject)
 
 
-def _call_gemini(prompt: str, temperature: float = 0.7, json_mode: bool = True) -> dict | str:
-    """Synchronous Gemini call — run in a thread via asyncio.to_thread."""
-    client = genai.Client(api_key=settings.GEMINI_API_KEY)
-    
-    config = types.GenerateContentConfig(
-        temperature=temperature,
-        response_mime_type="application/json" if json_mode else "text/plain",
+async def _build_curriculum_context(db: AsyncSession, concept: Concept, topic: Topic, subject: Subject) -> dict:
+    """Build the full curriculum context dict for AI generation."""
+    # Load learning objectives for this topic
+    obj_result = await db.execute(
+        select(LearningObjective)
+        .where(LearningObjective.topic_id == topic.id)
+        .order_by(LearningObjective.order_index)
     )
-    
-    response = client.models.generate_content(
-        model=settings.GEMINI_MODEL,
-        contents=prompt,
-        config=config,
+    objectives = obj_result.scalars().all()
+
+    # Load misconceptions for this concept (and topic-level ones)
+    misc_result = await db.execute(
+        select(Misconception).where(
+            (Misconception.concept_id == concept.id) |
+            ((Misconception.concept_id.is_(None)) & (Misconception.topic_id == topic.id))
+        )
     )
-    
-    text = response.text.strip()
-    if json_mode:
-        # Strip markdown fences if present
-        if text.startswith("```"):
-            text = text.split("```", 2)[1]
-            if text.startswith("json"):
-                text = text[4:]
-        return json.loads(text)
-    return text
+    misconceptions = misc_result.scalars().all()
 
-
-async def _gemini(prompt: str, temperature: float = 0.7, json_mode: bool = True) -> dict | str:
-    """Async wrapper around Gemini with timeout."""
-    timeout = float(getattr(settings, "AI_REQUEST_TIMEOUT", 60))
-    try:
-        return await asyncio.wait_for(
-            asyncio.to_thread(_call_gemini, prompt, temperature, json_mode),
-            timeout=timeout,
-        )
-    except asyncio.TimeoutError:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="AI request timed out. Please try again.",
-        )
-    except Exception as exc:
-        logger.exception("Gemini error: %s", exc)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="AI is temporarily unavailable. Please try again later.",
-        )
+    return {
+        "subject_name": subject.name,
+        "subject_description": subject.description or "",
+        "topic_name": topic.name,
+        "topic_description": topic.description or "",
+        "topic_difficulty": topic.difficulty or "",
+        "concept_name": concept.name,
+        "concept_explanation": concept.explanation,
+        "key_points": list(concept.key_points or []),
+        "objectives": [o.title for o in objectives],
+        "misconceptions": [
+            {"misconception": m.misconception, "correction": m.correction}
+            for m in misconceptions
+        ],
+    }
 
 
 # ─── 1. GET /concepts/{id}/progress ──────────────────────────────────────────
@@ -182,12 +173,13 @@ async def get_concept_progress(
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Return current progress — creates a fresh record at 'lesson' if none exists."""
+    """Return current progress; creates fresh record at 'lesson' if none exists.
+    Enforces sequential concept unlock: previous concept must be verified first.
+    """
     concept, topic, subject = await _get_concept_context(db, concept_id)
     progress = await _get_or_create_progress(db, current_user.id, concept_id)
 
-    # Check what the previous concept is and whether this one is unlocked
-    # Concepts in a topic are ordered by id (creation order)
+    # Enforce sequential unlock: previous concept must be verified
     all_concepts_result = await db.execute(
         select(Concept).where(Concept.topic_id == concept.topic_id).order_by(Concept.id)
     )
@@ -195,7 +187,6 @@ async def get_concept_progress(
     concept_ids = [c.id for c in all_concepts]
     my_idx = concept_ids.index(concept_id) if concept_id in concept_ids else 0
 
-    # First concept is always accessible; subsequent ones need the previous VERIFIED
     if my_idx > 0:
         prev_id = concept_ids[my_idx - 1]
         prev_result = await db.execute(
@@ -213,8 +204,8 @@ async def get_concept_progress(
     return {
         "ok": True,
         "concept": concept.serialize(),
-        "topic": {"id": topic.id, "name": topic.name},
-        "subject": {"id": subject.id, "name": subject.name},
+        "topic": {"id": topic.id, "name": topic.name, "description": topic.description},
+        "subject": {"id": subject.id, "name": subject.name, "description": subject.description},
         "progress": progress.serialize(),
         "lockedStages": progress.get_locked_stages(),
     }
@@ -228,72 +219,56 @@ async def generate_lesson(
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Generate and save the AI lesson. Allowed at 'lesson' stage only."""
+    """Generate and persist an AI lesson. Returns cached lesson on repeat calls."""
     concept, topic, subject = await _get_concept_context(db, concept_id)
     progress = await _get_or_create_progress(db, current_user.id, concept_id)
     _require_current_stage(progress, "lesson", "generating a lesson")
 
-    # If lesson already generated, return it
+    # Return cached lesson if already generated
     if progress.lesson_content:
-        return {"ok": True, "lesson": progress.lesson_content, "cached": True}
+        return {
+            "ok": True,
+            "lesson": progress.lesson_content,
+            "cached": True,
+            "subject": subject.name,
+            "topic": topic.name,
+            "concept": concept.name,
+        }
 
-    sub_concepts_text = "\n".join(f"- {kp}" for kp in (concept.key_points or []))
+    # Build full curriculum context
+    ctx = await _build_curriculum_context(db, concept, topic, subject)
 
-    prompt = f"""You are an expert teacher creating a focused lesson for students.
+    result = await ai_service.generate_lesson(ctx)
+    if not result["success"]:
+        raise HTTPException(
+            status_code=503,
+            detail=result["error"]["message"],
+        )
 
-Subject: {subject.name}
-Topic: {topic.name}
-Concept: {concept.name}
-
-Concept Explanation:
-{concept.explanation}
-
-Sub-Concepts to cover:
-{sub_concepts_text or "(None listed — teach the concept as a whole)"}
-
-TASK:
-Create a 5-10 minute lesson that teaches this concept clearly and engagingly.
-
-REQUIREMENTS:
-1. Start with a brief introduction
-2. Explain each sub-concept with clear language
-3. Include 1-2 concrete examples or analogies
-4. Keep it focused — do not introduce unrelated concepts
-5. ~300-500 words
-6. This lesson WILL be used verbatim to generate checkpoint questions,
-   so make sure every key point is clearly stated.
-
-Return ONLY valid JSON:
-{{
-  "title": "Lesson title",
-  "introduction": "Brief intro paragraph",
-  "sections": [
-    {{
-      "heading": "Section heading",
-      "content": "Teaching content",
-      "keyPoints": ["point 1", "point 2"]
-    }}
-  ],
-  "examples": [
-    {{
-      "title": "Example 1",
-      "description": "Worked example or analogy"
-    }}
-  ],
-  "summary": "What the student should now understand"
-}}"""
-
-    lesson = await _gemini(prompt, temperature=0.7)
+    lesson = result["lesson"]
     lesson["generatedAt"] = _now().isoformat()
     lesson["conceptId"] = concept_id
+    lesson["aiProvider"] = result["provider"]
 
+    # Save lesson AND curriculum snapshot
     progress.lesson_content = lesson
+    progress.curriculum_snapshot = {
+        k: v for k, v in ctx.items()
+        if k not in ("is_reteach", "missed_points", "previous_lesson")
+    }
     progress.updated_at = _now()
     await db.commit()
     await db.refresh(progress)
 
-    logger.info("Lesson generated: concept=%d user=%d", concept_id, current_user.id)
-    return {"ok": True, "lesson": lesson}
+    logger.info("Lesson generated: concept=%d user=%d provider=%s", concept_id, current_user.id, result["provider"])
+    return {
+        "ok": True,
+        "lesson": lesson,
+        "cached": False,
+        "subject": subject.name,
+        "topic": topic.name,
+        "concept": concept.name,
+    }
 
 
 # ─── 3. POST /concepts/{id}/complete-lesson ──────────────────────────────────
@@ -304,7 +279,7 @@ async def complete_lesson(
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Mark lesson read; advance to 'checkpoint'."""
+    """Mark lesson read; advance to 'checkpoint' stage."""
     await _get_concept_context(db, concept_id)
     progress = await _get_or_create_progress(db, current_user.id, concept_id)
     _require_current_stage(progress, "lesson", "completing the lesson")
@@ -320,7 +295,11 @@ async def complete_lesson(
     await db.refresh(progress)
 
     logger.info("Lesson completed: concept=%d user=%d", concept_id, current_user.id)
-    return {"ok": True, "message": "Lesson completed. Checkpoint unlocked.", "progress": progress.serialize()}
+    return {
+        "ok": True,
+        "message": "Lesson completed. Checkpoint unlocked.",
+        "progress": progress.serialize(),
+    }
 
 
 # ─── 4. POST /concepts/{id}/generate-checkpoint ──────────────────────────────
@@ -331,68 +310,53 @@ async def generate_checkpoint(
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Generate checkpoint questions FROM the saved lesson. Checkpoint stage only."""
+    """Generate and PERSIST checkpoint questions from the saved lesson.
+    
+    Returns cached checkpoint if one was already generated for this stage.
+    After checkpoint_passed, this resets so reteaching creates a new checkpoint.
+    """
     concept, topic, subject = await _get_concept_context(db, concept_id)
     progress = await _get_or_create_progress(db, current_user.id, concept_id)
     _require_current_stage(progress, "checkpoint", "generating a checkpoint")
 
-    # CRITICAL: lesson_content MUST exist — do not fall back to concept name
     if not progress.lesson_content:
         raise HTTPException(
             status_code=400,
-            detail="No lesson content found. Complete the lesson step first so the "
-                   "checkpoint can be generated from it.",
+            detail="No lesson content found. Complete the lesson step first.",
         )
 
-    # Determine source: use reteaching content if available (after failure)
+    # Return cached checkpoint if already generated (and not yet passed)
+    if progress.checkpoint_data and not progress.checkpoint_passed:
+        return {"ok": True, "checkpoint": progress.checkpoint_data, "cached": True}
+
+    # Choose source: reteaching content takes priority after a failed attempt
     source_lesson = progress.reteaching_content or progress.lesson_content
     source_label = "reteaching lesson" if progress.reteaching_content else "original lesson"
 
-    lesson_json = json.dumps(source_lesson, indent=2)
+    result = await ai_service.generate_checkpoint(
+        lesson=source_lesson,
+        concept_name=concept.name,
+        subject_name=subject.name,
+        topic_name=topic.name,
+        source_label=source_label,
+    )
+    if not result["success"]:
+        raise HTTPException(status_code=503, detail=result["error"]["message"])
 
-    prompt = f"""You are creating a checkpoint to test what a student learned in a specific lesson.
-
-Subject: {subject.name}
-Topic: {topic.name}
-Concept: {concept.name}
-
-THE {source_label.upper()} THAT WAS TAUGHT:
-{lesson_json}
-
-CRITICAL REQUIREMENTS:
-- Generate exactly 3 multiple-choice questions
-- Questions MUST test ONLY content that appears in the lesson above
-- Do NOT ask about anything not covered in the lesson
-- Do NOT assume prior knowledge beyond what the lesson taught
-- Each question must have exactly 4 options: A, B, C, D
-- correctAnswer must be exactly "A", "B", "C", or "D"
-- testsKeyPoint: quote the specific sentence or key point from the lesson this tests
-
-Return ONLY valid JSON:
-{{
-  "questions": [
-    {{
-      "question": "Question text",
-      "type": "multiple_choice",
-      "options": {{"A": "option text", "B": "option text", "C": "option text", "D": "option text"}},
-      "correctAnswer": "A",
-      "explanation": "Why A is correct and others are not",
-      "difficulty": "easy"|"medium"|"hard",
-      "testsKeyPoint": "exact key point from lesson"
-    }}
-  ],
-  "passingScore": 67,
-  "sourceLesson": "{source_label}"
-}}"""
-
-    checkpoint = await _gemini(prompt, temperature=0.3)
+    checkpoint = result["checkpoint"]
     checkpoint["generatedAt"] = _now().isoformat()
     checkpoint["basedOnLesson"] = True
     checkpoint["sourceLessonType"] = source_label
+    checkpoint["aiProvider"] = result["provider"]
 
-    logger.info("Checkpoint generated: concept=%d user=%d source=%s",
-                concept_id, current_user.id, source_label)
-    return {"ok": True, "checkpoint": checkpoint}
+    # PERSIST checkpoint so page refresh works
+    progress.checkpoint_data = checkpoint
+    progress.updated_at = _now()
+    await db.commit()
+    await db.refresh(progress)
+
+    logger.info("Checkpoint generated: concept=%d user=%d source=%s", concept_id, current_user.id, source_label)
+    return {"ok": True, "checkpoint": checkpoint, "cached": False}
 
 
 # ─── 5. POST /concepts/{id}/submit-checkpoint ────────────────────────────────
@@ -404,16 +368,26 @@ async def submit_checkpoint(
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Evaluate checkpoint answers. Pass → explain; Fail → reteach."""
+    """Evaluate checkpoint answers against the persisted checkpoint_data.
+    Pass (≥67%) → advance to 'explain'. Fail → increment reteaching_count.
+    """
     await _get_concept_context(db, concept_id)
     progress = await _get_or_create_progress(db, current_user.id, concept_id)
     _require_current_stage(progress, "checkpoint", "submitting checkpoint answers")
 
-    questions = body.checkpoint.get("questions", [])
-    passing_score = body.checkpoint.get("passingScore", 67)
+    # Use persisted checkpoint_data — do not trust client-submitted questions
+    checkpoint = progress.checkpoint_data
+    if not checkpoint:
+        raise HTTPException(
+            status_code=400,
+            detail="No checkpoint found. Generate a checkpoint first.",
+        )
+
+    questions = checkpoint.get("questions", [])
+    passing_score = checkpoint.get("passingScore", 67)
 
     if not questions:
-        raise HTTPException(status_code=400, detail="Checkpoint data is empty.")
+        raise HTTPException(status_code=400, detail="Checkpoint has no questions.")
 
     results = []
     correct_count = 0
@@ -434,6 +408,7 @@ async def submit_checkpoint(
             "question": q.get("question"),
             "userAnswer": user_ans,
             "correctAnswer": correct_ans,
+            "correctAnswerText": q.get("options", {}).get(correct_ans, correct_ans),
             "isCorrect": is_correct,
             "explanation": q.get("explanation"),
         })
@@ -447,8 +422,9 @@ async def submit_checkpoint(
         "results": results,
         "score": score,
         "passed": passed,
+        "missedKeyPoints": list(dict.fromkeys(missed_key_points)),
         "checkpointMeta": {
-            "sourceLessonType": body.checkpoint.get("sourceLessonType", "original"),
+            "sourceLessonType": checkpoint.get("sourceLessonType", "original"),
             "passingScore": passing_score,
         },
     }
@@ -457,29 +433,34 @@ async def submit_checkpoint(
     if passed:
         progress.checkpoint_passed = True
         progress.checkpoint_passed_at = _now()
-        # Clear any reteaching content so next checkpoint uses original lesson
+        # Clear reteaching + checkpoint_data so the next reteach cycle gets fresh questions
         progress.reteaching_content = None
+        progress.checkpoint_data = None
         progress.current_stage = "explain"
         progress.updated_at = _now()
         await db.commit()
         await db.refresh(progress)
         logger.info("Checkpoint passed: concept=%d user=%d score=%d", concept_id, current_user.id, score)
         return {
-            "ok": True, "passed": True, "score": score, "results": results,
+            "ok": True, "passed": True, "score": score,
+            "results": results,
             "message": "Checkpoint passed! Explain It unlocked.",
             "progress": progress.serialize(),
         }
     else:
         progress.reteaching_count = (progress.reteaching_count or 0) + 1
+        # Clear cached checkpoint so new reteaching generates fresh questions
+        progress.checkpoint_data = None
         progress.updated_at = _now()
         await db.commit()
         await db.refresh(progress)
         logger.info("Checkpoint failed: concept=%d user=%d score=%d", concept_id, current_user.id, score)
         return {
-            "ok": True, "passed": False, "score": score, "results": results,
+            "ok": True, "passed": False, "score": score,
+            "results": results,
             "message": f"Score {score}% — need {passing_score}% to pass.",
             "needsReteaching": True,
-            "missedKeyPoints": list(dict.fromkeys(missed_key_points)),  # deduplicated, ordered
+            "missedKeyPoints": list(dict.fromkeys(missed_key_points)),
             "attemptNumber": len(progress.checkpoint_attempts),
         }
 
@@ -493,9 +474,8 @@ async def generate_reteaching(
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Generate a simpler, focused re-lesson for the points the student missed.
-    Saved reteaching_content will be used as the source for the NEXT checkpoint.
+    """Generate a focused reteaching lesson for the points the student missed.
+    Saved reteaching_content becomes the source for the NEXT checkpoint.
     """
     concept, topic, subject = await _get_concept_context(db, concept_id)
     progress = await _get_or_create_progress(db, current_user.id, concept_id)
@@ -506,55 +486,21 @@ async def generate_reteaching(
     if not progress.checkpoint_attempts:
         raise HTTPException(status_code=400, detail="No checkpoint attempt found to reteach from.")
 
-    missed_text = "\n".join(f"- {p}" for p in body.missedKeyPoints) or "(general difficulty with the concept)"
-    original_lesson = json.dumps(progress.lesson_content, indent=2)
+    # Build curriculum context with reteach-specific fields
+    ctx = await _build_curriculum_context(db, concept, topic, subject)
+    ctx["is_reteach"] = True
+    ctx["missed_points"] = body.missedKeyPoints
+    ctx["previous_lesson"] = progress.lesson_content
 
-    prompt = f"""A student failed a checkpoint on this concept. Create a simpler, focused reteaching lesson.
+    result = await ai_service.generate_reteaching(ctx)
+    if not result["success"]:
+        raise HTTPException(status_code=503, detail=result["error"]["message"])
 
-Subject: {subject.name}
-Topic: {topic.name}
-Concept: {concept.name}
-
-ORIGINAL LESSON:
-{original_lesson}
-
-WHAT THE STUDENT STRUGGLED WITH:
-{missed_text}
-
-TASK: Create a shorter, simpler lesson (200-300 words) that:
-1. Focuses ONLY on the missed points
-2. Uses different, simpler examples than the original
-3. Breaks difficult parts into smaller steps
-4. Uses plain language
-5. MUST cover the content clearly so a new checkpoint from this lesson can be answered
-
-This new lesson content will become the source for a fresh checkpoint.
-Make the content testable — every key point should be clearly stated.
-
-Return valid JSON:
-{{
-  "title": "Let's revisit this together",
-  "introduction": "Short, encouraging intro",
-  "sections": [
-    {{
-      "heading": "Section heading",
-      "content": "Simpler explanation",
-      "keyPoints": ["simplified key point"]
-    }}
-  ],
-  "examples": [
-    {{
-      "title": "A new example",
-      "description": "Concrete, relatable example"
-    }}
-  ],
-  "summary": "What to remember"
-}}"""
-
-    reteaching = await _gemini(prompt, temperature=0.7)
+    reteaching = result["lesson"]
     reteaching["generatedAt"] = _now().isoformat()
     reteaching["isReteaching"] = True
     reteaching["attemptNumber"] = progress.reteaching_count
+    reteaching["aiProvider"] = result["provider"]
 
     progress.reteaching_content = reteaching
     progress.updated_at = _now()
@@ -575,7 +521,7 @@ async def submit_explanation(
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Submit the student's explanation; AI verifies conceptual understanding."""
+    """Submit student explanation; AI evaluates conceptual understanding."""
     concept, topic, subject = await _get_concept_context(db, concept_id)
     progress = await _get_or_create_progress(db, current_user.id, concept_id)
     _require_current_stage(progress, "explain", "submitting an explanation")
@@ -586,36 +532,40 @@ async def submit_explanation(
     if not body.explanation or len(body.explanation.strip()) < 20:
         raise HTTPException(status_code=400, detail="Explanation is too short.")
 
-    # Build context for AI verifier
-    misconceptions_result = await db.execute(
-        select(Misconception).where(Misconception.concept_id == concept_id)
+    # Load misconceptions and objectives for AI context
+    misc_result = await db.execute(
+        select(Misconception).where(
+            (Misconception.concept_id == concept_id) |
+            ((Misconception.concept_id.is_(None)) & (Misconception.topic_id == topic.id))
+        )
     )
-    misconceptions = misconceptions_result.scalars().all()
+    misconceptions = misc_result.scalars().all()
 
-    objectives_result = await db.execute(
-        select(LearningObjective).where(LearningObjective.topic_id == topic.id)
+    obj_result = await db.execute(
+        select(LearningObjective)
+        .where(LearningObjective.topic_id == topic.id)
+        .order_by(LearningObjective.order_index)
     )
-    objectives = objectives_result.scalars().all()
+    objectives = obj_result.scalars().all()
 
     concepts_ctx = [{"name": concept.name, "explanation": concept.explanation, "keyPoints": concept.key_points or []}]
-    misconceptions_ctx = [{"misconception": m.misconception, "correction": m.correction} for m in misconceptions]
-    objectives_ctx = [{"title": o.title, "description": o.description} for o in objectives]
-    previous_attempts = [{"response": a.get("explanation", "")} for a in (progress.explanation_attempts or [])]
+    misc_ctx = [{"misconception": m.misconception, "correction": m.correction} for m in misconceptions]
+    obj_ctx = [{"title": o.title, "description": o.description} for o in objectives]
+    prev_attempts = [{"response": a.get("explanation", "")} for a in (progress.explanation_attempts or [])]
 
-    try:
-        ai_result = await verify_explanation(
-            student_response=body.explanation,
-            topic_name=topic.name,
-            subject_name=subject.name,
-            activity_prompt="Explain this concept in your own words",
-            concepts=concepts_ctx,
-            misconceptions=misconceptions_ctx,
-            learning_objectives=objectives_ctx,
-            previous_attempts=previous_attempts,
-        )
-    except Exception as exc:
-        logger.exception("verify_explanation failed: %s", exc)
-        # Save explanation as pending — AI unavailable path
+    ai_result = await ai_service.verify_explanation(
+        student_response=body.explanation,
+        topic_name=topic.name,
+        subject_name=subject.name,
+        activity_prompt="Explain this concept in your own words",
+        concepts=concepts_ctx,
+        misconceptions=misc_ctx,
+        learning_objectives=obj_ctx,
+        previous_attempts=prev_attempts,
+    )
+
+    # AI unavailable path — save as pending
+    if not ai_result.get("success"):
         attempt_record = {
             "timestamp": _now().isoformat(),
             "explanation": body.explanation,
@@ -628,8 +578,10 @@ async def submit_explanation(
         return {
             "ok": False,
             "aiUnavailable": True,
-            "message": "AI verification is temporarily unavailable. Your response has been saved. "
-                       "You can continue and return to this activity later.",
+            "message": (
+                "AI verification is temporarily unavailable. "
+                "Your response has been saved. You can try again or continue."
+            ),
         }
 
     attempt_record = {
@@ -639,10 +591,11 @@ async def submit_explanation(
     }
     progress.explanation_attempts = list(progress.explanation_attempts or []) + [attempt_record]
 
-    result_data = ai_result.get("result", {}) if ai_result.get("success") else {}
+    result_data = ai_result.get("result", {})
     verdict = result_data.get("verdict", "incorrect")
     demonstrated = result_data.get("demonstrated_understanding", False)
-    passed = verdict == "correct" and demonstrated
+    # Pass if verdict is "correct" or "partial" with demonstrated understanding
+    passed = (verdict == "correct" and demonstrated) or (verdict == "partial" and demonstrated)
 
     if passed:
         progress.explanation_passed = True
@@ -655,22 +608,26 @@ async def submit_explanation(
         progress.updated_at = _now()
         await db.commit()
         await db.refresh(progress)
-        logger.info("Explanation verified: concept=%d user=%d", concept_id, current_user.id)
+        logger.info("Explanation verified: concept=%d user=%d verdict=%s", concept_id, current_user.id, verdict)
         return {
-            "ok": True, "passed": True, "verdict": verdict,
+            "ok": True, "passed": True,
+            "verdict": verdict,
             "aiResult": result_data,
             "message": "Great explanation! You're now eligible for the Challenge.",
             "progress": progress.serialize(),
         }
     else:
+        progress.ai_verification_result = result_data
         progress.updated_at = _now()
         await db.commit()
         await db.refresh(progress)
         return {
-            "ok": True, "passed": False, "verdict": verdict,
+            "ok": True, "passed": False,
+            "verdict": verdict,
             "aiResult": result_data,
             "shouldRetry": result_data.get("should_retry", True),
             "message": "Your explanation needs more detail. Review the feedback and try again.",
+            "progress": progress.serialize(),
         }
 
 
@@ -691,46 +648,30 @@ async def ask_ai_question(
     if not body.question or len(body.question.strip()) < 3:
         raise HTTPException(status_code=400, detail="Question is too short.")
 
-    key_points_text = "\n".join(f"- {kp}" for kp in (concept.key_points or []))
-    lesson_text = json.dumps(progress.lesson_content or {}, indent=2)
+    ctx = {
+        "concept_name": concept.name,
+        "subject_name": subject.name,
+        "topic_name": topic.name,
+        "concept_explanation": concept.explanation,
+        "key_points": list(concept.key_points or []),
+        "lesson_content": progress.lesson_content,
+    }
 
-    prompt = f"""You are a helpful tutor for a student studying this concept.
+    result = await ai_service.ask_concept_question(body.question.strip(), ctx)
 
-Subject: {subject.name}
-Topic: {topic.name}
-Concept: {concept.name}
-
-Concept Explanation:
-{concept.explanation}
-
-Key Points:
-{key_points_text}
-
-What was taught in the lesson:
-{lesson_text}
-
-RULES:
-1. Answer ONLY based on the curriculum content above
-2. Do NOT introduce concepts from future lessons
-3. Keep answers clear, concise, student-friendly (max 200 words)
-4. If the question is completely outside the concept scope, redirect politely
-
-Student's question: "{body.question.strip()}"
-
-Answer:"""
-
-    answer = await _gemini(prompt, temperature=0.7, json_mode=False)
+    if not result["success"]:
+        raise HTTPException(status_code=503, detail=result["error"]["message"])
 
     qa_entry = {
         "timestamp": _now().isoformat(),
         "question": body.question,
-        "answer": answer,
+        "answer": result["answer"],
     }
     progress.ask_ai_questions = list(progress.ask_ai_questions or []) + [qa_entry]
     progress.updated_at = _now()
     await db.commit()
 
-    return {"ok": True, "answer": answer, "question": body.question}
+    return {"ok": True, "answer": result["answer"], "question": body.question}
 
 
 # ─── 9. POST /concepts/{id}/verify-concept ───────────────────────────────────
@@ -743,7 +684,7 @@ async def verify_concept(
     current_user: User = Depends(get_current_user),
 ):
     """Mark concept VERIFIED after a successful Challenge. Unlocks next concept."""
-    concept, topic, _ = await _get_concept_context(db, concept_id)
+    await _get_concept_context(db, concept_id)
     progress = await _get_or_create_progress(db, current_user.id, concept_id)
 
     if not progress.challenge_eligible:
@@ -777,10 +718,8 @@ async def challenge_failed(
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Called when a student fails a Challenge.
-    Resets back to checkpoint stage for reteaching.
-    Does NOT lock them out — they can retry.
+    """Called when a student fails a Challenge.
+    Resets back to checkpoint stage. Does NOT permanently block the student.
     """
     await _get_concept_context(db, concept_id)
     progress = await _get_or_create_progress(db, current_user.id, concept_id)
@@ -788,9 +727,10 @@ async def challenge_failed(
     if not progress.challenge_eligible:
         raise HTTPException(status_code=403, detail="No active challenge found.")
 
-    # Reset to checkpoint to go through reteach → new checkpoint → explain → challenge
+    # Reset to checkpoint for the full reteach → checkpoint → explain → challenge cycle
     progress.checkpoint_passed = False
     progress.checkpoint_passed_at = None
+    progress.checkpoint_data = None
     progress.explanation_passed = False
     progress.explanation_passed_at = None
     progress.ai_verification_passed = False
@@ -821,25 +761,21 @@ async def get_concept_history(
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """Full learning history for this concept."""
+    """Return full learning history for a concept."""
     await _get_concept_context(db, concept_id)
     progress = await _get_or_create_progress(db, current_user.id, concept_id)
-    return {"ok": True, "history": progress.serialize()}
+    return {"ok": True, "progress": progress.serialize()}
 
 
-# ─── 12. GET /topics/{topic_id}/concepts-with-progress ───────────────────────
+# ─── 12. GET /topic/{topic_id}/concepts ──────────────────────────────────────
 
 @router.get("/topic/{topic_id}/concepts")
-async def get_topic_concepts_with_progress(
+async def list_topic_concepts(
     topic_id: int,
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Returns all concepts for a topic with the user's lock/progress state.
-    Used by the Topic page to render concept cards with correct states.
-    """
-    # Load topic + subject
+    """Return all concepts in a topic with lock/progress state per user."""
     topic_result = await db.execute(
         select(Topic, Subject)
         .join(Subject, Topic.subject_id == Subject.id)
@@ -850,66 +786,38 @@ async def get_topic_concepts_with_progress(
         raise HTTPException(status_code=404, detail="Topic not found.")
     topic, subject = topic_row
 
-    # Load all concepts ordered by id (creation order = curriculum order)
     concepts_result = await db.execute(
         select(Concept).where(Concept.topic_id == topic_id).order_by(Concept.id)
     )
     concepts = concepts_result.scalars().all()
 
-    # Load all progress records for this user in one query
-    if concepts:
-        concept_ids = [c.id for c in concepts]
-        progress_result = await db.execute(
-            select(ConceptProgress)
-            .where(ConceptProgress.user_id == current_user.id)
-            .where(ConceptProgress.concept_id.in_(concept_ids))
+    # Fetch all progress records for this user in this topic
+    concept_ids = [c.id for c in concepts]
+    progress_result = await db.execute(
+        select(ConceptProgress)
+        .where(ConceptProgress.user_id == current_user.id)
+        .where(ConceptProgress.concept_id.in_(concept_ids))
+    )
+    progress_map = {p.concept_id: p for p in progress_result.scalars().all()}
+
+    result = []
+    for i, concept in enumerate(concepts):
+        prog = progress_map.get(concept.id)
+        is_locked = i > 0 and not (
+            progress_map.get(concepts[i - 1].id) and
+            progress_map[concepts[i - 1].id].verified
         )
-        progress_map: dict[int, ConceptProgress] = {
-            p.concept_id: p for p in progress_result.scalars().all()
-        }
-    else:
-        progress_map = {}
-
-    # Build concept list with lock state
-    concept_list = []
-    for i, c in enumerate(concepts):
-        prog = progress_map.get(c.id)
-
-        # Lock logic: first concept always unlocked; nth concept requires (n-1) verified
-        if i == 0:
-            is_locked = False
-        else:
-            prev = progress_map.get(concepts[i - 1].id)
-            is_locked = not (prev and prev.verified)
-
-        # Determine display status
-        if prog and prog.verified:
-            display_status = "verified"
-        elif prog and prog.current_stage not in (None, "lesson") and not is_locked:
-            display_status = "in_progress"
-        elif not is_locked:
-            display_status = "available"
-        else:
-            display_status = "locked"
-
-        concept_list.append({
-            **c.serialize(),
+        result.append({
+            "concept": concept.serialize(),
+            "progress": prog.serialize() if prog else None,
             "isLocked": is_locked,
-            "displayStatus": display_status,
-            "currentStage": prog.current_stage if prog else None,
-            "verified": prog.verified if prog else False,
-            "challengeEligible": prog.challenge_eligible if prog else False,
+            "isVerified": bool(prog and prog.verified),
+            "inProgress": bool(prog and not prog.verified and prog.lesson_completed),
         })
-
-    total = len(concept_list)
-    verified_count = sum(1 for c in concept_list if c["verified"])
 
     return {
         "ok": True,
         "topic": topic.serialize(),
-        "subject": {"id": subject.id, "name": subject.name},
-        "concepts": concept_list,
-        "totalConcepts": total,
-        "verifiedConcepts": verified_count,
-        "progressPct": int((verified_count / total) * 100) if total else 0,
+        "subject": subject.serialize(),
+        "concepts": result,
     }

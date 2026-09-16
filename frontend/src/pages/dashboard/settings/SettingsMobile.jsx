@@ -163,13 +163,13 @@ export default function SettingsMobile() {
       {/* ── Logout Confirmation Dialog ── */}
       <ConfirmDialog
         open={logoutOpen}
-        onClose={() => setLogoutOpen(false)}
+        onCancel={() => !loggingOut && setLogoutOpen(false)}
         onConfirm={handleLogout}
         title="Logout"
         message="Are you sure you want to logout?"
-        confirmText={loggingOut ? "Logging out..." : "Logout"}
+        confirmText="Logout"
+        loading={loggingOut}
         danger
-        disabled={loggingOut}
       />
     </div>
   );

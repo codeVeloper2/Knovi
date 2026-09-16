@@ -53,9 +53,14 @@ class ConceptProgress(Base):
     
     # AI-generated lesson content (saved for checkpoint generation)
     lesson_content:        Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    # Snapshot of curriculum context used to generate lesson (for traceability)
+    curriculum_snapshot:   Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     lesson_completed:      Mapped[bool]          = mapped_column(Boolean, default=False, nullable=False)
     lesson_completed_at:   Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     
+    # Cached checkpoint questions (persisted so page refresh doesn't lose questions)
+    checkpoint_data:       Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+
     # Checkpoint attempts (array of {questions, answers, score, passed, timestamp})
     checkpoint_attempts:   Mapped[list]          = mapped_column(JSONB, default=list, nullable=False)
     checkpoint_passed:     Mapped[bool]          = mapped_column(Boolean, default=False, nullable=False)
@@ -103,8 +108,10 @@ class ConceptProgress(Base):
             "conceptId": self.concept_id,
             "currentStage": self.current_stage,
             "lessonContent": self.lesson_content,
+            "curriculumSnapshot": self.curriculum_snapshot,
             "lessonCompleted": self.lesson_completed,
             "lessonCompletedAt": self.lesson_completed_at.isoformat() if self.lesson_completed_at else None,
+            "checkpointData": self.checkpoint_data,
             "checkpointAttempts": self.checkpoint_attempts or [],
             "checkpointPassed": self.checkpoint_passed,
             "checkpointPassedAt": self.checkpoint_passed_at.isoformat() if self.checkpoint_passed_at else None,

@@ -1,143 +1,119 @@
-// Simple inline icon components
-const CheckCircle = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <circle cx="12" cy="12" r="10" />
-    <path d="m9 12 2 2 4-4" />
-  </svg>
-);
-
-const XCircle = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <circle cx="12" cy="12" r="10" />
-    <path d="m15 9-6 6m0-6 6 6" />
-  </svg>
-);
-
-const AlertCircle = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <circle cx="12" cy="12" r="10" />
-    <line x1="12" y1="8" x2="12" y2="12" />
-    <line x1="12" y1="16" x2="12.01" y2="16" />
-  </svg>
-);
-
 /**
- * VerificationStage — Display AI verification results
+ * VerificationStage — Passive display of AI verification results.
+ * The actual verification happens inside ExplainStage.
+ * This stage just shows the stored result and indicates next steps.
  */
-export default function VerificationStage({ conceptId, progress }) {
-  if (!progress?.aiVerificationResult) {
+
+function IconCheck() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <path d="m5 12 5 5L20 7" />
+    </svg>
+  );
+}
+function IconX() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <path d="m18 6-12 12M6 6l12 12" />
+    </svg>
+  );
+}
+function IconPartial() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <circle cx="12" cy="12" r="10" /><path d="M12 6v6" /><path d="M12 16h.01" />
+    </svg>
+  );
+}
+
+export default function VerificationStage({ progress }) {
+  const result = progress?.aiVerificationResult;
+  const passed = progress?.aiVerificationPassed;
+
+  if (!result) {
     return (
-      <div className="verification-stage">
-        <div className="verification-waiting">
-          <AlertCircle size={48} className="verification-icon" />
+      <div className="vr-stage">
+        <div className="vr-waiting">
+          <div className="vr-wait-icon">🤖</div>
           <h2>Waiting for Verification</h2>
-          <p>Submit your explanation in the Explain It stage to receive AI feedback.</p>
+          <p>Submit your explanation in the <strong>Explain It</strong> stage to receive AI feedback here.</p>
         </div>
       </div>
     );
   }
 
-  const result = progress.aiVerificationResult;
-  const passed = result.verdict === "correct" && result.demonstrated_understanding;
+  const verdict = result.verdict;
+  const score = result.score;
 
   return (
-    <div className="verification-stage">
-      <div className="verification-result">
-        <div className={`verification-header ${passed ? 'passed' : 'failed'}`}>
-          {passed ? (
-            <>
-              <CheckCircle size={48} />
-              <h2>Understanding Verified!</h2>
-              <p className="verification-score">Score: {result.score}/100</p>
-            </>
-          ) : (
-            <>
-              <XCircle size={48} />
-              <h2>Needs Improvement</h2>
-              <p className="verification-score">Score: {result.score}/100</p>
-            </>
+    <div className="vr-stage">
+      {/* Result header */}
+      <div className={`vr-result-header vr-result-${verdict}`}>
+        <div className="vr-result-icon">
+          {passed ? <IconCheck /> : verdict === "partial" ? <IconPartial /> : <IconX />}
+        </div>
+        <div>
+          <h2 className="vr-result-title">
+            {passed ? "Understanding Verified" : verdict === "partial" ? "Partially Understood" : "Needs More Detail"}
+          </h2>
+          {score != null && (
+            <div className="vr-score">Score: {score}/100</div>
           )}
         </div>
+      </div>
 
-        {/* Feedback */}
-        <div className="verification-feedback">
-          <h3>AI Feedback:</h3>
-          <p className="feedback-text">{result.feedback}</p>
+      {/* Feedback */}
+      {result.feedback && (
+        <div className="vr-feedback">
+          <div className="vr-section-label">AI Feedback</div>
+          <p>{result.feedback}</p>
         </div>
+      )}
 
-        {/* Correct Points */}
-        {result.correct_points && result.correct_points.length > 0 && (
-          <div className="points-section correct-points">
-            <h4>✓ What You Got Right:</h4>
-            <ul>
-              {result.correct_points.map((point, idx) => (
-                <li key={idx}>{point}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Missing Points */}
-        {result.missing_points && result.missing_points.length > 0 && (
-          <div className="points-section missing-points">
-            <h4>⚠ What's Missing:</h4>
-            <ul>
-              {result.missing_points.map((point, idx) => (
-                <li key={idx}>{point}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Incorrect Points */}
-        {result.incorrect_points && result.incorrect_points.length > 0 && (
-          <div className="points-section incorrect-points">
-            <h4>✗ Needs Correction:</h4>
-            <ul>
-              {result.incorrect_points.map((point, idx) => (
-                <li key={idx}>{point}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Misconceptions */}
-        {result.misconceptions_detected && result.misconceptions_detected.length > 0 && (
-          <div className="points-section misconceptions">
-            <h4>Common Misconceptions Detected:</h4>
-            {result.misconceptions_detected.map((misc, idx) => (
-              <div key={idx} className="misconception-item">
-                <p><strong>Misconception:</strong> {misc.name}</p>
-                <p><strong>Correction:</strong> {misc.correction}</p>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Hint for retry */}
-        {result.hint && !passed && (
-          <div className="verification-hint">
-            <h4>Hint:</h4>
-            <p>{result.hint}</p>
-          </div>
-        )}
-
-        {/* Next steps */}
-        <div className="verification-actions">
-          {passed ? (
-            <div className="success-message">
-              <p>You're ready for the Challenge! You can now ask AI questions or proceed to find a peer partner.</p>
-            </div>
-          ) : result.should_retry ? (
-            <div className="retry-message">
-              <p>Go back to Explain It and try again with the feedback provided.</p>
-            </div>
-          ) : (
-            <div className="reteach-message">
-              <p>Consider reviewing the lesson again before retrying your explanation.</p>
-            </div>
-          )}
+      {/* Breakdown */}
+      {result.correct_points?.length > 0 && (
+        <div className="vr-points vr-points-good">
+          <div className="vr-section-label">✓ What you got right</div>
+          <ul>{result.correct_points.map((p, i) => <li key={i}>{p}</li>)}</ul>
         </div>
+      )}
+      {result.missing_points?.length > 0 && (
+        <div className="vr-points vr-points-miss">
+          <div className="vr-section-label">◉ What's missing</div>
+          <ul>{result.missing_points.map((p, i) => <li key={i}>{p}</li>)}</ul>
+        </div>
+      )}
+      {result.incorrect_points?.length > 0 && (
+        <div className="vr-points vr-points-wrong">
+          <div className="vr-section-label">✗ Needs correction</div>
+          <ul>{result.incorrect_points.map((p, i) => <li key={i}>{p}</li>)}</ul>
+        </div>
+      )}
+      {result.misconceptions_detected?.length > 0 && (
+        <div className="vr-misc">
+          <div className="vr-section-label">⚠ Misconceptions detected</div>
+          {result.misconceptions_detected.map((m, i) => (
+            <div key={i} className="vr-misc-item">
+              <p><strong>Misconception:</strong> {m.name}</p>
+              <p><strong>Correction:</strong> {m.correction}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Next steps */}
+      <div className="vr-next">
+        {passed ? (
+          <div className="vr-next-pass">
+            <IconCheck />
+            <p>You're ready for the Challenge! Proceed to Ask AI or find a Challenge partner.</p>
+          </div>
+        ) : (
+          <div className="vr-next-retry">
+            <p>Go back to <strong>Explain It</strong> and try again using the feedback above.</p>
+            {result.hint && <div className="vr-hint"><strong>Hint:</strong> {result.hint}</div>}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,65 +1,69 @@
+/**
+ * CheckpointStage — 3-question MCQ checkpoint.
+ *
+ * Key fixes vs old version:
+ *  - options are a plain object {A,B,C,D} — iterate with Object.entries()
+ *  - checkpoint is loaded from backend (cached in DB) — no client-side passing back
+ *  - submit only sends answers dict; backend uses its own cached checkpoint
+ *  - polished UI: one question at a time, animated transitions
+ */
 import { useState, useEffect } from "react";
 import * as api from "../../api";
 
-// Simple inline icon components
-const Loader = () => (
-  <svg className="animate-spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <circle cx="12" cy="12" r="10" opacity="0.25" />
-    <path d="M12 2a10 10 0 0 1 10 10" opacity="0.75" />
-  </svg>
-);
+// ─── Icons ────────────────────────────────────────────────────────────────────
 
-const CheckCircle = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <circle cx="12" cy="12" r="10" />
-    <path d="m9 12 2 2 4-4" />
-  </svg>
-);
+function IconSpinner() {
+  return (
+    <svg className="ls-spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="12" cy="12" r="10" strokeOpacity="0.2" />
+      <path d="M12 2a10 10 0 0 1 10 10" />
+    </svg>
+  );
+}
+function IconCheck() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <path d="m5 12 5 5L20 7" />
+    </svg>
+  );
+}
+function IconX() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <path d="m18 6-12 12M6 6l12 12" />
+    </svg>
+  );
+}
+function IconArrow() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  );
+}
 
-const XCircle = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <circle cx="12" cy="12" r="10" />
-    <path d="m15 9-6 6m0-6 6 6" />
-  </svg>
-);
+const OPTION_LABELS = ["A", "B", "C", "D"];
 
-const AlertCircle = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <circle cx="12" cy="12" r="10" />
-    <line x1="12" y1="8" x2="12" y2="12" />
-    <line x1="12" y1="16" x2="12.01" y2="16" />
-  </svg>
-);
-
-/**
- * CheckpointStage — Test understanding with questions generated from the lesson
- */
 export default function CheckpointStage({ conceptId, progress, onComplete }) {
-  const [loading, setLoading] = useState(false);
-  const [checkpoint, setCheckpoint] = useState(null);
-  const [answers, setAnswers] = useState({});
-  const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
-  const [reteaching, setReteaching] = useState(null);
+  const [loading, setLoading]           = useState(false);
+  const [checkpoint, setCheckpoint]     = useState(null);
+  const [currentQ, setCurrentQ]         = useState(0);
+  const [answers, setAnswers]           = useState({});
+  const [submitting, setSubmitting]     = useState(false);
+  const [result, setResult]             = useState(null);
+  const [reteaching, setReteaching]     = useState(null);
   const [loadingReteach, setLoadingReteach] = useState(false);
+  const [error, setError]               = useState(null);
 
+  // Load checkpoint from backend (uses cached checkpoint_data if available)
   useEffect(() => {
-    // Check if checkpoint already attempted
-    if (progress?.checkpointAttempts && progress.checkpointAttempts.length > 0) {
-      const lastAttempt = progress.checkpointAttempts[progress.checkpointAttempts.length - 1];
-      if (lastAttempt.checkpoint) {
-        setCheckpoint(lastAttempt.checkpoint);
-      }
-      if (!progress.checkpointPassed) {
-        setResult({
-          passed: false,
-          score: lastAttempt.score,
-          results: lastAttempt.results,
-          needsReteaching: true,
-          missedKeyPoints: lastAttempt.missedKeyPoints || [],
-        });
-      }
+    // If already passed, show nothing (parent handles stage nav)
+    if (progress?.checkpointPassed) return;
+
+    // If we have cached checkpoint in progress, use it
+    if (progress?.checkpointData) {
+      setCheckpoint(progress.checkpointData);
+      return;
     }
   }, [progress]);
 
@@ -67,301 +71,253 @@ export default function CheckpointStage({ conceptId, progress, onComplete }) {
     try {
       setLoading(true);
       setError(null);
-
-      const response = await api.post(`/api/v1/concepts/${conceptId}/generate-checkpoint`);
-      
-      if (!response.ok) {
-        throw new Error(response.message || "Failed to generate checkpoint");
-      }
-
-      setCheckpoint(response.checkpoint);
+      const res = await api.conceptGenerateCheckpoint(conceptId);
+      if (!res.ok && !res.checkpoint) throw new Error(res.detail || "Failed to generate checkpoint");
+      setCheckpoint(res.checkpoint);
+      setCurrentQ(0);
       setAnswers({});
       setResult(null);
     } catch (err) {
-      console.error("Error generating checkpoint:", err);
-      setError(err.message || "Failed to generate checkpoint. Please try again.");
+      setError(err.message || "Checkpoint couldn't be generated. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAnswerChange = (questionIndex, value) => {
-    setAnswers(prev => ({
-      ...prev,
-      [questionIndex]: value,
-    }));
+  const handleSelectAnswer = (letter) => {
+    setAnswers(prev => ({ ...prev, [String(currentQ)]: letter }));
+  };
+
+  const handleNextQuestion = () => {
+    const questions = checkpoint?.questions || [];
+    if (currentQ < questions.length - 1) {
+      setCurrentQ(i => i + 1);
+    }
   };
 
   const handleSubmit = async () => {
     try {
       setSubmitting(true);
       setError(null);
-
-      const response = await api.post(`/api/v1/concepts/${conceptId}/submit-checkpoint`, {
-        answers,
-        checkpoint: checkpoint,
-      });
-      
-      if (!response.ok) {
-        throw new Error(response.message || "Failed to submit checkpoint");
-      }
-
-      setResult(response);
-
-      if (response.passed && onComplete) {
-        // Refresh progress to unlock explain stage
-        await onComplete();
+      const res = await api.conceptSubmitCheckpoint(conceptId, { answers });
+      if (res.passed) {
+        setResult(res);
+        if (onComplete) await onComplete();
+      } else {
+        setResult(res);
       }
     } catch (err) {
-      console.error("Error submitting checkpoint:", err);
-      setError(err.message || "Failed to submit checkpoint. Please try again.");
+      setError(err.message || "Failed to submit. Please try again.");
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleGenerateReteaching = async () => {
-    if (!result?.missedKeyPoints || result.missedKeyPoints.length === 0) {
-      return;
-    }
-
+    const missed = result?.missedKeyPoints || [];
     try {
       setLoadingReteach(true);
       setError(null);
-
-      const response = await api.post(`/api/v1/concepts/${conceptId}/generate-reteaching`, {
-        missedKeyPoints: result.missedKeyPoints,
-      });
-      
-      if (!response.ok) {
-        throw new Error(response.message || "Failed to generate reteaching");
-      }
-
-      setReteaching(response.reteaching);
+      const res = await api.conceptGenerateReteaching(conceptId, { missedKeyPoints: missed });
+      if (!res.ok && !res.reteaching) throw new Error(res.detail || "Failed to generate review");
+      setReteaching(res.reteaching);
     } catch (err) {
-      console.error("Error generating reteaching:", err);
-      setError(err.message || "Failed to generate reteaching. Please try again.");
+      setError(err.message || "Couldn't generate review. Please try again.");
     } finally {
       setLoadingReteach(false);
     }
   };
 
-  const handleRetry = () => {
+  const handleRetry = async () => {
     setResult(null);
-    setAnswers({});
     setReteaching(null);
-    handleGenerateCheckpoint();
+    setAnswers({});
+    setCurrentQ(0);
+    setCheckpoint(null);
+    await handleGenerateCheckpoint();
   };
 
-  // If checkpoint not generated yet
+  // ── No checkpoint yet ──
   if (!checkpoint) {
     return (
-      <div className="checkpoint-stage">
-        <div className="checkpoint-intro">
-          <AlertCircle size={48} className="checkpoint-intro-icon" />
-          <h2>Ready for Checkpoint?</h2>
-          <p>
-            Answer a few questions to test your understanding of the lesson.
-            The questions are based on what you just learned.
+      <div className="cp-stage">
+        <div className="cp-intro">
+          <div className="cp-intro-icon">✓</div>
+          <h2 className="cp-intro-title">Ready for the Checkpoint?</h2>
+          <p className="cp-intro-desc">
+            Answer 3 questions to test what you understood from the lesson.
+            Questions are based only on what you just learned.
           </p>
-          
-          {error && (
-            <div className="error-message">
-              <p>{error}</p>
-            </div>
-          )}
-
-          <button
-            onClick={handleGenerateCheckpoint}
-            disabled={loading}
-            className="btn-primary btn-large"
-          >
-            {loading ? (
-              <>
-                <Loader className="spinner" size={20} />
-                Generating Questions...
-              </>
-            ) : (
-              "Start Checkpoint"
-            )}
+          {error && <div className="cp-error"><p>{error}</p></div>}
+          <button className="ls-btn-primary ls-btn-large" onClick={handleGenerateCheckpoint} disabled={loading}>
+            {loading ? <><IconSpinner /> Preparing Questions…</> : "Start Checkpoint"}
           </button>
         </div>
       </div>
     );
   }
 
-  // Show results if submitted
+  const questions = checkpoint.questions || [];
+  const q = questions[currentQ];
+  const totalQ = questions.length;
+  const currentAnswer = answers[String(currentQ)];
+  const allAnswered = questions.every((_, i) => answers[String(i)]);
+
+  // ── Results screen ──
   if (result) {
-    return (
-      <div className="checkpoint-stage">
-        <div className="checkpoint-result">
-          <div className={`result-header ${result.passed ? 'passed' : 'failed'}`}>
-            {result.passed ? (
-              <>
-                <CheckCircle size={48} />
-                <h2>Checkpoint Passed!</h2>
-                <p className="result-score">Score: {result.score}%</p>
-              </>
+    const { passed, score, results: qResults, missedKeyPoints } = result;
+
+    // Show reteaching content if available
+    if (!passed && reteaching) {
+      const rBlocks = reteaching.blocks || [];
+      return (
+        <div className="cp-stage">
+          <div className="cp-reteach-header">
+            <div className="cp-reteach-badge">Re-learning</div>
+            <h2>{reteaching.title || "Let's revisit this together"}</h2>
+            <p>Focused on the areas you found difficult.</p>
+          </div>
+          <div className="cp-reteach-content">
+            {/* Render reteaching blocks */}
+            {rBlocks.length > 0 ? (
+              rBlocks.map((block, i) => {
+                const { LessonBlock } = require("./LessonBlocks");
+                return <LessonBlock key={i} block={block} />;
+              })
             ) : (
+              // Fallback for old reteaching format
               <>
-                <XCircle size={48} />
-                <h2>Checkpoint Not Passed</h2>
-                <p className="result-score">Score: {result.score}%</p>
-                <p>You need to review some concepts before moving forward.</p>
+                {reteaching.introduction && <p className="cp-reteach-intro">{reteaching.introduction}</p>}
+                {(reteaching.sections || []).map((s, i) => (
+                  <div key={i} className="cp-reteach-section">
+                    {s.heading && <h4>{s.heading}</h4>}
+                    <p>{s.content}</p>
+                  </div>
+                ))}
               </>
             )}
           </div>
+          {error && <div className="cp-error"><p>{error}</p></div>}
+          <button className="ls-btn-primary ls-btn-large" onClick={handleRetry}>
+            Try Checkpoint Again
+          </button>
+        </div>
+      );
+    }
 
-          {/* Show detailed results */}
-          <div className="checkpoint-results-list">
-            <h3>Your Answers:</h3>
-            {result.results && result.results.map((r, idx) => (
-              <div key={idx} className={`result-item ${r.isCorrect ? 'correct' : 'incorrect'}`}>
-                <div className="result-question">
-                  <strong>Q{idx + 1}:</strong> {r.question}
-                </div>
-                <div className="result-answer">
-                  <span className="label">Your answer:</span> {r.userAnswer || "(No answer)"}
-                </div>
-                {!r.isCorrect && (
-                  <div className="result-correct-answer">
-                    <span className="label">Correct answer:</span> {r.correctAnswer}
-                  </div>
-                )}
-                {r.explanation && (
-                  <div className="result-explanation">
-                    <span className="label">Explanation:</span> {r.explanation}
-                  </div>
-                )}
+    return (
+      <div className="cp-stage">
+        <div className={`cp-result-header ${passed ? "cp-result-pass" : "cp-result-fail"}`}>
+          <div className="cp-result-icon">
+            {passed ? <IconCheck /> : <IconX />}
+          </div>
+          <h2>{passed ? "Checkpoint Passed!" : "Not Quite There"}</h2>
+          <div className="cp-result-score">{score}%</div>
+          <p>{passed ? "Great work! Proceed to Explain It." : `You need ${checkpoint.passingScore || 67}% to pass.`}</p>
+        </div>
+
+        {/* Per-question breakdown */}
+        <div className="cp-results-list">
+          {(qResults || []).map((r, i) => (
+            <div key={i} className={`cp-result-item ${r.isCorrect ? "cp-ri-correct" : "cp-ri-wrong"}`}>
+              <div className="cp-ri-header">
+                <span className="cp-ri-icon">{r.isCorrect ? <IconCheck /> : <IconX />}</span>
+                <span className="cp-ri-q">Q{i + 1}: {r.question}</span>
               </div>
-            ))}
-          </div>
-
-          {/* Actions */}
-          {result.passed ? (
-            <div className="checkpoint-actions">
-              <p className="success-message">Proceed to the Explain It stage!</p>
-            </div>
-          ) : (
-            <div className="checkpoint-actions">
-              {!reteaching ? (
-                <>
-                  <p className="hint-message">
-                    Let's review the concepts you struggled with and try again.
-                  </p>
-                  <button
-                    onClick={handleGenerateReteaching}
-                    disabled={loadingReteach}
-                    className="btn-primary"
-                  >
-                    {loadingReteach ? (
-                      <>
-                        <Loader className="spinner" size={20} />
-                        Generating Review...
-                      </>
-                    ) : (
-                      "Review and Retry"
-                    )}
-                  </button>
-                </>
-              ) : (
-                <div className="reteaching-content">
-                  <h3>{reteaching.title}</h3>
-                  <p>{reteaching.introduction}</p>
-                  
-                  {reteaching.sections && reteaching.sections.map((section, idx) => (
-                    <div key={idx} className="reteach-section">
-                      <h4>{section.heading}</h4>
-                      <p>{section.content}</p>
-                    </div>
-                  ))}
-
-                  <button onClick={handleRetry} className="btn-primary">
-                    Try Checkpoint Again
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // Show checkpoint questions
-  const questions = checkpoint.questions || [];
-  const allAnswered = questions.every((_, idx) => answers[idx] && answers[idx].trim() !== '');
-
-  return (
-    <div className="checkpoint-stage">
-      <div className="checkpoint-questions">
-        <div className="checkpoint-header">
-          <h2>Checkpoint Questions</h2>
-          <p>Answer all questions to test your understanding.</p>
-        </div>
-
-        {error && (
-          <div className="error-message">
-            <p>{error}</p>
-          </div>
-        )}
-
-        <div className="questions-list">
-          {questions.map((q, idx) => (
-            <div key={idx} className="question-item">
-              <div className="question-number">Question {idx + 1}</div>
-              <div className="question-text">{q.question}</div>
-
-              {q.type === 'multiple_choice' ? (
-                <div className="question-options">
-                  {q.options && q.options.map((option, oidx) => (
-                    <label key={oidx} className="option-label">
-                      <input
-                        type="radio"
-                        name={`question-${idx}`}
-                        value={option}
-                        checked={answers[idx] === option}
-                        onChange={(e) => handleAnswerChange(idx, e.target.value)}
-                      />
-                      <span>{option}</span>
-                    </label>
-                  ))}
-                </div>
-              ) : (
-                <div className="question-input">
-                  <input
-                    type="text"
-                    placeholder="Type your answer..."
-                    value={answers[idx] || ''}
-                    onChange={(e) => handleAnswerChange(idx, e.target.value)}
-                    className="answer-input"
-                  />
+              {!r.isCorrect && (
+                <div className="cp-ri-detail">
+                  <span className="cp-ri-yours">Your answer: <strong>{r.userAnswer || "—"}</strong></span>
+                  <span className="cp-ri-correct-ans">Correct: <strong>{r.correctAnswer} — {r.correctAnswerText || ""}</strong></span>
+                  {r.explanation && <p className="cp-ri-explain">{r.explanation}</p>}
                 </div>
               )}
             </div>
           ))}
         </div>
 
-        <div className="checkpoint-actions">
-          <button
-            onClick={handleSubmit}
-            disabled={submitting || !allAnswered}
-            className="btn-primary btn-large"
-          >
-            {submitting ? (
-              <>
-                <Loader className="spinner" size={20} />
-                Submitting...
-              </>
-            ) : (
-              "Submit Answers"
-            )}
-          </button>
-          {!allAnswered && (
-            <p className="hint-text">Please answer all questions before submitting.</p>
-          )}
+        {error && <div className="cp-error"><p>{error}</p></div>}
+
+        {!passed && !reteaching && (
+          <div className="cp-fail-actions">
+            <p className="cp-fail-hint">Let's review what you found difficult, then try again.</p>
+            <button className="ls-btn-primary" onClick={handleGenerateReteaching} disabled={loadingReteach}>
+              {loadingReteach ? <><IconSpinner /> Generating Review…</> : "Review & Retry"}
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Active question ──
+  const optionEntries = q?.options ? Object.entries(q.options).filter(([k]) => OPTION_LABELS.includes(k)) : [];
+
+  return (
+    <div className="cp-stage">
+      {/* Header */}
+      <div className="cp-header">
+        <div className="cp-header-top">
+          <span className="cp-header-label">Checkpoint</span>
+          <span className="cp-q-counter">Question {currentQ + 1} of {totalQ}</span>
+        </div>
+        <div className="cp-q-progress">
+          {questions.map((_, i) => (
+            <div key={i} className={`cp-q-dot ${i < currentQ ? "cp-qd-done" : i === currentQ ? "cp-qd-active" : ""}`} />
+          ))}
         </div>
       </div>
+
+      {/* Question */}
+      <div className="cp-question-card">
+        <p className="cp-question-text">{q?.question}</p>
+        <div className="cp-options">
+          {optionEntries.map(([letter, text]) => {
+            const selected = currentAnswer === letter;
+            return (
+              <button
+                key={letter}
+                className={`cp-option ${selected ? "cp-option-selected" : ""}`}
+                onClick={() => handleSelectAnswer(letter)}
+                disabled={submitting}
+              >
+                <span className={`cp-option-letter ${selected ? "cp-ol-selected" : ""}`}>{letter}</span>
+                <span className="cp-option-text">{text}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {error && <div className="cp-error"><p>{error}</p></div>}
+
+      {/* Nav */}
+      <div className="cp-nav">
+        {currentQ < totalQ - 1 ? (
+          <button
+            className="ls-btn-primary"
+            onClick={handleNextQuestion}
+            disabled={!currentAnswer}
+          >
+            Next <IconArrow />
+          </button>
+        ) : (
+          <button
+            className="ls-btn-primary"
+            onClick={handleSubmit}
+            disabled={submitting || !allAnswered}
+          >
+            {submitting ? <><IconSpinner /> Checking…</> : "Submit Answers"}
+          </button>
+        )}
+        {currentQ > 0 && (
+          <button className="ls-btn-ghost" onClick={() => setCurrentQ(i => i - 1)} disabled={submitting}>
+            ← Back
+          </button>
+        )}
+      </div>
+      {!currentAnswer && (
+        <p className="cp-hint-text">Select an answer to continue.</p>
+      )}
     </div>
   );
 }

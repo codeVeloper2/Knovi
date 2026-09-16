@@ -368,7 +368,7 @@ function EmojiPickerPortal({ anchor, onPick, onClose }) {
 // ─────────────────────────────────────────────────────────────────
 // Message Bubble
 // ─────────────────────────────────────────────────────────────────
-function MessageBubble({ msg, myId, partnerName, partnerUrl, onDelete, onReport, onReact, onReply }) {
+function MessageBubble({ msg, myId, partnerName, partnerUrl, onDelete, onReport, onReact, onReply, onLightbox }) {
   const mine = msg.senderId === myId;
   const [showPicker, setShowPicker] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
