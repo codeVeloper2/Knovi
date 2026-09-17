@@ -1,3 +1,7 @@
+
+/* AI Learning System */
+@import "./styles/ai-learn.css";
+
 /* ═══════════════════════════════════════
    PEERUP — Dark Navy Tech Theme
    ═══════════════════════════════════════ */
@@ -17248,6 +17252,3 @@ kbd {
   .ls-footer-actions { justify-content: flex-end; }
 }
 
-
-/* AI Learning System */
-@import "./styles/ai-learn.css";

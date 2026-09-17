@@ -442,6 +442,9 @@ export const adminMakeStudent = (userId) => request(`/api/admin/users/${userId}/
 export const getSubjects           = ()         => request("/api/subjects",                          { auth: true });
 export const getSubject            = (id)       => request(`/api/subjects/${id}`,                    { auth: true });
 export const getSubjectTopics      = (id)       => request(`/api/subjects/${id}/topics`,             { auth: true });
+export const getTopics             = (subjectId) => request(`/api/subjects/${subjectId}/topics`, { auth: true });
+export const getConcepts           = (topicId)   => request(`/api/topics/${topicId}/concepts`, { auth: true });
+export const getConcept            = (conceptId) => request(`/api/concepts/${conceptId}`, { auth: true });
 export const getTopic              = (id)       => request(`/api/topics/${id}`,                      { auth: true });
 export const getTopicObjectives    = (id)       => request(`/api/topics/${id}/objectives`,           { auth: true });
 export const getTopicConcepts      = (id)       => request(`/api/topics/${id}/concepts`,             { auth: true });
@@ -468,6 +471,36 @@ export function createLearningSession(subjectId, topicId, conceptId, familiarity
     intent,
     custom_intent_text: customIntentText,
   });
+}
+
+// ── AI Learning ──────────────────────────────────────────────────────────────
+
+export function getAISessions() {
+  return listLearningSessions();
+}
+
+export function getAISession(sessionId) {
+  return getLearningSession(sessionId);
+}
+
+export function createAISession({ conceptId, currentKnowledge, studentContext }) {
+  return post("/api/learning/sessions", {
+    concept_id: conceptId,
+    current_knowledge: currentKnowledge,
+    student_context: studentContext,
+  });
+}
+
+export function getSessionMessages(sessionId) {
+  return get(`/api/learning/sessions/${sessionId}/messages`);
+}
+
+export function completeAISession(sessionId) {
+  return completeLearningSession(sessionId);
+}
+
+export function generateAdaptiveReteach(sessionId) {
+  return requestReteach(sessionId);
 }
 
 export function getLearningSession(sessionId) {

@@ -1,202 +1,211 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import * as api from "../../api";
-
-const FAMILIARITY_OPTIONS = [
-  { value: "new", label: "Completely new", desc: "I've never encountered this before" },
-  { value: "seen_before", label: "Seen it before", desc: "I've heard of it but don't really understand" },
-  { value: "know_basics", label: "Know the basics", desc: "I understand the fundamentals" },
-  { value: "know_well", label: "Know it well", desc: "I'm confident with this concept" },
-  { value: "need_help", label: "Need specific help", desc: "I have a particular question" },
-];
-
-const INTENT_OPTIONS = [
-  { value: "teach_me", label: "Teach me", desc: "Start from the beginning" },
-  { value: "already_know", label: "I already know", desc: "Just check my understanding" },
-  { value: "explain_simply", label: "Explain simply", desc: "Make it easy to understand" },
-  { value: "give_examples", label: "Give me examples", desc: "Show me how it works" },
-  { value: "broaden", label: "Broaden my knowledge", desc: "Show me connections and applications" },
-  { value: "go_deeper", label: "Go deeper", desc: "I want advanced understanding" },
-  { value: "quiz_me", label: "Quiz me", desc: "Test what I know" },
-  { value: "custom", label: "Custom", desc: "I'll tell you what I need" },
-];
 
 export default function AISessionSetup() {
   const { subjectId, topicId, conceptId } = useParams();
   const navigate = useNavigate();
-
-  const [concept, setConcept] = useState(null);
-  const [topic, setTopic] = useState(null);
-  const [subject, setSubject] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [concept, setConcept] = useState(null);
+  const [familiarity, setFamiliarity] = useState("");
+  const [additionalContext, setAdditionalContext] = useState("");
   const [creating, setCreating] = useState(false);
-  const [error, setError] = useState("");
-
-  const [familiarity, setFamiliarity] = useState("new");
-  const [intent, setIntent] = useState("teach_me");
-  const [studentNote, setStudentNote] = useState("");
-  const [customIntentText, setCustomIntentText] = useState("");
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [sessionId, setSessionId] = useState(null);
 
   useEffect(() => {
-    const sid = parseInt(subjectId, 10);
-    const tid = parseInt(topicId, 10);
-    const cid = parseInt(conceptId, 10);
-
-    Promise.all([
-      api.getSubjectById(sid),
-      api.getTopicById(tid),
-      api.getConceptById(cid),
-    ])
-      .then(([subj, top, conc]) => {
-        setSubject(subj);
-        setTopic(top);
-        setConcept(conc);
+    api.getConcept(conceptId)
+      .then(con => {
+        setConcept(con);
+        setLoading(false);
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [subjectId, topicId, conceptId]);
+      .catch(() => setLoading(false));
+  }, [conceptId]);
 
-  const handleStart = async () => {
-    if (creating) return;
+  async function handleStartSession() {
+    if (!familiarity) return;
     setCreating(true);
-    setError("");
-
     try {
-      const session = await api.createLearningSession(
-        parseInt(subjectId, 10),
-        parseInt(topicId, 10),
-        parseInt(conceptId, 10),
-        familiarity,
-        intent,
-        studentNote || null,
-        customIntentText || null
-      );
-      navigate(`/app/learn/ai/session/${session.id}`);
+      const session = await api.createAISession({
+        conceptId: parseInt(conceptId),
+        currentKnowledge: familiarity,
+        studentContext: additionalContext.trim() || undefined,
+      });
+      setSessionId(session.id);
+      setShowWelcome(true);
     } catch (err) {
-      setError(err.message);
+      alert(err.message || "Failed to create session");
       setCreating(false);
     }
-  };
+  }
+
+  function handleEnterRoom() {
+    if (sessionId) {
+      navigate(`/app/learn/ai/session/${sessionId}`);
+    }
+  }
 
   if (loading) {
     return (
-      <div className="ai-session-setup">
-        <div className="ai-learn-container">
-          <div className="loading-spinner">Loading...</div>
+      <div className="ai-learn-page">
+        <div className="ai-setup-container">
+          <div className="skeleton skeleton-text" style={{ width: "250px", height: "28px" }} />
+          <div className="skeleton skeleton-text" style={{ width: "400px", height: "18px", marginTop: "8px" }} />
         </div>
       </div>
     );
   }
 
-  if (!concept || !topic || !subject) {
+  if (!concept) {
     return (
-      <div className="ai-session-setup">
-        <div className="ai-learn-container">
-          <div className="error-banner">Concept, topic, or subject not found.</div>
-          <button className="ai-btn-secondary" onClick={() => navigate("/app/learn/ai")}>
-            Back to Learn Home
+      <div className="ai-learn-page">
+        <div className="ai-empty-state">
+          <p className="ai-empty-text">Concept not found.</p>
+          <button className="ai-btn-secondary" onClick={() => navigate(`/app/learn/ai/subject/${subjectId}/topic/${topicId}`)}>
+            Back to Topic
           </button>
         </div>
       </div>
     );
   }
 
+  if (showWelcome) {
+    return (
+      <div className="ai-learn-page">
+        <div className="ai-welcome-container">
+          <div className="ai-tutor-mascot-large">
+            <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
+              <circle cx="60" cy="60" r="50" fill="url(#grad2)" />
+              <circle cx="45" cy="50" r="8" fill="#fff" />
+              <circle cx="75" cy="50" r="8" fill="#fff" />
+              <path d="M40 70 Q60 85 80 70" stroke="#fff" strokeWidth="4" strokeLinecap="round" fill="none" />
+              <defs>
+                <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#4f6ef7" />
+                  <stop offset="100%" stopColor="#6366f1" />
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+
+          <div className="ai-welcome-content">
+            <p className="ai-welcome-label">You're learning:</p>
+            <h1 className="ai-welcome-title">{concept.name}</h1>
+            <p className="ai-welcome-meta">{concept.subjectName} · {concept.topicName}</p>
+
+            <div className="ai-welcome-divider" />
+
+            <h2 className="ai-welcome-subtitle">Your AI tutor is ready.</h2>
+            <p className="ai-welcome-text">
+              I'll explain concepts in a way that matches what you already know, then check your understanding as we go.
+            </p>
+            <p className="ai-welcome-text">
+              Be honest with your answers. Your tutor uses your responses to adjust how it teaches you.
+            </p>
+
+            <button className="ai-btn-primary ai-btn-large" onClick={handleEnterRoom} disabled={!sessionId}>
+              Enter Learning Room
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="ai-session-setup">
-      <div className="ai-learn-container">
-        <button
-          className="ai-back-btn"
-          onClick={() =>
-            navigate(`/app/learn/ai/subject/${subjectId}/topic/${topicId}`)
-          }
-        >
-          ← Back
-        </button>
+    <div className="ai-learn-page">
+      <button className="ai-back-btn" onClick={() => navigate(`/app/learn/ai/subject/${subjectId}/topic/${topicId}`)}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <path d="M19 12H5M12 19l-7-7 7-7" />
+        </svg>
+        Back
+      </button>
 
-        <header className="ai-page-header">
-          <span className="ai-breadcrumb">
-            {subject.name} → {topic.name}
-          </span>
-          <h1>{concept.name}</h1>
-          {concept.explanation && (
-            <p className="ai-concept-explanation">{concept.explanation}</p>
-          )}
-        </header>
+      <div className="ai-setup-container">
+        <div className="ai-setup-header">
+          <h1 className="ai-setup-title">{concept.name}</h1>
+          <p className="ai-setup-subtitle">{concept.explanation}</p>
+          <p className="ai-setup-meta">{concept.subjectName} · {concept.topicName}</p>
+        </div>
 
-        {error && <div className="error-banner">{error}</div>}
+        <div className="ai-setup-card">
+          <h2 className="ai-setup-question">How familiar are you with this?</h2>
+          
+          <div className="ai-familiarity-options">
+            <button
+              className={`ai-familiarity-btn ${familiarity === "completely_new" ? "active" : ""}`}
+              onClick={() => setFamiliarity("completely_new")}
+            >
+              <div className="ai-familiarity-icon">🌱</div>
+              <div>
+                <div className="ai-familiarity-label">Completely new</div>
+                <div className="ai-familiarity-desc">Start from the beginning</div>
+              </div>
+            </button>
 
-        <section className="ai-setup-section">
-          <h2>Your Current Knowledge</h2>
-          <p className="ai-setup-hint">Help your AI tutor understand where you're starting from.</p>
-          <div className="ai-radio-group">
-            {FAMILIARITY_OPTIONS.map((opt) => (
-              <label key={opt.value} className="ai-radio-card">
-                <input
-                  type="radio"
-                  name="familiarity"
-                  value={opt.value}
-                  checked={familiarity === opt.value}
-                  onChange={(e) => setFamiliarity(e.target.value)}
-                />
-                <div className="ai-radio-content">
-                  <strong>{opt.label}</strong>
-                  <span>{opt.desc}</span>
-                </div>
-              </label>
-            ))}
+            <button
+              className={`ai-familiarity-btn ${familiarity === "seen_before" ? "active" : ""}`}
+              onClick={() => setFamiliarity("seen_before")}
+            >
+              <div className="ai-familiarity-icon">👀</div>
+              <div>
+                <div className="ai-familiarity-label">Seen it before</div>
+                <div className="ai-familiarity-desc">I've heard about this</div>
+              </div>
+            </button>
+
+            <button
+              className={`ai-familiarity-btn ${familiarity === "understand_basics" ? "active" : ""}`}
+              onClick={() => setFamiliarity("understand_basics")}
+            >
+              <div className="ai-familiarity-icon">📖</div>
+              <div>
+                <div className="ai-familiarity-label">Understand the basics</div>
+                <div className="ai-familiarity-desc">I know some of this</div>
+              </div>
+            </button>
+
+            <button
+              className={`ai-familiarity-btn ${familiarity === "know_well" ? "active" : ""}`}
+              onClick={() => setFamiliarity("know_well")}
+            >
+              <div className="ai-familiarity-icon">✨</div>
+              <div>
+                <div className="ai-familiarity-label">Know it well</div>
+                <div className="ai-familiarity-desc">Just need practice</div>
+              </div>
+            </button>
+
+            <button
+              className={`ai-familiarity-btn ${familiarity === "specific_help" ? "active" : ""}`}
+              onClick={() => setFamiliarity("specific_help")}
+            >
+              <div className="ai-familiarity-icon">🎯</div>
+              <div>
+                <div className="ai-familiarity-label">I need help with something specific</div>
+                <div className="ai-familiarity-desc">Target a particular aspect</div>
+              </div>
+            </button>
           </div>
-        </section>
 
-        <section className="ai-setup-section">
-          <h2>What Do You Want to Do?</h2>
-          <p className="ai-setup-hint">How would you like your tutor to approach this?</p>
-          <div className="ai-radio-group">
-            {INTENT_OPTIONS.map((opt) => (
-              <label key={opt.value} className="ai-radio-card">
-                <input
-                  type="radio"
-                  name="intent"
-                  value={opt.value}
-                  checked={intent === opt.value}
-                  onChange={(e) => setIntent(e.target.value)}
-                />
-                <div className="ai-radio-content">
-                  <strong>{opt.label}</strong>
-                  <span>{opt.desc}</span>
-                </div>
-              </label>
-            ))}
-          </div>
-
-          {intent === "custom" && (
+          <div className="ai-setup-additional">
+            <label className="ai-setup-label">Tell your tutor anything else</label>
             <textarea
-              className="ai-textarea"
-              placeholder="Tell your tutor exactly what you need..."
-              value={customIntentText}
-              onChange={(e) => setCustomIntentText(e.target.value)}
+              className="ai-setup-textarea"
+              placeholder="e.g., I understand force but not acceleration..."
+              value={additionalContext}
+              onChange={e => setAdditionalContext(e.target.value)}
               rows={3}
             />
-          )}
-        </section>
+            <p className="ai-setup-hint">Optional, but helps your tutor adapt to you</p>
+          </div>
 
-        <section className="ai-setup-section">
-          <h2>Anything Else? (Optional)</h2>
-          <textarea
-            className="ai-textarea"
-            placeholder="e.g., 'I struggle with the math part' or 'I need this for an exam tomorrow'"
-            value={studentNote}
-            onChange={(e) => setStudentNote(e.target.value)}
-            rows={3}
-          />
-        </section>
-
-        <div className="ai-setup-actions">
           <button
-            className="ai-btn-primary"
-            onClick={handleStart}
-            disabled={creating || (intent === "custom" && !customIntentText.trim())}
+            className="ai-btn-primary ai-btn-large"
+            onClick={handleStartSession}
+            disabled={!familiarity || creating}
           >
-            {creating ? "Starting..." : "Start Learning"}
+            {creating ? "Creating session..." : "Start AI Session"}
           </button>
         </div>
       </div>

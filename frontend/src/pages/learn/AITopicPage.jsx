@@ -1,33 +1,40 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import * as api from "../../api";
 
 export default function AITopicPage() {
   const { subjectId, topicId } = useParams();
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
   const [topic, setTopic] = useState(null);
   const [concepts, setConcepts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
   useEffect(() => {
     Promise.all([
-      api.getTopicById(parseInt(topicId, 10)),
-      api.getConceptsByTopic(parseInt(topicId, 10)),
+      api.getTopic(topicId),
+      api.getConcepts(topicId),
     ])
-      .then(([t, concs]) => {
-        setTopic(t);
-        setConcepts(concs || []);
+      .then(([top, cons]) => {
+        setTopic(top);
+        setConcepts(cons || []);
+        setLoading(false);
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+      .catch(() => {
+        setLoading(false);
+      });
   }, [topicId]);
 
   if (loading) {
     return (
-      <div className="ai-topic-page">
-        <div className="ai-learn-container">
-          <div className="loading-spinner">Loading concepts...</div>
+      <div className="ai-learn-page">
+        <div className="ai-page-header">
+          <div className="skeleton skeleton-text" style={{ width: "200px", height: "32px" }} />
+          <div className="skeleton skeleton-text" style={{ width: "350px", height: "18px", marginTop: "8px" }} />
+        </div>
+        <div className="ai-concepts-list">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="skeleton skeleton-card" style={{ height: "140px" }} />
+          ))}
         </div>
       </div>
     );
@@ -35,14 +42,11 @@ export default function AITopicPage() {
 
   if (!topic) {
     return (
-      <div className="ai-topic-page">
-        <div className="ai-learn-container">
-          <div className="error-banner">Topic not found.</div>
-          <button
-            className="ai-btn-secondary"
-            onClick={() => navigate(`/app/learn/ai/subject/${subjectId}`)}
-          >
-            Back to Topics
+      <div className="ai-learn-page">
+        <div className="ai-empty-state">
+          <p className="ai-empty-text">Topic not found.</p>
+          <button className="ai-btn-secondary" onClick={() => navigate(`/app/learn/ai/subject/${subjectId}`)}>
+            Back to Subject
           </button>
         </div>
       </div>
@@ -50,64 +54,70 @@ export default function AITopicPage() {
   }
 
   return (
-    <div className="ai-topic-page">
-      <div className="ai-learn-container">
-        <button
-          className="ai-back-btn"
-          onClick={() => navigate(`/app/learn/ai/subject/${subjectId}`)}
-        >
-          ← Back to Topics
-        </button>
+    <div className="ai-learn-page">
+      <button className="ai-back-btn" onClick={() => navigate(`/app/learn/ai/subject/${subjectId}`)}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <path d="M19 12H5M12 19l-7-7 7-7" />
+        </svg>
+        Back
+      </button>
 
-        <header className="ai-page-header">
-          <h1>{topic.name}</h1>
-          {topic.difficulty && (
-            <span className={`ai-topic-difficulty diff-${topic.difficulty}`}>
-              {topic.difficulty}
-            </span>
-          )}
-          {topic.description && <p className="ai-page-desc">{topic.description}</p>}
-        </header>
+      <div className="ai-page-header">
+        <div className="ai-header-left">
+          <div>
+            <div className="ai-breadcrumb">
+              <span className="ai-breadcrumb-link" onClick={() => navigate(`/app/learn/ai/subject/${subjectId}`)}>
+                {topic.subjectName}
+              </span>
+              <span className="ai-breadcrumb-sep">›</span>
+              <span>{topic.name}</span>
+            </div>
+            <h1 className="ai-page-title">{topic.name}</h1>
+            <p className="ai-page-subtitle">{topic.description}</p>
+          </div>
+        </div>
+        <div className={`ai-difficulty-badge difficulty-${topic.difficulty}`}>
+          {topic.difficulty}
+        </div>
+      </div>
 
-        {error && <div className="error-banner">{error}</div>}
-
+      <section className="ai-learn-section">
+        <h2 className="ai-section-title">Concepts</h2>
         {concepts.length === 0 ? (
           <div className="ai-empty-state">
-            <p>No concepts available yet for this topic.</p>
+            <p className="ai-empty-text">No concepts are available for this topic yet.</p>
           </div>
         ) : (
-          <div className="ai-concept-list">
-            {concepts.map((concept) => (
-              <button
+          <div className="ai-concepts-list">
+            {concepts.map(concept => (
+              <div
                 key={concept.id}
                 className="ai-concept-card"
-                onClick={() =>
-                  navigate(
-                    `/app/learn/ai/subject/${subjectId}/topic/${topicId}/concept/${concept.id}`
-                  )
-                }
+                onClick={() => navigate(`/app/learn/ai/subject/${subjectId}/topic/${topicId}/concept/${concept.id}`)}
               >
-                <h3 className="ai-concept-name">{concept.name}</h3>
-                {concept.explanation && (
-                  <p className="ai-concept-preview">
-                    {concept.explanation.substring(0, 150)}
-                    {concept.explanation.length > 150 ? "..." : ""}
-                  </p>
-                )}
-                {concept.keyPoints && concept.keyPoints.length > 0 && (
-                  <div className="ai-concept-points">
-                    {concept.keyPoints.slice(0, 3).map((kp, i) => (
-                      <span key={i} className="ai-key-point">
-                        • {kp}
-                      </span>
-                    ))}
+                <div className="ai-concept-header">
+                  <h3 className="ai-concept-name">{concept.name}</h3>
+                  {concept.learningStatus && (
+                    <span className={`ai-status-dot status-${concept.learningStatus}`} />
+                  )}
+                </div>
+                <p className="ai-concept-explanation">{concept.explanation}</p>
+                {concept.progress !== undefined && (
+                  <div className="ai-concept-progress">
+                    <div className="ai-progress-bar">
+                      <div 
+                        className="ai-progress-fill" 
+                        style={{ width: `${concept.progress}%` }} 
+                      />
+                    </div>
+                    <span className="ai-progress-text">{concept.progress}% complete</span>
                   </div>
                 )}
-              </button>
+              </div>
             ))}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }
