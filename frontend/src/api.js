@@ -452,3 +452,84 @@ export const getTopicLearningContent = (id)     => request(`/api/topics/${id}/le
 
 // ── (Old solo/sync/concept-pipeline/challenge API calls removed in clean reset) ──
 // New AI Learning Session API calls will be added here when the new system is built.
+
+
+// ══════════════════════════════════════════════════════════════
+// AI LEARNING SESSIONS
+// ══════════════════════════════════════════════════════════════
+
+export function createLearningSession(subjectId, topicId, conceptId, familiarity, intent, studentNote = null, customIntentText = null) {
+  return post("/api/learning/sessions", {
+    subject_id: subjectId,
+    topic_id: topicId,
+    concept_id: conceptId,
+    student_familiarity: familiarity,
+    student_note: studentNote,
+    intent,
+    custom_intent_text: customIntentText,
+  });
+}
+
+export function getLearningSession(sessionId) {
+  return get(`/api/learning/sessions/${sessionId}`);
+}
+
+export function listLearningSessions({ status, subjectId, limit = 20, offset = 0 } = {}) {
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  if (subjectId) params.set("subject_id", subjectId);
+  params.set("limit", limit);
+  params.set("offset", offset);
+  return get(`/api/learning/sessions?${params}`);
+}
+
+export function abandonLearningSession(sessionId) {
+  return post(`/api/learning/sessions/${sessionId}/abandon`);
+}
+
+export function completeLearningSession(sessionId) {
+  return post(`/api/learning/sessions/${sessionId}/complete`);
+}
+
+export function teachConcept(sessionId) {
+  return post(`/api/learning/sessions/${sessionId}/teach`);
+}
+
+export function sendStudentMessage(sessionId, content) {
+  return post(`/api/learning/sessions/${sessionId}/message`, { content });
+}
+
+export function startStudyPeriod(sessionId, durationSeconds = 300) {
+  return post(`/api/learning/sessions/${sessionId}/study/start`, { duration_seconds: durationSeconds });
+}
+
+export function finishStudyPeriod(sessionId, studyPeriodId) {
+  return post(`/api/learning/sessions/${sessionId}/study/finish`, { study_period_id: studyPeriodId });
+}
+
+export function generateRetrievalQuestions(sessionId, count = 3) {
+  return post(`/api/learning/sessions/${sessionId}/questions?count=${count}`);
+}
+
+export function submitAnswer(sessionId, questionId, studentAnswer, responseTimeSeconds = null) {
+  return post(`/api/learning/sessions/${sessionId}/answers`, {
+    question_id: questionId,
+    student_answer: studentAnswer,
+    response_time_seconds: responseTimeSeconds,
+  });
+}
+
+export function requestReteach(sessionId, reason = null) {
+  return post(`/api/learning/sessions/${sessionId}/reteach`, { reason });
+}
+
+export function generateSessionSummary(sessionId) {
+  return post(`/api/learning/sessions/${sessionId}/summary`);
+}
+
+export function recordIntegrityEvent(sessionId, eventType, meta = null) {
+  return post(`/api/learning/sessions/${sessionId}/integrity`, {
+    event_type: eventType,
+    meta,
+  });
+}

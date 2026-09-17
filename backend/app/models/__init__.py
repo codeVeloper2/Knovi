@@ -12,14 +12,32 @@ from app.models.curriculum import (
     LearningActivity, Question, Resource,
     TopicProgress, ResourceDownload,
 )
+from app.models.ai_learning import (
+    AILearningSession,
+    AISessionMessage,
+    AISessionTeaching,
+    AISessionStudyPeriod,
+    AISessionQuestion,
+    AISessionAnswer,
+    AISessionTeachingAttempt,
+    AISessionIntegrityEvent,
+    AISessionSummary,
+)
 
 __all__ = [
+    # Auth / social
     "User", "Conversation", "Message", "MatchRequest",
+    # Legacy video learn
     "Course", "Lesson", "Tutorial", "VideoProgress",
     "CourseEnrollment", "SavedContent", "LearnComment",
+    # Progress / gamification
     "EarnedBadge", "Certificate",
     # Curriculum
     "Subject", "Topic", "LearningObjective", "Concept", "Misconception",
     "LearningActivity", "Question", "Resource",
     "TopicProgress", "ResourceDownload",
+    # AI Learning Sessions
+    "AILearningSession", "AISessionMessage", "AISessionTeaching",
+    "AISessionStudyPeriod", "AISessionQuestion", "AISessionAnswer",
+    "AISessionTeachingAttempt", "AISessionIntegrityEvent", "AISessionSummary",
 ]

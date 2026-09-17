@@ -44,6 +44,13 @@ import TutorialDetailPage from "./pages/learn/TutorialDetailPage";
 import CreateTutorialPage from "./pages/learn/CreateTutorialPage";
 import MyTutorialsPage from "./pages/learn/MyTutorialsPage";
 
+// ── AI Learning pages ──
+import AILearnHome from "./pages/learn/AILearnHome";
+import AISubjectPage from "./pages/learn/AISubjectPage";
+import AITopicPage from "./pages/learn/AITopicPage";
+import AISessionSetup from "./pages/learn/AISessionSetup";
+import AILearningRoom from "./pages/learn/AILearningRoom";
+
 // On mobile shows the settings card list; on desktop redirects to /profile
 function SettingsIndex() {
   const isMobile = window.innerWidth <= 820;
@@ -81,6 +88,15 @@ function AppRoutes() {
           <Route path="tutorials/:tutorialId" element={<TutorialDetailPage />} />
           <Route path="create"                element={<CreateTutorialPage />} />
           <Route path="my-tutorials"          element={<MyTutorialsPage />} />
+        </Route>
+
+        {/* ── AI Learning ── */}
+        <Route path="learn/ai">
+          <Route index element={<AILearnHome />} />
+          <Route path="subject/:subjectId" element={<AISubjectPage />} />
+          <Route path="subject/:subjectId/topic/:topicId" element={<AITopicPage />} />
+          <Route path="subject/:subjectId/topic/:topicId/concept/:conceptId" element={<AISessionSetup />} />
+          <Route path="session/:sessionId" element={<AILearningRoom />} />
         </Route>
 
         {/* ── Progress & Settings ── */}

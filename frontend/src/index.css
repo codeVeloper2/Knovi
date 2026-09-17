@@ -17247,3 +17247,7 @@ kbd {
   .ls-lesson-footer { flex-direction: column; align-items: stretch; }
   .ls-footer-actions { justify-content: flex-end; }
 }
+
+
+/* AI Learning System */
+@import "./styles/ai-learn.css";
