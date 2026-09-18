@@ -147,14 +147,6 @@ export default function LearnLayout() {
             </NavLink>
           ))}
         </nav>
-
-        <div className="learn-sidebar-helper">
-          <SparkleRobot />
-          <div className="learn-helper-copy">
-            <strong>Need help?</strong>
-            <p>I'm your AI tutor. Ask me anything about your studies!</p>
-          </div>
-        </div>
       </aside>
 
       <div className="learn-main">

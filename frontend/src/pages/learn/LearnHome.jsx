@@ -338,59 +338,6 @@ export default function LearnHome() {
         </section>
 
         <aside className="learn-right-rail">
-          <section className="learn-panel learn-progress-panel">
-            <button type="button" className="learn-panel-close" aria-label="Close progress panel">×</button>
-            <h2>Your Learning Progress</h2>
-
-            <div className="learn-overall-progress">
-              <ProgressRing percent={displayPercent} />
-              <div>
-                <strong>Overall Progress</strong>
-                <span>{completedSessions.length} of {sessions.length} AI sessions completed</span>
-              </div>
-            </div>
-
-            <div className="learn-progress-list">
-              {subjectProgress.map(({ subject, completed, total }, index) => (
-                <ProgressSubject
-                  key={subject.id}
-                  subject={subject}
-                  completed={completed}
-                  total={total}
-                  meta={iconMeta(subject.name, index)}
-                />
-              ))}
-              {subjectProgress.length === 0 && (
-                <div className="learn-progress-empty">Start your first AI learning session to see progress here.</div>
-              )}
-            </div>
-          </section>
-
-          <section className="learn-panel learn-quick-panel">
-            <h2>Quick Actions</h2>
-
-            <button type="button" className="learn-quick-action" onClick={() => focusSession ? navigate(`/app/learn/ai/session/${focusSession.id}`) : navigate("/app/learn")}>
-              <span className="learn-quick-icon play"><QuickIcon type="play" /></span>
-              <span>
-                <strong>{focusSession ? "Continue Learning" : "Start Learning"}</strong>
-                <small>{focusSession ? statusLabel(focusSession.status) : "Choose a subject to begin"}</small>
-              </span>
-              <Arrow />
-            </button>
-
-            <button type="button" className="learn-quick-action" onClick={() => navigate("/app/learn/saved")}>
-              <span className="learn-quick-icon doc"><QuickIcon type="doc" /></span>
-              <span><strong>Browse Resources</strong><small>Notes, videos, and materials</small></span>
-              <Arrow />
-            </button>
-
-            <button type="button" className="learn-quick-action" onClick={() => navigate("/app/learn/path")}>
-              <span className="learn-quick-icon path"><QuickIcon type="path" /></span>
-              <span><strong>View Learning Path</strong><small>Recommended journey through your subjects</small></span>
-              <Arrow />
-            </button>
-          </section>
-
           <section className="learn-panel learn-robot-card">
             <div className="learn-robot-card-art"><RobotArt /></div>
             <div>

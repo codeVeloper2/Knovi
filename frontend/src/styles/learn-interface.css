@@ -1008,6 +1008,7 @@
 }
 .dash--learn .desktop-subbar { display: none !important; }
 
+/* Shell fills exactly the remaining height below topbar — no extra gap */
 @media (min-width: 821px) {
   .dash-main--learn .learn-shell {
     min-height: calc(100vh - 58px);
