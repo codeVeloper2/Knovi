@@ -1,25 +1,37 @@
-# PeerUp — Project Record
+# PeerUP — Project Reference
 
-A single-file reference you can hand to any AI (or your future self) to get full
-context on this project fast. Last updated: 2026-09-08.
+A concise single-file reference describing the current state of the project.
+Last updated: September 2026.
 
 ---
 
-## 1. What PeerUp is
+## 1. What PeerUP is
 
-A student-first learning community where students find study partners, chat,
-join study rooms, and track progress. Tagline: **Learn. Teach. Grow.**
+A student-first learning community where students learn from AI and from each other.
+Tagline: **Learn. Teach. Grow.**
+
+Two pillars:
+- **AI Learning** — a student works through a concept with an adaptive AI tutor
+- **Peer Learning** — students connect, match on subjects, and chat to learn together
+
+---
 
 ## 2. Tech stack
 
-| Layer     | Tech |
-|-----------|------|
-| Frontend  | React + Vite (JavaScript, `.jsx`), React Router, plain CSS (`index.css`) |
-| Backend   | FastAPI (Python), async SQLAlchemy 2.x, psycopg 3 (binary) |
-| Database  | PostgreSQL, hosted on **Supabase** (pooler connection) |
-| Storage   | **Supabase Storage** (public `avatars` bucket) — for profile photos |
-| Auth      | Custom JWT issued by the backend; **Firebase** used ONLY to verify Google sign-in tokens |
-| Email     | SMTP (Gmail) via Python `smtplib` |
+| Layer      | Tech |
+|------------|------|
+| Frontend   | React + Vite (JavaScript, `.jsx`), React Router, plain CSS |
+| Backend    | FastAPI (Python), async SQLAlchemy 2.x, psycopg 3 (binary) |
+| Database   | PostgreSQL hosted on Supabase |
+| Storage    | Supabase Storage (`avatars` bucket — profile photos) |
+| Auth       | Custom JWT issued by backend; Firebase used only to verify Google sign-in tokens |
+| Email      | SMTP (Gmail) via Python `smtplib` |
+| AI Primary | Google Gemini (via `google-genai` SDK) |
+| AI Fallback| Groq |
+| Frontend hosting | Cloudflare Pages |
+| Backend hosting  | Railway |
+
+---
 
 ## 3. Repository layout
 
@@ -27,30 +39,82 @@ join study rooms, and track progress. Tagline: **Learn. Teach. Grow.**
 PeerUP/
 ├─ backend/
 │  ├─ app/
-│  │  ├─ api/v1/        # route handlers: auth, profile, users, match, chat, ai
-│  │  ├─ core/          # config.py, database.py, security.py, dependencies.py
-│  │  ├─ models/        # SQLAlchemy models (user.py)
-│  │  ├─ schemas/       # Pydantic request/response schemas (auth.py, profile.py)
-│  │  ├─ services/      # business logic: auth_service, email_service,
-│  │  │                 #   storage_service, match_service, ai_service
-│  │  └─ main.py        # FastAPI app; mounts routers under /api
-│  ├─ run.py            # dev entry point (see "Running" below)
+│  │  ├─ api/v1/
+│  │  │  ├─ auth.py               # Authentication
+│  │  │  ├─ profile.py            # User profile management
+│  │  │  ├─ users.py              # User discovery/search
+│  │  │  ├─ match.py              # Match request system
+│  │  │  ├─ chat.py               # Real-time messaging (WebSocket)
+│  │  │  ├─ learn.py              # Video tutorials and courses
+│  │  │  ├─ curriculum.py         # Student read-only curriculum API
+│  │  │  ├─ admin_curriculum.py   # Admin curriculum management
+│  │  │  ├─ ai_learning.py        # AI Learning Session API (15 endpoints)
+│  │  │  ├─ progress.py           # XP and achievements
+│  │  │  ├─ notifications.py      # Notifications
+│  │  │  └─ ai.py                 # Reserved (empty placeholder)
+│  │  ├─ core/
+│  │  │  ├─ config.py             # Settings / env vars
+│  │  │  ├─ database.py           # Async SQLAlchemy session
+│  │  │  ├─ security.py           # JWT auth dependency
+│  │  │  └─ dependencies.py       # Shared FastAPI deps
+│  │  ├─ models/
+│  │  │  ├─ user.py               # User + profile
+│  │  │  ├─ match.py              # Match requests
+│  │  │  ├─ chat.py               # Conversations + messages
+│  │  │  ├─ learn.py              # Video courses + tutorials
+│  │  │  ├─ curriculum.py         # Subjects, topics, concepts, objectives, misconceptions
+│  │  │  ├─ progress.py           # Badges + certificates
+│  │  │  └─ ai_learning.py        # AI Learning Session tables (9 models)
+│  │  ├─ schemas/
+│  │  │  ├─ ai_learning.py        # AI Learning request/response schemas
+│  │  │  ├─ auth.py               # Auth schemas
+│  │  │  ├─ curriculum.py         # Curriculum schemas
+│  │  │  └─ profile.py            # Profile schemas
+│  │  └─ services/
+│  │     ├─ ai_learning_service.py  # AI Learning business logic
+│  │     ├─ ai_service.py           # Gemini → Groq fallback
+│  │     ├─ auth_service.py
+│  │     ├─ chat_service.py
+│  │     ├─ learn_service.py
+│  │     ├─ match_service.py
+│  │     ├─ progress_service.py
+│  │     ├─ email_service.py
+│  │     ├─ storage_service.py
+│  │     └─ ws_manager.py
+│  ├─ migrations/
+│  │  └─ 001_ai_learning_sessions.sql   # AI Learning tables (run once in Supabase)
+│  ├─ seed_curriculum.sql               # Curriculum seed data (safe CTEs, no hardcoded IDs)
+│  ├─ run.py
 │  ├─ requirements.txt
-│  ├─ serviceAccountKey.json   # Firebase Admin creds (git-ignored)
-│  └─ .env              # secrets/config (git-ignored)
+│  └─ .env.example
 └─ frontend/
-   ├─ src/
-   │  ├─ pages/         # auth/, onboarding/, dashboard/settings/, Dashboard, etc.
-   │  ├─ components/    # DashboardLayout, ConfirmDialog, ShortcutsModal, Loader, Logo…
-   │  ├─ context/       # AuthContext.jsx, ToastContext.jsx
-   │  ├─ hooks/         # useKeyboardShortcuts.js
-   │  ├─ api.js         # fetch wrapper + all backend calls
-   │  ├─ shortcuts.js   # central keyboard-shortcut registry
-   │  ├─ firebase.js    # Firebase client init (Google sign-in only)
-   │  └─ index.css      # all styles
-   ├─ public/           # favicon.svg, logo.svg
-   └─ .env              # VITE_* config (git-ignored)
+   └─ src/
+      ├─ pages/
+      │  ├─ auth/          # Login, signup, password reset, email verify
+      │  ├─ onboarding/    # Profile setup wizard
+      │  ├─ dashboard/     # Home, Progress, Settings
+      │  ├─ discover/      # Student discovery + match request
+      │  ├─ match/         # Match requests inbox
+      │  ├─ chat/          # Messaging (WebSocket)
+      │  ├─ learn/         # AI Learning + video tutorials
+      │  │  ├─ AILearnHome.jsx       # /app/learn/ai
+      │  │  ├─ AISubjectPage.jsx     # /app/learn/ai/subject/:id
+      │  │  ├─ AITopicPage.jsx       # /app/learn/ai/subject/:id/topic/:id
+      │  │  ├─ AISessionSetup.jsx    # /app/learn/ai/.../concept/:id (knowledge + intent)
+      │  │  ├─ AILearningRoom.jsx    # /app/learn/ai/session/:id (ONE continuous room)
+      │  │  └─ ...                   # Video tutorial pages
+      │  └─ admin/         # Admin curriculum tools
+      ├─ components/       # DashboardLayout, auth guards, shared UI
+      ├─ context/          # AuthContext, ToastContext
+      ├─ hooks/            # useKeyboardShortcuts
+      ├─ styles/
+      │  └─ ai-learn.css   # AI Learning room styles
+      ├─ api.js            # Fetch wrapper + all backend calls
+      ├─ firebase.js       # Firebase client (Google sign-in only)
+      └─ index.css         # All other styles
 ```
+
+---
 
 ## 4. Running the project (Windows / PowerShell)
 
@@ -59,164 +123,180 @@ PeerUP/
 .\.venv\Scripts\python.exe run.py
 ```
 - Serves on `http://127.0.0.1:8000`, all routes under `/api`.
-- IMPORTANT: use `run.py`, NOT `uvicorn app.main:app` directly. `run.py` forces a
-  **SelectorEventLoop**, which psycopg's async mode needs on Windows (the default
-  ProactorEventLoop breaks it).
-- `.env` is read at startup only — restart after any `.env` change.
+- Use `run.py`, NOT `uvicorn app.main:app` directly.
+  `run.py` forces `SelectorEventLoop` which psycopg async mode requires on Windows.
+- Restart after any `.env` change.
 
 **Frontend** (from `frontend/`):
 ```powershell
 npm run dev        # dev server at http://localhost:5173
-npm run build      # production build (outputs to dist/)
+npm run build      # production build → dist/
 ```
-- If `npm` is blocked by execution policy, build directly:
-  `node node_modules/vite/bin/vite.js build`
+
+---
 
 ## 5. Environment variables
 
 ### backend/.env
 ```
-GOOGLE_APPLICATION_CREDENTIALS   # path to serviceAccountKey.json
-FIREBASE_STORAGE_BUCKET          # legacy; Firebase Storage NO LONGER used for avatars
-CORS_ORIGINS                     # comma-separated allowed origins
+DATABASE_URL=                    # Supabase PostgreSQL URI
+JWT_SECRET=                      # Generate: python -c "import secrets;print(secrets.token_hex(32))"
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=1440
+EMAIL_TOKEN_EXPIRE_MINUTES=1440
 
-# Supabase Storage (avatar uploads)
-SUPABASE_URL                     # auto-derived from DATABASE_URL if blank
-SUPABASE_SERVICE_KEY             # service_role key — SERVER-SIDE ONLY, never in frontend
+GOOGLE_APPLICATION_CREDENTIALS_JSON=   # Firebase Admin (Google sign-in)
+GOOGLE_APPLICATION_CREDENTIALS=        # Local path alt.
+FIREBASE_STORAGE_BUCKET=               # Legacy; not used for storage
+
+SUPABASE_URL=                    # Auto-derived from DATABASE_URL if blank
+SUPABASE_SERVICE_KEY=            # service_role key — server-side only
 SUPABASE_AVATAR_BUCKET=avatars
 
-DATABASE_URL                     # Supabase Postgres URI (URL-encode special chars in pw)
+CHAT_ENCRYPTION_KEY=             # AES-256-GCM; generate with secrets.token_hex(32)
 
-JWT_SECRET / JWT_ALGORITHM / ACCESS_TOKEN_EXPIRE_MINUTES / EMAIL_TOKEN_EXPIRE_MINUTES
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+FRONTEND_URL=http://localhost:5173
 
-# Email (Gmail SMTP) — emails only send when SMTP_HOST + SMTP_FROM are set;
-# otherwise the app runs in "dev mode" and shows codes on screen.
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
-SMTP_USER=<gmail address>
-SMTP_PASSWORD=<Gmail APP PASSWORD, not the login password>
-SMTP_FROM=<gmail address>
-SMTP_FROM_NAME=PeerUp
+SMTP_USER=
+SMTP_PASSWORD=                   # Gmail App Password, not login password
+SMTP_FROM=
+SMTP_FROM_NAME=PeerUP
 SMTP_USE_TLS=true
+
+GEMINI_API_KEY=                  # https://aistudio.google.com/app/apikey
+GEMINI_MODEL=gemini-2.0-flash
+GROQ_API_KEY=                    # https://console.groq.com
+GROQ_MODEL=llama-3.3-70b-versatile
+AI_REQUEST_TIMEOUT=60
 ```
 
 ### frontend/.env
 ```
 VITE_API_URL=http://127.0.0.1:8000
-VITE_FIREBASE_*      # Firebase client config (Google sign-in)
+VITE_FIREBASE_API_KEY=
+VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
+VITE_FIREBASE_STORAGE_BUCKET=
+VITE_FIREBASE_MESSAGING_SENDER_ID=
+VITE_FIREBASE_APP_ID=
 ```
-
-## 6. Auth model (how sign-in works)
-
-- **Email/password**: backend creates the user, hashes the password (bcrypt),
-  emails a 6-digit verification code; the backend issues a JWT on success.
-- **Google**: frontend does the Firebase popup, sends the Firebase ID token to
-  `POST /api/auth/google`; the backend verifies it and issues its own JWT.
-- The JWT is stored client-side (`localStorage`/`sessionStorage`, key
-  `peerup_token`) and sent as `Authorization: Bearer <token>`.
-- A user row has `provider` = "password" | "google" and `hasPassword` (bool).
-
-## 7. Key backend endpoints (all under /api)
-
-| Method | Path                     | Purpose |
-|--------|--------------------------|---------|
-| POST   | /auth/signup             | create account, email verification code |
-| POST   | /auth/login              | email+password login → JWT |
-| POST   | /auth/google             | exchange Firebase token → JWT |
-| POST   | /auth/verify-email       | confirm 6-digit code |
-| POST   | /auth/forgot-password    | send reset code |
-| POST   | /auth/reset-password     | reset with code |
-| GET    | /me                      | current user |
-| PUT    | /me/profile              | update profile |
-| POST   | /me/avatar               | upload avatar (multipart) → Supabase, returns photoURL |
-| POST   | /me/change-password      | change password (verifies current) |
-| DELETE | /me                      | delete account (verifies password) |
-
-## 8. Feature notes / decisions made
-
-### Avatar upload (Supabase Storage)
-- Was originally Firebase Storage, but Firebase Storage now requires the paid
-  **Blaze** plan → switched to **Supabase Storage** (free, no card).
-- Uploads go server-side via `storage_service.upload_avatar` using the
-  service_role key (httpx REST call). Bucket `avatars` must be **public**.
-- Stored at `avatars/<user_id>/<uuid>.<ext>`; returns a public URL.
-- The `/me/avatar` route runs the blocking upload in a **threadpool**
-  (`run_in_threadpool`) so it doesn't freeze the async event loop — this was the
-  fix for uploads timing out / "couldn't reach the server" on Windows.
-
-### Emails (`services/email_service.py`)
-- Templates: verification code, password reset, activity/security alerts
-  (password/name/photo change), and **account deleted**. All share a branded
-  header + footer with an educational blurb.
-- Logo in emails: hosted PNG at a public Supabase URL
-  (`avatars/assets/peerup-logo.png`) referenced via `<img>`. Do NOT use `data:`
-  URIs (Gmail strips them) or SVG (email clients don't render SVG).
-- `smtp_configured()` gates all sending; if false, the app shows codes on screen
-  ("dev mode") instead of emailing.
-- Activity emails only fire on password change + display-name/photo change (not
-  on every profile save, to avoid spam), and only for already-set-up profiles.
-- All email sends are **best-effort / non-fatal** — a mail failure never blocks
-  the underlying action.
-
-### Delete account
-- Flow (in Settings → Security "danger zone"): enter password → type `DELETE` →
-  confirmation modal → deletes.
-- Backend `auth_service.delete_account`: verifies password (skipped for
-  Google-only accounts with no password), deletes the `users` row, then
-  **best-effort** deletes the user's avatar files from Supabase Storage
-  (`storage_service.delete_user_avatars`) and sends the "account deleted" email.
-- FUTURE: when tables referencing `users.id` are added (messages, matches,
-  progress…), give those FKs `ondelete="CASCADE"` so a user delete auto-removes
-  all related rows.
-
-### Keyboard shortcuts (`frontend/src/shortcuts.js`)
-- Central registry drives the handler, sidebar pills, and the help modal (open
-  with `?`).
-- Handler uses capture-phase + `preventDefault`/`stopPropagation` to override the
-  browser.
-- Main nav: Ctrl+H Home, Ctrl+D Discover, Ctrl+E Chat, **Ctrl+O** Study Rooms,
-  Ctrl+L Learn, Ctrl+U Progress, Ctrl+S Settings.
-  (Study Rooms uses Ctrl+O, NOT Ctrl+R, so browser reload still works.)
-- Settings sub-nav: Ctrl+1 Profile, Ctrl+2 Subjects, Ctrl+3 Security,
-  Ctrl+4 Notifications. Ctrl+M = back to menu.
-- Actions: Ctrl+B toggle sidebar, `/` focus search, `?` shortcuts help.
-
-### UI components
-- `ConfirmDialog.jsx` — reusable confirmation modal (title/message/danger/loading),
-  used for logout and delete account.
-- Topbar avatar is a button that navigates to `/app/settings` (profile).
-- `Loader.jsx` — branded full-screen spinner for loading states.
-
-### Request schemas are STRICT (`extra="forbid"`)
-- All request bodies inherit `StrictModel` (`app/schemas/base.py`), which sets
-  Pydantic `extra="forbid"`. Unknown fields → a clear **422** naming the field,
-  instead of being silently dropped.
-- Why: a frontend field that a schema forgot to declare used to just vanish
-  (this hid a bug where `language` never saved). Strict mode surfaces such
-  frontend/backend contract mismatches immediately.
-- CONSEQUENCE: when you add a field to a form/request, you MUST add it to the
-  matching schema too — otherwise that request 422s. (Response models like
-  `TokenResponse` stay on plain `BaseModel`; only request bodies are strict.)
-
-## 9. Verification workflow (how changes are checked)
-
-- Backend: `python -c "import compileall; compileall.compile_dir('app')"` and/or
-  import `app.main` to catch import errors. (A `<prefix>` warning on Windows is
-  harmless.)
-- Frontend: `vite build` should transform all modules with no errors.
-- Temp files/build output are cleaned up after checks.
-
-## 10. Known TODO / housekeeping
-
-- Rotate the Gmail **App Password** if it was ever exposed; keep it only in
-  `backend/.env` (never in frontend).
-- `FIREBASE_STORAGE_BUCKET` in `.env` is now unused (Firebase Storage dropped) —
-  safe to remove.
-- Many dashboard pages (Discover, Chat, Rooms, Learn) are still placeholders.
-- No test suite yet.
-- When adding related tables, use `ON DELETE CASCADE` (see Delete account note).
 
 ---
 
-*This file is documentation only — it changes no behavior. Update it as the
-project evolves so it stays a reliable single source of truth.*
+## 6. AI Learning System
+
+The new AI Learning System replaces the old 7-stage sequential pipeline.
+
+Architecture:
+- **Database** — defines WHAT the student should learn (subjects, topics, concepts, objectives, misconceptions)
+- **Gemini** — decides HOW to teach it (strategy, depth, style)
+- **Backend** — authoritative for all state transitions, timers, evaluation, and persistence
+
+### State machine
+```
+created → teaching → studying → retrieval → [practice | reteaching] → completed
+         abandoned at any point
+```
+
+### Key design decisions
+- `teaching → completed` is blocked — must pass through retrieval
+- `complete_session` requires `retrieval | practice | reteaching` state
+- Study timer is server-authoritative: client must wait ≥20% of allocated time
+- Teaching content is hidden from all API responses during `retrieval` and `practice` states
+- Attempt tracking: best score per question, not raw average
+- Adaptive reteaching: always a different strategy than previously used
+- Intent (teach_me, quiz_me, explain_simply, etc.) changes the AI prompt directive
+- Identified misconceptions from evaluation are passed to reteach AI prompt
+
+### Session flow
+```
+Create session (subject + topic + concept + familiarity + intent)
+→ Generate teaching content (Gemini, strategy based on intent)
+→ Start study period (server records started_at + expected_end_at)
+→ Study period expires (server validates elapsed time)
+→ Session → retrieval state (teaching content hidden in APIs)
+→ Generate retrieval questions (grounded in teaching snapshot)
+→ Student answers → AI evaluates (strong/partial/weak + misconception)
+→ Strong: continue/practice
+→ Weak/partial: adaptive reteach (different strategy, misconception-targeted)
+→ Practice questions
+→ Generate session summary (best-per-question scoring)
+→ completed
+```
+
+### Database tables (run 001_ai_learning_sessions.sql first)
+```
+ai_learning_sessions
+ai_session_messages
+ai_session_teaching
+ai_session_study_periods
+ai_session_questions
+ai_session_answers
+ai_session_teaching_attempts
+ai_session_integrity_events
+ai_session_summaries
+```
+
+---
+
+## 7. Auth model
+
+- **Email/password**: backend creates user, hashes password (bcrypt), emails 6-digit code; issues JWT on success.
+- **Google**: frontend Firebase popup → Firebase ID token → `POST /api/auth/google` → backend verifies → JWT.
+- JWT stored as `peerup_token` in `localStorage` / `sessionStorage`. Sent as `Authorization: Bearer <token>`.
+- `provider` = `"password"` or `"google"`.
+
+---
+
+## 8. Key design notes
+
+### Request schemas are strict (`extra="forbid"`)
+All request bodies use `StrictModel`. Unknown fields → clear 422. When you add a frontend field, add it to the Pydantic schema or the request will fail.
+
+### Avatar upload (Supabase Storage)
+Originally Firebase Storage (now requires Blaze plan) → switched to Supabase Storage (free). Uploads are server-side via `storage_service.upload_avatar` in a threadpool to avoid blocking async loop.
+
+### Emails (best-effort)
+`smtp_configured()` gates all sends. If unconfigured, app works in "dev mode" — verification codes print to the API response instead of being emailed. Email failures never block the underlying action.
+
+### Windows async requirement
+Use `run.py` to start backend. It sets `SelectorEventLoop` before importing FastAPI. `psycopg` async driver breaks on Windows with `ProactorEventLoop` (the default).
+
+### Chat encryption
+Messages encrypted with AES-256-GCM using `CHAT_ENCRYPTION_KEY`. Generate with `secrets.token_hex(32)`.
+
+### Keyboard shortcuts
+Central registry in `shortcuts.js`. Main nav: Ctrl+H Home, Ctrl+D Discover, Ctrl+E Chat, Ctrl+L Learn, Ctrl+U Progress. Settings: Ctrl+1–4. Ctrl+B toggle sidebar, `/` focus search, `?` shortcuts modal.
+
+---
+
+## 9. Verification workflow
+
+Backend:
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -c "import ast; ast.parse(open('app/services/ai_learning_service.py').read()); print('OK')"
+```
+
+Frontend:
+```powershell
+cd frontend
+npm run build    # must exit 0 with no errors
+```
+
+---
+
+## 10. Known housekeeping
+
+- `FIREBASE_STORAGE_BUCKET` in `.env` is unused (Firebase Storage dropped) — safe to remove.
+- `backend/app/api/v1/ai.py` is an empty placeholder router (registered but has no routes) — harmless.
+- Progress page integration for AI session scores is designed but not yet wired into the Progress dashboard UI.
+- No automated test suite for the AI Learning System (manual end-to-end testing only).
+- When adding tables referencing `users.id`, use `ON DELETE CASCADE`.
+
+---
+
+*Update this file as the project evolves.*

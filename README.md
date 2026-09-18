@@ -1,124 +1,104 @@
-# PeerUp
+# PeerUP
 
-> **Learn from peers. Teach what you know. Grow together.**
+**Learn. Teach. Grow.**
 
-PeerUp is a peer-to-peer learning platform where students find study partners based on the subjects they can teach and the subjects they need help with. Once connected, they study together inside the app using real-time collaborative tools — shared notes, a whiteboard, a Pomodoro timer, and more.
+PeerUP is a peer-learning platform where students can learn any concept with an adaptive AI tutor, and connect with other students who are learning the same things. It combines AI-powered personalised instruction with a social peer-discovery system — because sometimes you also just need someone else who gets it.
 
 **Live app:** https://peerup.pages.dev
 **GitHub:** https://github.com/codeVeloper2/peerUP
 
 ---
 
-## What PeerUp Does
+## The Problem
 
-A student creates a profile listing the subjects they are good at and the subjects they need help with. PeerUp surfaces the most relevant study partners on the Discover page. When you find someone who can teach you a subject, you send them a match request for that specific subject. When they accept, a subject-locked chat room opens between you.
+Learning is rarely a straight line. A student might understand three quarters of a concept and completely miss one key part. Standard resources either start from scratch or assume you already know the part you're missing. And when you're stuck at 11pm, finding someone who can help right now is hard.
 
-From inside that chat, either student can open a **Study Room** — a real-time collaborative workspace built specifically for learning together.
+PeerUP addresses this by letting students:
 
-**The full journey:**
-
-```
-Discover → Send Match Request → Accept → Chat → Open Study Room → Study → Grow
-```
+1. Work through concepts with an AI tutor that adapts to how much they already know and responds to where they actually get stuck
+2. Find other students to learn with — people who know what you're trying to learn, or need help with what you can teach
 
 ---
 
-## Features
+## What PeerUP Does
 
-### Authentication
-- Email and password signup with email verification gate
-- Google one-click sign-in via Firebase
-- Forgot password and reset via email
-- Remember me (local vs session persistence)
-- Password strength indicator and show/hide toggle
-- Human-readable error messages
-- Learning agreement accepted on first login only
+### AI Learning
 
-### Profile
-- Profile setup: name, grade, university level, subjects taught, subjects needed, skill level per subject, bio, photo
-- Privacy settings: toggle public profile visibility and direct message permissions
-- Edit profile anytime from settings
-- Subject and skill level management
+The core learning experience. A student picks a subject, topic, and concept, then tells the AI how familiar they are with it and what they want to do — teach me from scratch, quiz me, give me examples, go deeper. The AI adapts.
 
-### Discover
-- Browse all public student profiles in a searchable, filterable directory
-- Student cards showing subjects they teach and subjects they need help with
-- Filter by subject, grade, level, and availability
-- Sort by recommended, highest rated, most active, newest
-- Profile preview panel without page navigation
-- Available Now indicator
+The system goes through five distinct phases inside a single learning room:
 
-### Match Requests
-- Send a match request for a specific subject
-- Subject dropdown auto-populated from the overlap between both students' profiles
-- Accept or decline incoming requests
-- Accepted request creates a subject-locked chat room
-- Connection/access system — students must be connected before chatting or opening study rooms
+1. **Teaching** — Gemini explains the concept using a strategy matched to the student's familiarity and intent
+2. **Study** — A timer runs while the student reads the explanation. When time ends, the explanation is locked away
+3. **Retrieval** — Questions generated from what was actually taught (not generic knowledge). The student has to recall without the explanation visible
+4. **Evaluation** — AI evaluates the answer and identifies understanding level (strong / partial / weak) and any misconceptions
+5. **Summary** — Session summary with strengths, gaps, and a recommendation for what to do next
 
-### Chat
-- Subject-locked chat rooms labelled by subject and partner
-- Real-time messaging via WebSockets
-- Typing indicators
-- Read receipts — single checkmark when sent, double checkmark when read
-- Unread message badges
-- File and image sharing
-- Session goal pinned at the top of every chat
-- Learning notice pinned on first open
-- Report button on messages
-- Group study rooms (up to 5 students)
+If the student struggles, the AI doesn't repeat the same explanation. It picks a completely different teaching strategy — an analogy, a worked example, a real-world context, a step-by-step breakdown — and addresses the specific misconception that was detected.
 
-### Study Room
-- Opens from inside a chat room with a session goal prompt
-- Partner receives a join notification
-- Shared live notepad — both students type simultaneously with visible cursors
-- Collaborative whiteboard powered by Excalidraw
-- Study materials — upload and preview PDFs, images, and documents
-- Quick Chat panel alongside the workspace
-- Synchronized Pomodoro timer — 25 minutes focus, 5 minutes break
-- Break screen overlay when timer ends
-- Focus Mode — hides sidebar and chat, full-width workspace only
-- End session confirmation modal
-- Session summary — subject, duration, partner, goal
-- Peer rating (1–5 stars) after every session
-- XP awarded to both students on session completion
-- Notes saved to both student profiles automatically
+### Peer Learning
 
-### Progress and Gamification
-- XP system — earn points for sessions, ratings, and activity
-- Level progression: Rising Learner → Study Buddy → Knowledge Seeker → Peer Scholar → Expert Mentor
-- Study streak tracking
-- Session history
+Students build profiles listing what subjects they can teach and what they need help with. PeerUP surfaces relevant people on the Discover page. You send a match request for a specific subject, they accept, and a chat opens between you. From there you can study together.
 
-### Learn — Sequential Learning System ✨ NEW
-- **7-stage mastery pipeline** for concept-based learning
-- AI-generated personalized lessons using Google Gemini
-- Checkpoint quizzes generated from lesson content
-- Automated reteaching when students struggle
-- "Explain It" stage — students write explanations in their own words
-- AI verification of understanding (focuses on concepts, not grammar)
-- Curriculum-bound AI Q&A assistant
-- **Peer-to-peer Challenge system** — students verify each other's mastery
-- Challenge matching — finds peers at the same learning stage
-- 5-question independent assessment
-- Peer exchange phase — students ask each other questions
-- AI evaluation with hints and feedback
-- Progressive concept unlocking — must master prerequisites
-- Real-time progress tracking with stage indicators
-- Complete learning history and analytics
+---
 
-**The Learning Flow:**
+## AI Learning Flow
+
 ```
-Lesson → Checkpoint → Explain It → AI Verification → Ask AI → Challenge → Verified ✓
-  ↓ fail         ↓ fail                                  ↓ fail
-Reteach    Retry Explanation                     Reset to Checkpoint
+Subject → Topic → Concept
+         ↓
+Current Knowledge  (new / seen before / know basics / know well / need specific help)
+         ↓
+Learning Intent    (teach me / explain simply / give examples / go deeper / quiz me / broaden)
+         ↓
+AI Teaching        (strategy chosen by AI based on familiarity + intent)
+         ↓
+Study Timer        (server-managed; teaching content hidden when timer ends)
+         ↓
+Retrieval          (questions grounded in what was taught, not generic)
+         ↓
+AI Evaluation      (strong / partial / weak + misconception detection)
+         ↓
+    Strong understanding          Weak or partial understanding
+         ↓                                  ↓
+  Practice / continue         Misconception identified
+                              Different teaching strategy chosen
+                              Adaptive reteaching
+                                  ↓
+                              Practice questions
+                                  ↓
+                              Evaluation
+         ↓
+Session Summary (what you learned, strengths, gaps, recommended next step)
+         ↓
+Progress saved
 ```
 
-### Settings
-- Profile settings
-- Subject management
-- Security settings (password change)
-- Notification preferences
-- Privacy controls
+The explanation is intentionally made inaccessible once the study timer ends. The student has to answer from memory, not by scrolling back up. This is deliberate — retrieval practice with the answer hidden is how long-term retention actually works.
+
+---
+
+## Key AI Capabilities
+
+- **Gemini** is the primary AI provider. **Groq** is the automatic fallback if Gemini fails
+- Teaching strategy is selected based on session intent and what strategies have already been used — the AI never repeats the same approach in a reteaching round
+- Student intent is wired directly into the AI prompt, not just stored as metadata — "quiz me" changes the AI's actual behaviour from the first message
+- Evaluation returns structured output: correctness, score, understanding level, detected misconception, and whether reteaching is needed
+- Score calculations use best-per-question: if a student answers a question wrong on attempt 1 (30/100) and correct on attempt 2 (90/100), the question scores 90, not 60
+- The backend enforces all state transitions — the client cannot skip the timer, skip retrieval, or mark a session complete without passing through the learning phases
+
+The AI is not perfect. The surrounding system is designed to be robust when AI outputs are malformed, delayed, or unavailable.
+
+---
+
+## Peer Learning
+
+- Students create profiles with subjects they can teach and subjects they want help with
+- The Discover page shows other students with useful profile previews
+- Match requests are subject-specific — you request to learn a particular subject from a specific person
+- Accepted requests open a subject-locked chat room
+- Real-time messaging via WebSockets, with typing indicators, read receipts, and file sharing
+- Group study (up to 5 students)
 
 ---
 
@@ -126,20 +106,50 @@ Reteach    Retry Explanation                     Reset to Checkpoint
 
 | Layer | Technology |
 |---|---|
-| Frontend | React, Vite, JavaScript |
+| Frontend | React, Vite, JavaScript / JSX |
 | Routing | React Router |
-| Styling | CSS, inline styles |
+| Styling | CSS (index.css + ai-learn.css) |
 | Backend | Python, FastAPI |
+| ORM | SQLAlchemy 2.x (async) |
 | Database | PostgreSQL via Supabase |
 | File Storage | Supabase Storage |
-| Authentication | Firebase Auth (Google + Email/Password) |
+| Authentication | Custom JWT + Firebase (Google sign-in verification only) |
 | Real-time | WebSockets |
-| ORM | SQLAlchemy |
-| Migrations | Alembic |
-| Whiteboard | Excalidraw |
-| AI | Google Gemini 1.5 Flash |
+| AI Primary | Google Gemini (`google-genai` SDK) |
+| AI Fallback | Groq |
+| Email | SMTP via Gmail |
 | Frontend Hosting | Cloudflare Pages |
 | Backend Hosting | Railway |
+
+---
+
+## Architecture
+
+```
+Browser (React + Vite)
+         │
+         │ HTTP / WebSocket
+         ▼
+FastAPI Backend  (/api/*)
+         │
+    ┌────┴────┐
+    │         │
+AI Learning   Social / Chat
+ Service       Services
+    │
+    ├── Gemini (primary)
+    └── Groq   (fallback)
+         │
+    PostgreSQL / Supabase
+```
+
+The backend is the authority for everything that matters:
+
+- **Session state transitions** are enforced server-side. The client cannot skip from teaching to completed without going through retrieval
+- **Study timers** are validated against server time. Clients cannot finish a timer early
+- **Teaching content** is stripped from API responses when the session is in retrieval or practice state — not just hidden in the UI
+- **Answer scoring** uses best-per-question logic
+- **Session ownership** is verified on every endpoint — users cannot read or modify another user's session
 
 ---
 
@@ -149,72 +159,32 @@ Reteach    Retry Explanation                     Reset to Checkpoint
 PeerUP/
 ├── backend/
 │   ├── app/
-│   │   ├── api/v1/          # Route handlers
-│   │   │   ├── auth.py           # Authentication endpoints
-│   │   │   ├── profile.py        # User profile management
-│   │   │   ├── users.py          # User discovery and search
-│   │   │   ├── match.py          # Match request system
-│   │   │   ├── chat.py           # Real-time messaging
-│   │   │   ├── learn.py          # Study room WebSocket
-│   │   │   ├── concept_learn.py  # Sequential learning pipeline ✨
-│   │   │   ├── challenge.py      # Peer challenge system ✨
-│   │   │   ├── curriculum.py     # Learning content
-│   │   │   ├── admin_curriculum.py # Admin tools
-│   │   │   ├── progress.py       # XP and achievements
-│   │   │   ├── ai.py             # AI assistance
-│   │   │   └── notifications.py  # Push notifications
-│   │   ├── core/            # Config, security, database, dependencies
-│   │   ├── models/          # SQLAlchemy database models
-│   │   │   ├── user.py           # User and profile
-│   │   │   ├── match.py          # Match requests
-│   │   │   ├── chat.py           # Messages and rooms
-│   │   │   ├── learn.py          # Study sessions
-│   │   │   ├── curriculum.py     # Subjects, topics, concepts
-│   │   │   ├── progress.py       # XP and levels
-│   │   │   └── solo_learning.py  # Concept progress tracking ✨
-│   │   ├── schemas/         # Pydantic request and response schemas
-│   │   └── services/        # Business logic
-│   │       ├── ai_service.py     # Google Gemini integration ✨
-│   │       ├── auth_service.py
-│   │       ├── chat_service.py
-│   │       ├── match_service.py
-│   │       ├── learn_service.py
-│   │       ├── progress_service.py
-│   │       ├── email_service.py
-│   │       ├── storage_service.py
-│   │       └── ws_manager.py     # WebSocket management
-│   ├── migrations/          # Database migrations ✨
-│   │   ├── 001_concept_progress.sql
-│   │   └── 002_challenge_sessions.sql
+│   │   ├── api/v1/               # Route handlers (15 AI learning endpoints)
+│   │   ├── core/                 # Config, database, security
+│   │   ├── models/               # SQLAlchemy models (9 AI learning tables)
+│   │   ├── schemas/              # Pydantic schemas
+│   │   └── services/             # Business logic + AI service
+│   ├── migrations/
+│   │   └── 001_ai_learning_sessions.sql
+│   ├── seed_curriculum.sql       # Safe curriculum seed (CTE-based, no hardcoded IDs)
 │   ├── requirements.txt
-│   └── main.py
+│   ├── run.py
+│   └── .env.example
 ├── frontend/
 │   └── src/
-│       ├── pages/           # Application pages
-│       │   ├── auth/            # Login, signup, password reset
-│       │   ├── onboarding/      # Profile setup wizard
-│       │   ├── dashboard/       # Main app layout
-│       │   ├── discover/        # Student discovery
-│       │   ├── match/           # Match requests
-│       │   ├── chat/            # Messaging
-│       │   ├── study/           # Study room
-│       │   ├── learn/           # Learning pages ✨
-│       │   │   ├── SubjectsPage.jsx
-│       │   │   ├── TopicConceptsPage.jsx
-│       │   │   ├── ConceptLearnPage.jsx  # 7-stage pipeline
-│       │   │   └── challenge/            # Challenge flow
-│       │   │       ├── ChallengeFindPartnerPage.jsx
-│       │   │       ├── ChallengeLobbyPage.jsx
-│       │   │       ├── ChallengeSessionPage.jsx
-│       │   │       └── ChallengeCompletePage.jsx
-│       │   └── admin/           # Admin curriculum tools
-│       ├── components/      # Shared UI components
-│       ├── context/         # Auth and Toast context providers
-│       └── hooks/           # Custom React hooks
-├── docs/                    # Development notes and migration scripts
-│   ├── PROJECT_NOTES.md
-│   ├── STUDY_ROOM_ENHANCEMENTS.md
-│   ├── STUDY_ROOM_NEW_FLOW.md
+│       ├── pages/
+│       │   ├── learn/            # AI Learning pages + video tutorials
+│       │   ├── auth/
+│       │   ├── dashboard/
+│       │   ├── discover/
+│       │   ├── chat/
+│       │   └── admin/
+│       ├── components/           # DashboardLayout, route guards, shared UI
+│       ├── styles/
+│       │   └── ai-learn.css
+│       └── api.js                # All backend API calls
+├── docs/
+│   ├── PROJECT_NOTES.md          # Developer reference
 │   ├── CHAT_READ_RECEIPTS.md
 │   └── CHAT_TROUBLESHOOTING.md
 └── README.md
@@ -222,104 +192,111 @@ PeerUP/
 
 ---
 
-## Setup Instructions
+## Local Development
 
 ### Prerequisites
+
 - Node.js 18+
 - Python 3.11+
-- A Firebase project with Authentication and Storage enabled
-- A Supabase project with a PostgreSQL database
+- A Supabase project with PostgreSQL
+- A Firebase project with Authentication enabled (Email/Password + Google)
+- A Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
+- Optionally a Groq API key from [Groq Console](https://console.groq.com)
 
-### Firebase Setup
-1. Create a Firebase project
-2. Enable Authentication — Email/Password and Google
-3. Enable Storage
-4. Copy the web app config values into `frontend/.env`
-5. Go to Project Settings → Service Accounts → Generate a new private key
-6. Save the downloaded file as `backend/serviceAccountKey.json` (never commit this file)
+### Database Setup
 
-### Frontend Setup
-```bash
+Run `backend/migrations/001_ai_learning_sessions.sql` in your Supabase SQL editor to create the AI learning tables.
+
+To seed curriculum content, run `backend/seed_curriculum.sql` after the migration. It uses CTEs with RETURNING clauses — safe to run on any sequence state after clearing the curriculum tables.
+
+### Backend
+
+```powershell
+cd backend
+cp .env.example .env
+# Fill in DATABASE_URL, JWT_SECRET, Firebase credentials, Gemini key
+
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+
+# Start the server
+.\.venv\Scripts\python.exe run.py
+```
+
+> **Windows note:** Always use `run.py`, not `uvicorn app.main:app` directly. `run.py` sets the `SelectorEventLoop` that psycopg's async driver requires on Windows.
+
+### Frontend
+
+```powershell
 cd frontend
 cp .env.example .env
-# Fill in your Firebase config values in .env
+# Fill in VITE_API_URL and your Firebase config values
+
 npm install
 npm run dev
 ```
 
-### Backend Setup
-```bash
-cd backend
-cp .env.example .env
-# Fill in your Supabase DATABASE_URL, Firebase credentials, and other values
-python -m venv .venv
-source .venv/bin/activate        # On Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-alembic upgrade head              # Run database migrations
-uvicorn app.main:app --reload --port 8000
-```
-
 ### Environment Variables
 
-**frontend/.env**
+**backend/.env** (see `.env.example` for all options):
+
 ```
+DATABASE_URL=             # Supabase PostgreSQL URI
+JWT_SECRET=               # python -c "import secrets;print(secrets.token_hex(32))"
+GEMINI_API_KEY=           # from aistudio.google.com
+GROQ_API_KEY=             # optional fallback
+GOOGLE_APPLICATION_CREDENTIALS_JSON=  # Firebase Admin service account JSON
+SUPABASE_SERVICE_KEY=     # service_role key from Supabase dashboard
+CHAT_ENCRYPTION_KEY=      # python -c "import secrets;print(secrets.token_hex(32))"
+```
+
+**frontend/.env**:
+
+```
+VITE_API_URL=http://127.0.0.1:8000
 VITE_FIREBASE_API_KEY=
 VITE_FIREBASE_AUTH_DOMAIN=
 VITE_FIREBASE_PROJECT_ID=
 VITE_FIREBASE_STORAGE_BUCKET=
 VITE_FIREBASE_MESSAGING_SENDER_ID=
 VITE_FIREBASE_APP_ID=
-VITE_API_URL=http://localhost:8000
-```
-
-**backend/.env**
-```
-DATABASE_URL=
-FIREBASE_STORAGE_BUCKET=
-GOOGLE_APPLICATION_CREDENTIALS_JSON=
-SECRET_KEY=
-EMAIL_HOST=
-EMAIL_PORT=
-EMAIL_USER=
-EMAIL_PASSWORD=
-GEMINI_API_KEY=
-GEMINI_MODEL=gemini-1.5-flash
-AI_REQUEST_TIMEOUT=60
 ```
 
 ---
 
 ## AI Usage Disclosure
 
-This project was built with significant assistance from AI tools. We are disclosing this as required by the hackathon rules.
+This project was built with significant assistance from AI tools. This is disclosed as required by the hackathon rules.
 
 **AI tools used:**
-- **Claude (Anthropic)** — used throughout the project for planning, architecture decisions, feature design, code generation, debugging, and writing prompts for other AI tools. Claude Code was used directly in the development environment for implementing features.
-- **Kiro AI** — used for implementing specific features including the Discover page, Chat system, Match Request system, and Study Room based on prompts we wrote.
-- **ChatGPT** — used for UI design guidance and generating design references for the Study Room interface.
-- **Grok** — used for research and alternative approaches during development.
+
+- **Kiro AI** — used as the primary development environment throughout the project. Feature implementation, debugging, architecture decisions, and code generation were all done with Kiro
+- **Claude (Anthropic)** — used for planning, architecture decisions, and feature design prompts
+- **ChatGPT** — used for UI design guidance and design references
 
 **Our role:**
-- All product decisions, feature design, and architecture were decided by us
+
+- All product decisions, feature design, and architecture are ours
 - We wrote and refined all prompts given to AI tools
 - We reviewed, tested, and debugged all generated code
 - We understand how the application works and can explain every part of it
-- The overall product vision, user experience design, and development direction are entirely ours
+- The product vision and user experience design are entirely ours
 
-AI tools assisted our learning and accelerated development — they did not replace our understanding or decision-making.
+AI tools accelerated development — they did not replace understanding or decision-making.
 
 ---
 
-## Credits and External Resources
+## Credits
 
-- [Firebase](https://firebase.google.com) — Authentication and storage
-- [Supabase](https://supabase.com) — PostgreSQL database hosting
-- [Excalidraw](https://excalidraw.com) — Collaborative whiteboard component
+- [Firebase](https://firebase.google.com) — Authentication
+- [Supabase](https://supabase.com) — PostgreSQL hosting and file storage
 - [FastAPI](https://fastapi.tiangolo.com) — Python web framework
 - [SQLAlchemy](https://sqlalchemy.org) — Python ORM
-- [Alembic](https://alembic.sqlalchemy.org) — Database migrations
 - [Vite](https://vitejs.dev) — Frontend build tool
 - [React Router](https://reactrouter.com) — Client-side routing
+- [Google Gemini](https://ai.google.dev) — Primary AI provider
+- [Groq](https://groq.com) — AI fallback provider
 - [Cloudflare Pages](https://pages.cloudflare.com) — Frontend hosting
 - [Railway](https://railway.app) — Backend hosting
 
@@ -327,7 +304,7 @@ AI tools assisted our learning and accelerated development — they did not repl
 
 ## Team
 
-- **Babalola Ezekiel (Izy moni)** — Solo developer. Responsible for all product design, frontend development, backend development, database architecture, real-time systems, UI/UX design, and project direction. Built entirely alone as a first hackathon project.
+**Babalola Ezekiel (Izy moni)** — Solo developer. Product design, frontend, backend, database, real-time systems, UI/UX, and overall direction. Built entirely alone as a first hackathon project.
 
 ---
 
