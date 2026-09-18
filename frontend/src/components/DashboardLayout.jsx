@@ -82,6 +82,7 @@ export default function DashboardLayout() {
   const searchRef = useRef(null);
 
   const inSettings = location.pathname.startsWith("/app/settings");
+  const isLearn = location.pathname.startsWith("/app/learn");
 
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   useEffect(() => {
@@ -203,7 +204,7 @@ export default function DashboardLayout() {
   }
 
   return (
-    <div className={`dash ${isMobile ? "dash--mobile" : "dash--desktop"}`}>
+    <div className={`dash ${isMobile ? "dash--mobile" : "dash--desktop"} ${isLearn ? "dash--learn" : ""}`}>
       {/* ── Mobile Navigation (shown only on mobile) ── */}
       {isMobile && (
         <>
@@ -309,25 +310,29 @@ export default function DashboardLayout() {
             </div>
           </header>
 
-          {/* ── Sub-bar: greeting + search ── */}
-          <div className="desktop-subbar">
-            <span className="desktop-subbar-greeting">
-              Hi, <strong>{name}</strong> 👋
-            </span>
-            <div className="desktop-subbar-search">
-              <SearchIcon width={16} height={16} />
-              <input
-                ref={searchRef}
-                type="search"
-                placeholder="Search students, subjects, or topics…"
-              />
-            </div>
-          </div>
+          {!isLearn && (
+            <>
+              {/* ── Sub-bar: greeting + search ── */}
+              <div className="desktop-subbar">
+                <span className="desktop-subbar-greeting">
+                  Hi, <strong>{name}</strong> 👋
+                </span>
+                <div className="desktop-subbar-search">
+                  <SearchIcon width={16} height={16} />
+                  <input
+                    ref={searchRef}
+                    type="search"
+                    placeholder="Search students, subjects, or topics…"
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </>
       )}
 
       {/* ── Main Content ── */}
-      <main className={`dash-main ${isMobile ? "dash-main--mobile" : "dash-main--desktop"}`}>
+      <main className={`dash-main ${isMobile ? "dash-main--mobile" : "dash-main--desktop"} ${isLearn ? "dash-main--learn" : ""}`}>
         <Outlet />
       </main>
 

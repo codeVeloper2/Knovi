@@ -43,6 +43,9 @@ import TutorialsPage from "./pages/learn/TutorialsPage";
 import TutorialDetailPage from "./pages/learn/TutorialDetailPage";
 import CreateTutorialPage from "./pages/learn/CreateTutorialPage";
 import MyTutorialsPage from "./pages/learn/MyTutorialsPage";
+import SavedPage from "./pages/learn/SavedPage";
+import StudySessionsPage from "./pages/learn/StudySessionsPage";
+import LearningPathPage from "./pages/learn/LearningPathPage";
 
 // ── AI Learning pages ──
 import AILearnHome from "./pages/learn/AILearnHome";
@@ -88,6 +91,9 @@ function AppRoutes() {
           <Route path="tutorials/:tutorialId" element={<TutorialDetailPage />} />
           <Route path="create"                element={<CreateTutorialPage />} />
           <Route path="my-tutorials"          element={<MyTutorialsPage />} />
+          <Route path="sessions"             element={<StudySessionsPage />} />
+          <Route path="saved"                element={<SavedPage />} />
+          <Route path="path"                 element={<LearningPathPage />} />
         </Route>
 
         {/* ── AI Learning ── */}

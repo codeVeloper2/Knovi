@@ -1,379 +1,419 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
 import * as api from "../../api";
-import { SUBJECTS } from "../../subjects";
-import NotificationsBell from "../../components/NotificationsPanel";
 
-// ── Colour map ────────────────────────────────────────────────────────────
-const COLORS = {
-  Mathematics:"#6366f1",Math:"#6366f1",English:"#3b82f6",Biology:"#22c55e",
-  Chemistry:"#f59e0b",Physics:"#eab308",History:"#a78bfa",Geography:"#34d399",
-  "Computer Science":"#06b6d4",Spanish:"#ef4444",French:"#60a5fa",Art:"#f472b6",
-  Music:"#818cf8",Economics:"#f59e0b",Literature:"#a78bfa",Psychology:"#34d399",
-  Programming:"#06b6d4","Further Math":"#6366f1",Accounting:"#f59e0b",
+const SUBJECT_META = {
+  Mathematics: { tone: "purple", symbol: "π", description: "Algebra, Geometry, Calculus, Statistics and more." },
+  Physics: { tone: "blue", symbol: "⚛", description: "Mechanics, Electricity, Waves, Thermodynamics and more." },
+  Chemistry: { tone: "green", symbol: "⚗", description: "Organic, Inorganic, Physical, Biochemistry and more." },
+  Biology: { tone: "green", symbol: "⌁", description: "Cells, Genetics, Ecology, Human Biology and more." },
+  "Computer Science": { tone: "purple", symbol: "</>", description: "Programming, Data Structures, Algorithms, Web Dev and more." },
+  "English Language": { tone: "pink", symbol: "▥", description: "Grammar, Writing, Literature, Comprehension and more." },
+  English: { tone: "pink", symbol: "▥", description: "Grammar, Writing, Literature, Comprehension and more." },
+  Accounting: { tone: "gold", symbol: "▤", description: "Financial records, statements, costing and more." },
+  Economics: { tone: "purple", symbol: "↗", description: "Micro, Macro, Trade, Development and more." },
+  Geography: { tone: "cyan", symbol: "◎", description: "Physical, Human, Environmental, World Regions and more." },
+  History: { tone: "gold", symbol: "▥", description: "World history, culture, governance and more." },
+  Literature: { tone: "pink", symbol: "▥", description: "Poetry, Drama, Novel, Analysis and more." },
+  "Art & Design": { tone: "cyan", symbol: "◉", description: "Visual arts, design principles, creativity and more." },
 };
-const color = s => COLORS[s] || "#6366f1";
 
-// ── Mobile header ─────────────────────────────────────────────────────────
-function MobileHeader() {
-  const { profile, user } = useAuth();
-  const navigate = useNavigate();
-  const name    = profile?.displayName || user?.displayName || "";
-  const photo   = profile?.photoURL    || user?.photoURL    || "";
-  const initial = name.trim()[0]?.toUpperCase() || "?";
+const FALLBACK_META = [
+  { tone: "purple", symbol: "✦" },
+  { tone: "blue", symbol: "◌" },
+  { tone: "green", symbol: "◇" },
+  { tone: "gold", symbol: "▤" },
+  { tone: "pink", symbol: "◈" },
+  { tone: "cyan", symbol: "◎" },
+];
+
+function iconMeta(name, index = 0) {
+  const meta = SUBJECT_META[name];
+  if (meta) return meta;
+  return { ...FALLBACK_META[index % FALLBACK_META.length], description: "Explore this subject with your AI tutor." };
+}
+
+function normalizeSubjects(value) {
+  if (Array.isArray(value)) return value;
+  return Array.isArray(value?.subjects) ? value.subjects : [];
+}
+
+function statusLabel(status) {
+  const labels = {
+    created: "Ready to start",
+    teaching: "Learning",
+    study: "Studying",
+    retrieval: "Practice",
+    practice: "Practice",
+    reteaching: "Review",
+    paused: "Paused",
+  };
+  return labels[status] || "In progress";
+}
+
+function Icon({ children, size = 24 }) {
   return (
-    <div className="ln-mob-header">
-      <div className="ln-mob-header-left">
-        <button className="ln-mob-menu-btn" aria-label="Open menu"
-          onClick={() => window.dispatchEvent(new CustomEvent("peerup:open-nav"))}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <line x1="3" y1="6" x2="21" y2="6"/>
-            <line x1="3" y1="12" x2="21" y2="12"/>
-            <line x1="3" y1="18" x2="21" y2="18"/>
-          </svg>
-        </button>
-        <span className="ln-mob-logo">Peer<span className="ln-mob-accent">Up</span></span>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      {children}
+    </svg>
+  );
+}
+
+function Arrow() {
+  return (
+    <Icon size={18}>
+      <path d="m9 5 7 7-7 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </Icon>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <Icon size={21}>
+      <circle cx="11" cy="11" r="6.7" stroke="currentColor" strokeWidth="1.8" />
+      <path d="m16 16 4.2 4.2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </Icon>
+  );
+}
+
+function RobotArt() {
+  return (
+    <div className="learn-hero-robot" aria-hidden="true">
+      <span className="hero-spark hs1">✦</span>
+      <span className="hero-spark hs2">✦</span>
+      <span className="hero-spark hs3">+</span>
+      <div className="hero-robot-antenna"><i /></div>
+      <div className="hero-robot-head">
+        <div className="hero-robot-face"><i /><i /><b /></div>
       </div>
-      <div className="ln-mob-header-right">
-        <NotificationsBell className="notif-bell-btn" />
-        <button className="ln-mob-avatar" onClick={() => navigate("/app/settings")} aria-label="Profile">
-          {photo ? <img src={photo} alt={name} referrerPolicy="no-referrer" /> : <span>{initial}</span>}
-        </button>
+      <div className="hero-robot-body"><span /></div>
+      <div className="hero-robot-wing hero-left" />
+      <div className="hero-robot-wing hero-right" />
+      <div className="hero-robot-bubble">
+        Let's make<br />learning simple<br />and fun!
       </div>
     </div>
   );
 }
 
-// ── Tutorial card ─────────────────────────────────────────────────────────
-function TutCard({ t, onClick }) {
-  const c = color(t.subject);
-  const dur = t.durationSeconds > 0
-    ? `${Math.floor(t.durationSeconds / 60)}:${String(t.durationSeconds % 60).padStart(2, "0")}`
-    : null;
+function SubjectIcon({ meta }) {
   return (
-    <button type="button" className="ln-card" onClick={onClick}>
-      <div className="ln-card-thumb">
-        {t.thumbnailUrl
-          ? <img src={t.thumbnailUrl} alt={t.title} />
-          : <div className="ln-card-thumb-empty" style={{ background: `${c}18` }}>
-              <svg width="28" height="28" viewBox="0 0 24 24" fill={c} opacity=".4"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            </div>
-        }
-        <div className="play-overlay">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="white" opacity=".9"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        </div>
-        {dur && <span className="ln-card-dur">{dur}</span>}
-        {t.progressPct > 0 && !t.completed && (
-          <div className="ln-card-bar"><div style={{ width: `${t.progressPct}%`, background: c }} /></div>
-        )}
-      </div>
-      <div className="ln-card-body">
-        <span className="ln-card-subject" style={{ color: c }}>{t.subject}</span>
-        <p className="ln-card-title">{t.title}</p>
-        <span className="ln-card-meta">
-          {t.views > 0 ? `${t.views} views` : ""}
-          {t.views > 0 && t.rating > 0 ? " · " : ""}
-          {t.rating > 0 ? `⭐ ${t.rating}` : ""}
-        </span>
-        <span className="ln-card-creator">{t.creatorName}</span>
-      </div>
-    </button>
+    <span className={`learn-subject-icon learn-tone-${meta.tone}`}>
+      <span>{meta.symbol}</span>
+    </span>
   );
 }
 
-// ── Continue watching card ────────────────────────────────────────────────
-function ContinueCard({ item, onClick }) {
-  const c = color(item.subject);
+function ProgressRing({ percent }) {
+  const radius = 38;
+  const circumference = 2 * Math.PI * radius;
+  const dash = circumference * Math.min(100, Math.max(0, percent)) / 100;
   return (
-    <button type="button" className="ln-continue-card" onClick={onClick}>
-      <div className="ln-continue-thumb">
-        {item.thumbnailUrl
-          ? <img src={item.thumbnailUrl} alt={item.title} />
-          : <div className="ln-card-thumb-empty" style={{ background: `${c}18`, height: "100%" }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill={c} opacity=".5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            </div>
-        }
-        <span className="ln-continue-subject-badge">{item.subject}</span>
-        <div className="ln-continue-play">
-          <div style={{ width:36, height:36, borderRadius:"50%", background:"rgba(255,255,255,0.18)", display:"flex", alignItems:"center", justifyContent:"center" }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          </div>
-        </div>
-      </div>
-      <div className="ln-continue-body">
-        <div className="ln-continue-title">{item.title}</div>
-        <div className="ln-continue-creator">{item.creatorName || ""}</div>
-        <div className="ln-continue-bar-row">
-          <div className="ln-continue-bar">
-            <div className="ln-continue-fill" style={{ width:`${item.percentage}%`, background:c }} />
-          </div>
-          <span className="ln-continue-pct" style={{ color:c }}>{item.percentage}%</span>
-        </div>
-        <button type="button" className="ln-continue-resume" style={{ background:c }}>Resume</button>
-      </div>
-    </button>
-  );
-}
-
-// ── Featured card ─────────────────────────────────────────────────────────
-function FeatureCard({ t, onClick }) {
-  const c = color(t.subject);
-  const dur = t.durationSeconds > 0
-    ? `${Math.floor(t.durationSeconds / 60)}:${String(t.durationSeconds % 60).padStart(2, "0")}`
-    : null;
-  return (
-    <button type="button" className="ln-feature-card" onClick={onClick}>
-      <div className="ln-feature-thumb">
-        {t.thumbnailUrl
-          ? <img src={t.thumbnailUrl} alt={t.title} />
-          : <div className="ln-card-thumb-empty" style={{ background:`${c}18`, height:"100%" }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill={c} opacity=".5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            </div>
-        }
-        <span className="ln-feature-subject" style={{ background:c }}>{t.subject}</span>
-        {dur && <span className="ln-feature-dur">{dur}</span>}
-      </div>
-      <div className="ln-feature-body">
-        <div className="ln-feature-title">{t.title}</div>
-        <div className="ln-feature-creator">{t.creatorName}</div>
-      </div>
-    </button>
-  );
-}
-
-// ── Course card ───────────────────────────────────────────────────────────
-function CourseCard({ subject, topicCount, navigate }) {
-  const c = color(subject.name);
-  return (
-    <button
-      type="button"
-      className="ln-course-card"
-      style={{ "--course-color": c }}
-      onClick={() => navigate(`/app/learn`)}
-    >
-      <div className="ln-course-icon" style={{ background:`${c}20`, borderColor:`${c}40` }}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round">
-          <path d="M12 3 2 8l10 5 10-5-10-5z"/>
-          <path d="M6 10.5V16c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5.5"/>
-        </svg>
-      </div>
-      <div className="ln-course-body">
-        <span className="ln-course-name">{subject.name}</span>
-        {topicCount > 0 && (
-          <span className="ln-course-meta">{topicCount} topic{topicCount !== 1 ? "s" : ""}</span>
-        )}
-      </div>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="ln-course-arrow">
-        <path d="m9 6 6 6-6 6"/>
+    <div className="learn-progress-ring" style={{ "--ring-dash": `${dash}px`, "--ring-total": `${circumference}px` }}>
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <circle className="ring-track" cx="50" cy="50" r={radius} />
+        <circle className="ring-fill" cx="50" cy="50" r={radius} />
       </svg>
-    </button>
+      <strong>{percent}%</strong>
+    </div>
   );
 }
 
-// ── Section wrapper ───────────────────────────────────────────────────────
-function Sec({ title, onAll, children }) {
+function QuickIcon({ type }) {
+  if (type === "play") {
+    return <Icon size={24}><path d="m9 7 9 5-9 5V7Z" fill="currentColor" /></Icon>;
+  }
+  if (type === "path") {
+    return <Icon size={24}><circle cx="6" cy="17" r="2" stroke="currentColor" strokeWidth="1.8" /><circle cx="18" cy="7" r="2" stroke="currentColor" strokeWidth="1.8" /><path d="M8 16h4a6 6 0 0 0 6-6V9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></Icon>;
+  }
+  if (type === "target") {
+    return <Icon size={24}><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.8" /><circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.8" /><path d="m15 9 4-4M15 5h4v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></Icon>;
+  }
+  return <Icon size={24}><path d="M6 3.5h9l3 3v14H6z" stroke="currentColor" strokeWidth="1.8" /><path d="M14 3.5V7h4M9 11h6M9 14h6M9 17h4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></Icon>;
+}
+
+function ProgressSubject({ subject, completed, total, meta }) {
+  const pct = total ? Math.round((completed / total) * 100) : 0;
   return (
-    <section className="ln-sec">
-      <div className="ln-sec-head">
-        <h2 className="ln-sec-title">{title}</h2>
-        {onAll && <button type="button" className="ln-sec-all" onClick={onAll}>View all →</button>}
+    <div className="learn-progress-subject">
+      <SubjectIcon meta={meta} />
+      <div className="learn-progress-subject-main">
+        <div className="learn-progress-subject-row">
+          <span>{subject.name}</span>
+          <span>{completed}/{total}</span>
+        </div>
+        <div className="learn-mini-bar"><span style={{ width: `${pct}%` }} /></div>
       </div>
-      {children}
-    </section>
+      <Arrow />
+    </div>
   );
 }
 
-// ── Main export ───────────────────────────────────────────────────────────
 export default function LearnHome() {
-  const { profile } = useAuth();
   const navigate = useNavigate();
 
-  const [tab,            setTab]            = useState("tutorials");
-  const [search,         setSearch]         = useState("");
-  const [subject,        setSubject]        = useState("All");
-  const [feed,           setFeed]           = useState(null);
-  const [loading,        setLoading]        = useState(true);
-  const [subjects,       setSubjects]       = useState([]);
-  const [coursesLoading, setCoursesLoading] = useState(false);
-  const [coursesLoaded,  setCoursesLoaded]  = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [subjects, setSubjects] = useState([]);
+  const [topicCounts, setTopicCounts] = useState({});
+  const [sessions, setSessions] = useState([]);
+  const [progress, setProgress] = useState(null);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
-    api.getLearnHome().then(setFeed).catch(() => {}).finally(() => setLoading(false));
+    let alive = true;
+
+    Promise.all([
+      api.getSubjects().catch(() => []),
+      api.getAISessions({ limit: 100, offset: 0 }).catch(() => []),
+      api.getProgress().catch(() => null),
+    ]).then(async ([subjectResult, sessionResult, progressResult]) => {
+      if (!alive) return;
+
+      const list = normalizeSubjects(subjectResult);
+      setSubjects(list);
+
+      const sessionList = Array.isArray(sessionResult) ? sessionResult : (sessionResult?.items || []);
+      setSessions(sessionList);
+      setProgress(progressResult);
+
+      const pairs = await Promise.all(
+        list.map(async subject => {
+          try {
+            const topics = await api.getTopics(subject.id);
+            return [subject.id, Array.isArray(topics) ? topics.length : 0];
+          } catch {
+            return [subject.id, 0];
+          }
+        })
+      );
+      if (alive) {
+        setTopicCounts(Object.fromEntries(pairs));
+        setLoading(false);
+      }
+    }).catch(() => {
+      if (alive) setLoading(false);
+    });
+
+    return () => { alive = false; };
   }, []);
 
-  useEffect(() => {
-    if (tab === "courses" && !coursesLoaded) {
-      setCoursesLoading(true);
-      api.getSubjects()
-        .then(data => setSubjects(Array.isArray(data) ? data : (data?.subjects || [])))
-        .catch(() => {})
-        .finally(() => { setCoursesLoading(false); setCoursesLoaded(true); });
-    }
-  }, [tab, coursesLoaded]);
+  const activeSessions = useMemo(
+    () => sessions.filter(s => !["completed", "abandoned"].includes(s.status)),
+    [sessions]
+  );
 
-  function handleSearch(e) {
-    e.preventDefault();
-    if (search.trim()) navigate(`/app/learn/tutorials?search=${encodeURIComponent(search.trim())}`);
+  const completedSessions = useMemo(
+    () => sessions.filter(s => s.status === "completed"),
+    [sessions]
+  );
+
+  const filteredSubjects = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return subjects;
+    return subjects.filter(s =>
+      `${s.name} ${s.description || ""}`.toLowerCase().includes(q)
+    );
+  }, [subjects, query]);
+
+  const overallPercent = sessions.length
+    ? Math.round((completedSessions.length / sessions.length) * 100)
+    : 0;
+
+  const subjectProgress = useMemo(() => {
+    return subjects.slice(0, 4).map(subject => {
+      const total = topicCounts[subject.id] || 0;
+      const completed = completedSessions.filter(s => Number(s.subjectId) === Number(subject.id)).length;
+      return { subject, total: Math.max(total, completed), completed };
+    });
+  }, [subjects, topicCounts, completedSessions]);
+
+  const focusSession = activeSessions[0] || completedSessions[0] || null;
+  const focusSubject = subjects.find(s => Number(s.id) === Number(focusSession?.subjectId));
+  const focusTopic = focusSession?.topicName || (focusSession ? "Continue your current topic" : null);
+
+  const displayPercent = Number.isFinite(overallPercent) ? overallPercent : 0;
+
+  if (loading) {
+    return (
+      <div className="learn-home">
+        <div className="learn-hero learn-skeleton">
+          <div className="learn-skeleton-line wide" />
+          <div className="learn-skeleton-line medium" />
+          <div className="learn-skeleton-search" />
+        </div>
+        <div className="learn-content-grid">
+          <div>
+            <div className="learn-skeleton-line title" />
+            <div className="learn-subject-grid">
+              {[1,2,3,4,5,6].map(i => <div className="learn-skeleton-card" key={i} />)}
+            </div>
+          </div>
+          <div className="learn-skeleton-side" />
+        </div>
+      </div>
+    );
   }
-  function goTutorial(id) { navigate(`/app/learn/tutorials/${id}`); }
-
-  const allTuts = [
-    ...(feed?.latestTutorials || []),
-    ...(feed?.popular || []),
-  ].filter((t, i, arr) => arr.findIndex(x => x.id === t.id) === i);
 
   return (
-    <div className="ln-page lh-page">
-      {/* MobileHeader is a duplicate — MobileTopBar handles this globally */}
-
-      {/* ── Page heading ── */}
-      <div className="ln-page-head">
-        <span className="ln-page-emoji">📖</span>
-        <div>
-          <h1 className="ln-page-title">Resources</h1>
-          <p className="ln-page-sub">Learn something new. Share what you know.</p>
+    <div className="learn-home">
+      <div className="learn-hero">
+        <div className="learn-hero-copy">
+          <div className="learn-hero-icon">
+            <Icon size={42}>
+              <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H18v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Z" fill="none" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M6.5 19H18M8 7h6M8 10h5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </Icon>
+          </div>
+          <div>
+            <h1>What would you like to learn today?</h1>
+            <p>Choose a subject and explore topics. Your AI tutor will guide you from basics to mastery.</p>
+          </div>
         </div>
+        <RobotArt />
+        <form className="learn-hero-search" onSubmit={e => e.preventDefault()}>
+          <SearchIcon />
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search for a subject, topic or keyword..."
+            aria-label="Search for a subject, topic or keyword"
+          />
+        </form>
       </div>
 
-      {/* ── Tab switcher ── */}
-      <div className="ln-tabs" role="tablist">
-        <button
-          type="button" role="tab"
-          aria-selected={tab === "tutorials"}
-          className={`ln-tab ${tab === "tutorials" ? "active" : ""}`}
-          onClick={() => setTab("tutorials")}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <polygon points="5 3 19 12 5 21 5 3"/>
-          </svg>
-          Tutorials
-        </button>
-        <button
-          type="button" role="tab"
-          aria-selected={tab === "courses"}
-          className={`ln-tab ${tab === "courses" ? "active" : ""}`}
-          onClick={() => setTab("courses")}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <path d="M12 3 2 8l10 5 10-5-10-5z"/>
-            <path d="M6 10.5V16c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5.5"/>
-          </svg>
-          Courses
-        </button>
-      </div>
-
-      {/* ════════ TUTORIALS TAB ════════ */}
-      {tab === "tutorials" && (
-        <>
-          <form className="ln-search-wrap" onSubmit={handleSearch}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-            </svg>
-            <input value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search tutorials, subjects, or topics..." />
-          </form>
-
-          <div className="ln-chips">
-            {["All", ...SUBJECTS].map(s => (
-              <button key={s} type="button"
-                className={`ln-chip ${subject === s ? "selected" : ""}`}
-                style={{ "--c": color(s) }}
-                onClick={() => setSubject(s)}
-              >{s}</button>
-            ))}
+      <div className="learn-home-grid">
+        <section className="learn-subject-area">
+          <div className="learn-section-head">
+            <h2>All Subjects</h2>
+            <label className="learn-sort">
+              <span>Sort by:</span>
+              <select defaultValue="popular" aria-label="Sort subjects">
+                <option value="popular">Popular</option>
+                <option value="name">Name</option>
+                <option value="topics">Topics</option>
+              </select>
+            </label>
           </div>
 
-          {loading && <div className="ln-loading"><span className="discover-spinner" /> Loading...</div>}
-
-          {!loading && feed && (
-            <>
-              {feed.continueWatching?.length > 0 && (
-                <Sec title="Continue Learning" onAll={() => navigate("/app/learn/tutorials")}>
-                  <div className="ln-continue-row">
-                    {feed.continueWatching.map(item => (
-                      <ContinueCard key={`${item.type}-${item.id}`} item={item}
-                        onClick={() => navigate(`/app/learn/tutorials/${item.id}`)} />
-                    ))}
-                  </div>
-                </Sec>
-              )}
-
-              {feed.latestTutorials?.length > 0 && (
-                <Sec title="Featured Tutorials" onAll={() => navigate("/app/learn/tutorials")}>
-                  <div className="ln-feature-row">
-                    {feed.latestTutorials.slice(0, 6).map(t => (
-                      <FeatureCard key={t.id} t={t} onClick={() => goTutorial(t.id)} />
-                    ))}
-                  </div>
-                </Sec>
-              )}
-
-              {feed.popular?.length > 0 && (
-                <Sec title="Popular Tutorials" onAll={() => navigate("/app/learn/tutorials")}>
-                  <div className="ln-grid">
-                    {(subject === "All"
-                      ? feed.popular.slice(0, 4)
-                      : feed.popular.filter(t => t.subject === subject).slice(0, 4)
-                    ).map(t => (
-                      <TutCard key={t.id} t={t} onClick={() => goTutorial(t.id)} />
-                    ))}
-                  </div>
-                </Sec>
-              )}
-
-              {!feed.latestTutorials?.length && !feed.popular?.length && (
-                <div className="ln-empty">
-                  <span>🎓</span>
-                  <h3>No tutorials yet</h3>
-                  <p>Be the first to share your knowledge!</p>
-                  <button type="button" className="ln-btn-primary" onClick={() => navigate("/app/learn/create")}>
-                    Create Tutorial
+          {filteredSubjects.length === 0 ? (
+            <div className="learn-empty">
+              <span className="learn-empty-icon">📚</span>
+              <h3>No subjects found</h3>
+              <p>Try another search term.</p>
+            </div>
+          ) : (
+            <div className="learn-subject-grid">
+              {filteredSubjects.map((subject, index) => {
+                const meta = iconMeta(subject.name, index);
+                const topicCount = topicCounts[subject.id] ?? subject.topicCount ?? 0;
+                return (
+                  <button
+                    key={subject.id}
+                    type="button"
+                    className="learn-subject-card"
+                    onClick={() => navigate(`/app/learn/ai/subject/${subject.id}`)}
+                  >
+                    <div className="learn-subject-card-top">
+                      <SubjectIcon meta={meta} />
+                      <Arrow />
+                    </div>
+                    <div className="learn-subject-card-copy">
+                      <h3>{subject.name}</h3>
+                      <p>{subject.description || meta.description}</p>
+                    </div>
+                    <div className="learn-subject-card-foot">
+                      <span>
+                        <Icon size={18}>
+                          <path d="M6 6.5 12 3l6 3.5-6 3.5-6-3.5Z" stroke="currentColor" strokeWidth="1.5" />
+                          <path d="m6 10 6 3.5 6-3.5M6 13.5 12 17l6-3.5" stroke="currentColor" strokeWidth="1.5" />
+                        </Icon>
+                        {topicCount} {topicCount === 1 ? "topic" : "topics"}
+                      </span>
+                    </div>
                   </button>
-                </div>
-              )}
-
-              <div className="ln-cta-banner">
-                <div>
-                  <h3>Share your knowledge</h3>
-                  <p>Upload a tutorial and help fellow students learn.</p>
-                </div>
-                <button type="button" className="ln-btn-primary" onClick={() => navigate("/app/learn/create")}>
-                  Create Tutorial
-                </button>
-              </div>
-            </>
-          )}
-        </>
-      )}
-
-      {/* ════════ COURSES TAB ════════ */}
-      {tab === "courses" && (
-        <div className="ln-courses-wrap">
-          {coursesLoading && (
-            <div className="ln-loading"><span className="discover-spinner" /> Loading courses...</div>
-          )}
-          {!coursesLoading && coursesLoaded && subjects.length === 0 && (
-            <div className="ln-empty">
-              <span>📚</span>
-              <h3>No courses yet</h3>
-              <p>Check back soon — courses are being added.</p>
+                );
+              })}
             </div>
           )}
-          {!coursesLoading && subjects.length > 0 && (
-            <>
-              <p className="ln-courses-hint">Pick a subject to start learning at your own pace.</p>
-              <div className="ln-courses-list">
-                {subjects.map(s => (
-                  <CourseCard key={s.id} subject={s}
-                    topicCount={s.topicCount ?? s.topics_count ?? 0}
-                    navigate={navigate} />
-                ))}
+        </section>
+
+        <aside className="learn-right-rail">
+          <section className="learn-panel learn-progress-panel">
+            <button type="button" className="learn-panel-close" aria-label="Close progress panel">×</button>
+            <h2>Your Learning Progress</h2>
+
+            <div className="learn-overall-progress">
+              <ProgressRing percent={displayPercent} />
+              <div>
+                <strong>Overall Progress</strong>
+                <span>{completedSessions.length} of {sessions.length} AI sessions completed</span>
               </div>
-            </>
-          )}
-        </div>
-      )}
+            </div>
+
+            <div className="learn-progress-list">
+              {subjectProgress.map(({ subject, completed, total }, index) => (
+                <ProgressSubject
+                  key={subject.id}
+                  subject={subject}
+                  completed={completed}
+                  total={total}
+                  meta={iconMeta(subject.name, index)}
+                />
+              ))}
+              {subjectProgress.length === 0 && (
+                <div className="learn-progress-empty">Start your first AI learning session to see progress here.</div>
+              )}
+            </div>
+          </section>
+
+          <section className="learn-panel learn-quick-panel">
+            <h2>Quick Actions</h2>
+
+            <button type="button" className="learn-quick-action" onClick={() => focusSession ? navigate(`/app/learn/ai/session/${focusSession.id}`) : navigate("/app/learn")}>
+              <span className="learn-quick-icon play"><QuickIcon type="play" /></span>
+              <span>
+                <strong>{focusSession ? "Continue Learning" : "Start Learning"}</strong>
+                <small>{focusSession ? statusLabel(focusSession.status) : "Choose a subject to begin"}</small>
+              </span>
+              <Arrow />
+            </button>
+
+            <button type="button" className="learn-quick-action" onClick={() => navigate("/app/learn/saved")}>
+              <span className="learn-quick-icon doc"><QuickIcon type="doc" /></span>
+              <span><strong>Browse Resources</strong><small>Notes, videos, and materials</small></span>
+              <Arrow />
+            </button>
+
+            <button type="button" className="learn-quick-action" onClick={() => navigate("/app/learn/path")}>
+              <span className="learn-quick-icon path"><QuickIcon type="path" /></span>
+              <span><strong>View Learning Path</strong><small>Recommended journey through your subjects</small></span>
+              <Arrow />
+            </button>
+          </section>
+
+          <section className="learn-panel learn-robot-card">
+            <div className="learn-robot-card-art"><RobotArt /></div>
+            <div>
+              <h3>Small steps.<br />Big progress.</h3>
+              <p>Keep learning, one concept at a time.</p>
+            </div>
+            <div className="learn-growth-arrow">↗</div>
+          </section>
+
+          <button
+            type="button"
+            className="learn-focus-card"
+            onClick={() => focusSession ? navigate(`/app/learn/ai/session/${focusSession.id}`) : navigate("/app/learn")}
+          >
+            <span className="learn-focus-icon"><QuickIcon type="target" /></span>
+            <span>
+              <strong>Today's Focus</strong>
+              <small>{focusSubject ? `${focusSubject.name}${focusTopic ? ` · ${focusTopic}` : ""}` : "Pick a subject to begin"}</small>
+            </span>
+            <Arrow />
+          </button>
+        </aside>
+      </div>
     </div>
   );
 }
