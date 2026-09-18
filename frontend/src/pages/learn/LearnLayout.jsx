@@ -154,16 +154,6 @@ export default function LearnLayout() {
             <strong>Need help?</strong>
             <p>I'm your AI tutor. Ask me anything about your studies!</p>
           </div>
-          <button type="button" className="learn-helper-button" onClick={() => navigate("/app/learn")}>
-            <span className="learn-helper-chat-icon">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M5 5.5h14v10H11l-4.5 3v-3H5v-10Z"/>
-                <path d="M9 10.5h6M9 13h4"/>
-              </svg>
-            </span>
-            <span>Chat with AI</span>
-            <ChevronRight />
-          </button>
         </div>
       </aside>
 
