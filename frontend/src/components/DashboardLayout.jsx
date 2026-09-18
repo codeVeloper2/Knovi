@@ -332,7 +332,10 @@ export default function DashboardLayout() {
       )}
 
       {/* ── Main Content ── */}
-      <main className={`dash-main ${isMobile ? "dash-main--mobile" : "dash-main--desktop"} ${isLearn ? "dash-main--learn" : ""}`}>
+      <main
+        className={`dash-main ${isMobile ? "dash-main--mobile" : "dash-main--desktop"} ${isLearn ? "dash-main--learn" : ""}`}
+        style={isLearn && !isMobile ? { marginTop: 58, padding: 0 } : undefined}
+      >
         <Outlet />
       </main>
 

@@ -84,25 +84,23 @@ function AppRoutes() {
         <Route path="chat/:convId"   element={<ChatPage />} />
         <Route path="match-requests" element={<MatchRequestsPage />} />
 
-        {/* ── Video Learn ── */}
+        {/* ── Learn (all learn pages share the LearnLayout sidebar) ── */}
         <Route path="learn" element={<LearnLayout />}>
           <Route index element={<LearnHome />} />
           <Route path="tutorials"             element={<TutorialsPage />} />
           <Route path="tutorials/:tutorialId" element={<TutorialDetailPage />} />
           <Route path="create"                element={<CreateTutorialPage />} />
           <Route path="my-tutorials"          element={<MyTutorialsPage />} />
-          <Route path="sessions"             element={<StudySessionsPage />} />
-          <Route path="saved"                element={<SavedPage />} />
-          <Route path="path"                 element={<LearningPathPage />} />
-        </Route>
+          <Route path="sessions"              element={<StudySessionsPage />} />
+          <Route path="saved"                 element={<SavedPage />} />
+          <Route path="path"                  element={<LearningPathPage />} />
 
-        {/* ── AI Learning ── */}
-        <Route path="learn/ai">
-          <Route index element={<AILearnHome />} />
-          <Route path="subject/:subjectId" element={<AISubjectPage />} />
-          <Route path="subject/:subjectId/topic/:topicId" element={<AITopicPage />} />
-          <Route path="subject/:subjectId/topic/:topicId/concept/:conceptId" element={<AISessionSetup />} />
-          <Route path="session/:sessionId" element={<AILearningRoom />} />
+          {/* AI Learning — share the same Learn sidebar */}
+          <Route path="ai"                                                         element={<AILearnHome />} />
+          <Route path="ai/subject/:subjectId"                                      element={<AISubjectPage />} />
+          <Route path="ai/subject/:subjectId/topic/:topicId"                       element={<AITopicPage />} />
+          <Route path="ai/subject/:subjectId/topic/:topicId/concept/:conceptId"    element={<AISessionSetup />} />
+          <Route path="ai/session/:sessionId"                                      element={<AILearningRoom />} />
         </Route>
 
         {/* ── Progress & Settings ── */}
