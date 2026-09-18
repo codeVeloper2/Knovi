@@ -890,7 +890,7 @@ async def generate_retrieval_questions(
     session = await _get_session_owned(
         session_id, user_id, db, load_teaching=True
     )
-    if session.status not in ("retrieval", "practice"):
+    if session.status not in ("retrieval", "practice", "reteaching"):
         raise HTTPException(
             409,
             f"Cannot generate questions: session is '{session.status}'."

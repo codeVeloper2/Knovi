@@ -476,7 +476,7 @@ export default function AILearningRoom() {
       setQIndex(0);
       setAnswerInput("");
       setLastEval(null);
-      // Server may be in 'reteaching' — questions endpoint accepts 'reteaching' too
+      // Server is in 'reteaching' — backend now accepts reteaching for question generation
       setPhase("practice");
     } catch (err) {
       setError(err.message || "Failed to generate practice questions.");
