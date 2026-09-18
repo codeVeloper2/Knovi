@@ -473,34 +473,74 @@ export function createLearningSession(subjectId, topicId, conceptId, familiarity
   });
 }
 
-// ── AI Learning ──────────────────────────────────────────────────────────────
+// ── AI Learning (frontend-facing wrappers) ───────────────────────────────────
 
-export function getAISessions() {
-  return listLearningSessions();
+/** List sessions — optionally filtered by status / subjectId. */
+export function getAISessions(opts = {}) {
+  return listLearningSessions(opts);
 }
 
+/** Get a single session with server-side explanation hiding applied. */
 export function getAISession(sessionId) {
   return getLearningSession(sessionId);
 }
 
-export function createAISession({ conceptId, currentKnowledge, studentContext }) {
+/**
+ * Create a new AI learning session.
+ * Maps frontend field names to the exact backend schema:
+ *   subjectId         → subject_id
+ *   topicId           → topic_id
+ *   conceptId         → concept_id
+ *   familiarity       → student_familiarity  (must be one of FAMILIARITY_OPTIONS)
+ *   intent            → intent               (must be one of INTENT_OPTIONS)
+ *   studentNote       → student_note
+ *   customIntentText  → custom_intent_text
+ */
+export function createAISession({
+  subjectId,
+  topicId,
+  conceptId,
+  familiarity,
+  intent = "teach_me",
+  studentNote = null,
+  customIntentText = null,
+}) {
   return post("/api/learning/sessions", {
-    concept_id: conceptId,
-    current_knowledge: currentKnowledge,
-    student_context: studentContext,
+    subject_id:         subjectId,
+    topic_id:           topicId,
+    concept_id:         conceptId,
+    student_familiarity: familiarity,
+    intent,
+    student_note:       studentNote || null,
+    custom_intent_text: customIntentText || null,
   });
 }
 
+/** GET /learning/sessions/{id}/messages — filtered by server based on session state. */
 export function getSessionMessages(sessionId) {
   return get(`/api/learning/sessions/${sessionId}/messages`);
 }
 
+/** Abandon a session (early exit, not a successful completion). */
+export function abandonAISession(sessionId) {
+  return abandonLearningSession(sessionId);
+}
+
+/**
+ * Complete a session.
+ * Guard: server requires session to be in retrieval/practice/reteaching first.
+ * Use abandonAISession() for early exits.
+ */
 export function completeAISession(sessionId) {
   return completeLearningSession(sessionId);
 }
 
-export function generateAdaptiveReteach(sessionId) {
-  return requestReteach(sessionId);
+/**
+ * Request adaptive reteaching.
+ * reason is optional — if omitted the backend uses 'student_struggled'.
+ */
+export function generateAdaptiveReteach(sessionId, reason = null) {
+  return requestReteach(sessionId, reason);
 }
 
 export function getLearningSession(sessionId) {

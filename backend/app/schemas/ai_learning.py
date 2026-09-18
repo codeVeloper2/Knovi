@@ -169,6 +169,11 @@ class AnswerOut(BaseModel):
     feedback:            Optional[str]
     responseTimeSeconds: Optional[int]
     createdAt:           str
+    # Evaluation fields (populated after AI evaluation)
+    understanding:       Optional[str] = None   # strong | partial | weak
+    needsReteach:        Optional[bool] = None
+    misconception:       Optional[str] = None
+    recommendedStrategy: Optional[str] = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────

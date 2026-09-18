@@ -1,264 +1,543 @@
-import { useState, useEffect, useRef } from "react";
+/**
+ * AILearningRoom — ONE continuous AI Learning experience.
+ *
+ * State is driven by the SERVER (session.status), not the frontend timer.
+ * The client timer is UI-only: when it reaches zero the client calls the
+ * server finish endpoint. The server validates elapsed time and either
+ * accepts or rejects the transition.
+ *
+ * Server session.status → UI room state mapping:
+ *   created     → intent_selection
+ *   teaching    → teaching
+ *   studying    → studying  (timer running)
+ *   retrieval   → retrieval
+ *   reteaching  → reteaching
+ *   practice    → practice
+ *   completed   → summary
+ *   abandoned   → abandoned
+ */
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import * as api from "../../api";
+import { TutorAvatar } from "./AISessionSetup";
+
+// ── Status → room phase mapping ───────────────────────────────────────────────
+function serverStatusToPhase(status, hasMessages) {
+  switch (status) {
+    case "created":    return "intent_selection";
+    case "teaching":   return hasMessages ? "teaching" : "intent_selection";
+    case "studying":   return "studying";
+    case "retrieval":  return "retrieval";
+    case "reteaching": return "reteaching";
+    case "practice":   return "practice";
+    case "completed":  return "summary";
+    case "abandoned":  return "abandoned";
+    default:           return "intent_selection";
+  }
+}
+
+// ── Intent options shown in room (mapped to backend INTENT_OPTIONS) ───────────
+const ROOM_INTENTS = [
+  { value: "teach_me",       label: "Teach me this",          icon: "📚" },
+  { value: "explain_simply", label: "Explain it simply",      icon: "💡" },
+  { value: "give_examples",  label: "Give me examples",       icon: "📝" },
+  { value: "go_deeper",      label: "Go deeper",              icon: "🔬" },
+  { value: "broaden",        label: "Broaden this",           icon: "🌐" },
+  { value: "already_know",   label: "Test my knowledge",      icon: "🎯" },
+  { value: "quiz_me",        label: "Quiz me straight away",  icon: "✅" },
+];
+
+const PHASE_LABELS = {
+  intent_selection: "Getting started",
+  teaching:         "Learning",
+  studying:         "Studying",
+  retrieval:        "Recall",
+  reteaching:       "Re-learning",
+  practice:         "Practice",
+  summary:          "Summary",
+};
+
+const PROGRESS_PHASES = ["teaching", "studying", "retrieval", "practice", "summary"];
 
 export default function AILearningRoom() {
   const { sessionId } = useParams();
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [session, setSession] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [currentState, setCurrentState] = useState("welcome"); // welcome, intent_selection, teaching, study, retrieval, evaluation, reteaching, summary
-  const [userInput, setUserInput] = useState("");
-  const [sending, setSending] = useState(false);
-  const [studyTimer, setStudyTimer] = useState(null);
-  const [studyPeriodId, setStudyPeriodId] = useState(null);
-  const [questions, setQuestions] = useState([]);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answer, setAnswer] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const messagesEndRef = useRef(null);
-  const timerIntervalRef = useRef(null);
+  const navigate      = useNavigate();
 
+  // ── Core session state ────────────────────────────────────────────────────
+  const [loading,      setLoading]      = useState(true);
+  const [session,      setSession]      = useState(null);
+  const [messages,     setMessages]     = useState([]);
+  const [phase,        setPhase]        = useState("intent_selection");
+  const [error,        setError]        = useState(null);
+
+  // ── Teaching ──────────────────────────────────────────────────────────────
+  const [teaching,     setTeaching]     = useState(null);
+  const [aiWorking,    setAiWorking]    = useState(false);
+
+  // ── Study timer ───────────────────────────────────────────────────────────
+  const [studyPeriod,  setStudyPeriod]  = useState(null);   // StudyPeriodOut
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [timerPaused,  setTimerPaused]  = useState(false);
+  const timerRef  = useRef(null);
+  const pausedRef = useRef(false);
+
+  // ── Retrieval ─────────────────────────────────────────────────────────────
+  const [questions,    setQuestions]    = useState([]);
+  const [qIndex,       setQIndex]       = useState(0);
+  const [answerInput,  setAnswerInput]  = useState("");
+  const [submitting,   setSubmitting]   = useState(false);
+  const [lastEval,     setLastEval]     = useState(null);  // last AnswerOut
+
+  // ── Summary ───────────────────────────────────────────────────────────────
+  const [summary,      setSummary]      = useState(null);
+
+  // ── Input ─────────────────────────────────────────────────────────────────
+  const [msgInput,     setMsgInput]     = useState("");
+
+  const bottomRef    = useRef(null);
+  const inputRef     = useRef(null);
+
+  // ── Auto-scroll ───────────────────────────────────────────────────────────
   useEffect(() => {
-    loadSession();
-    return () => {
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
-      }
-    };
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, phase, lastEval]);
+
+  // ── Load / resume session ─────────────────────────────────────────────────
+  useEffect(() => {
+    loadAndResume();
+    return () => clearTimer();
   }, [sessionId]);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  function scrollToBottom() {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  async function loadAndResume() {
+    setLoading(true);
+    setError(null);
+    try {
+      const [sess, msgs] = await Promise.all([
+        api.getAISession(sessionId),
+        api.getSessionMessages(sessionId),
+      ]);
+      applyServerState(sess, msgs);
+    } catch (err) {
+      setError(err.message || "Failed to load session.");
+    } finally {
+      setLoading(false);
+    }
   }
 
-  async function loadSession() {
+  /** Apply server state to all local UI state — used on load and after mutations. */
+  function applyServerState(sess, msgs) {
+    setSession(sess);
+    setMessages(msgs || []);
+
+    const derivedPhase = serverStatusToPhase(
+      sess.status,
+      (msgs || []).filter(m => m.messageType === "teaching" || m.messageType === "reteach").length > 0,
+    );
+    setPhase(derivedPhase);
+
+    // Resume teaching content
+    if (sess.teaching) {
+      setTeaching(sess.teaching);
+    }
+
+    // Resume summary
+    if (sess.summary) {
+      setSummary(sess.summary);
+    }
+
+    // Resume active study timer
+    if (sess.activeStudyPeriod && sess.status === "studying") {
+      const remaining = sess.activeStudyPeriod.remainingSeconds ?? 0;
+      setStudyPeriod(sess.activeStudyPeriod);
+      if (remaining > 0) {
+        startClientTimer(remaining, sess.activeStudyPeriod.id);
+      } else {
+        // Timer already expired server-side — transition immediately
+        handleServerTimerExpired(sess.activeStudyPeriod.id);
+      }
+    }
+
+    // Resume questions if in retrieval/practice
+    if (
+      (derivedPhase === "retrieval" || derivedPhase === "practice") &&
+      sess.questions?.length > 0
+    ) {
+      setQuestions(sess.questions);
+      setQIndex(0);
+    }
+  }
+
+  // ── Client-side timer (UI only) ───────────────────────────────────────────
+  function startClientTimer(seconds, periodId) {
+    clearTimer();
+    setTimerSeconds(seconds);
+    pausedRef.current = false;
+    setTimerPaused(false);
+    timerRef.current = setInterval(() => {
+      if (pausedRef.current) return;
+      setTimerSeconds(prev => {
+        if (prev <= 1) {
+          clearTimer();
+          handleServerTimerExpired(periodId);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }
+
+  function clearTimer() {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }
+
+  function toggleTimerPause() {
+    pausedRef.current = !pausedRef.current;
+    setTimerPaused(pausedRef.current);
+  }
+
+  /** Timer reached zero on client — tell server to finish the study period. */
+  async function handleServerTimerExpired(periodId) {
+    clearTimer();
     try {
+      await api.finishStudyPeriod(sessionId, periodId);
+      // Refresh to get server-authoritative retrieval state
+      const [sess, msgs] = await Promise.all([
+        api.getAISession(sessionId),
+        api.getSessionMessages(sessionId),
+      ]);
+      applyServerState(sess, msgs);
+    } catch (err) {
+      // Server may reject early finish — show error but don't crash
+      setError(err.message || "Could not transition to retrieval. Please try again.");
+      // Resume timer with remaining server time if available
+      loadAndResume();
+    }
+  }
+
+  // ── Intent dispatch ───────────────────────────────────────────────────────
+  async function handleIntentSelect(intentValue) {
+    setAiWorking(true);
+    setError(null);
+    try {
+      // "quiz_me" and "already_know" go straight to retrieval questions
+      if (intentValue === "quiz_me" || intentValue === "already_know") {
+        // First ensure a teaching snapshot exists (even empty/diagnostic)
+        const t = await api.teachConcept(sessionId);
+        setTeaching(t);
+        addOptimisticTeachingMessage(t);
+        // Immediately start retrieval
+        await triggerRetrieval();
+        return;
+      }
+
+      // All other intents: generate teaching
+      const t = await api.teachConcept(sessionId);
+      setTeaching(t);
+      addOptimisticTeachingMessage(t);
+
       const sess = await api.getAISession(sessionId);
       setSession(sess);
-      
-      // Load existing messages
-      const msgs = await api.getSessionMessages(sessionId);
-      setMessages(msgs || []);
-      
-      // Determine current state based on session
-      if (sess.status === "completed") {
-        setCurrentState("summary");
-      } else if (msgs.length === 0) {
-        setCurrentState("intent_selection");
-      } else {
-        // Determine state from last message or session phase
-        const lastMsg = msgs[msgs.length - 1];
-        if (lastMsg?.messageType === "teaching") {
-          setCurrentState("teaching");
-        } else {
-          setCurrentState("teaching");
-        }
-      }
-      setLoading(false);
+      setPhase("teaching");
     } catch (err) {
-      alert(err.message || "Failed to load session");
-      setLoading(false);
-    }
-  }
-
-  async function handleIntent(intent) {
-    setSending(true);
-    try {
-      let response;
-      if (intent === "teach") {
-        response = await api.teachConcept(sessionId);
-      } else {
-        response = await api.sendStudentMessage(sessionId, intent);
-      }
-      
-      if (response.message) {
-        setMessages(prev => [...prev, response.message]);
-      }
-      setCurrentState("teaching");
-    } catch (err) {
-      alert(err.message || "Failed to process request");
+      setError(err.message || "AI service error. Please try again.");
     } finally {
-      setSending(false);
+      setAiWorking(false);
     }
   }
 
-  async function handleSendMessage() {
-    if (!userInput.trim() || sending) return;
-    
-    const userMsg = {
-      role: "student",
-      content: userInput,
-      messageType: "question",
-      createdAt: new Date().toISOString(),
-    };
-    
-    setMessages(prev => [...prev, userMsg]);
-    setUserInput("");
-    setSending(true);
-    
-    try {
-      const response = await api.sendStudentMessage(sessionId, userInput);
-      if (response.message) {
-        setMessages(prev => [...prev, response.message]);
-      }
-    } catch (err) {
-      alert(err.message || "Failed to send message");
-    } finally {
-      setSending(false);
-    }
+  function addOptimisticTeachingMessage(t) {
+    if (!t?.explanation) return;
+    setMessages(prev => [
+      ...prev,
+      {
+        id:          `local-${Date.now()}`,
+        role:        "ai",
+        messageType: "teaching",
+        content:     t.explanation,
+        sequence:    prev.length + 1,
+        createdAt:   new Date().toISOString(),
+        extra:       { strategy: t.strategy },
+      },
+    ]);
   }
 
+  // ── Start study period ────────────────────────────────────────────────────
   async function handleStartStudy() {
+    setAiWorking(true);
+    setError(null);
     try {
-      const response = await api.startStudyPeriod(sessionId, 300); // 5 minutes default
-      setStudyTimer(response.durationSeconds || 300);
-      setStudyPeriodId(response.studyPeriodId);
-      setCurrentState("study");
-      
-      // Start countdown
-      timerIntervalRef.current = setInterval(() => {
-        setStudyTimer(prev => {
-          if (prev <= 1) {
-            clearInterval(timerIntervalRef.current);
-            handleStudyComplete();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+      const period = await api.startStudyPeriod(sessionId, 300);
+      setStudyPeriod(period);
+      setSession(prev => ({ ...prev, status: "studying" }));
+      setPhase("studying");
+      startClientTimer(period.durationSeconds, period.id);
     } catch (err) {
-      alert(err.message || "Failed to start study period");
+      setError(err.message || "Failed to start study period.");
+    } finally {
+      setAiWorking(false);
     }
   }
 
-  async function handleStudyComplete() {
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-    }
-    
+  // ── Teaching tool buttons ─────────────────────────────────────────────────
+  async function handleTeachingAction(action) {
+    const actionMessages = {
+      show_example:        "Can you show me a concrete example?",
+      explain_differently: "Can you explain this using a different approach?",
+      make_simpler:        "Can you explain this more simply?",
+      go_deeper:           "Can you go into more depth on this?",
+      why:                 "Why does this work this way?",
+      real_world:          "Can you give me a real-world example of this?",
+    };
+    const msg = actionMessages[action] || action;
+    await handleSendMessage(msg);
+  }
+
+  // ── Free-form message ─────────────────────────────────────────────────────
+  async function handleSendMessage(text) {
+    const content = (text || msgInput).trim();
+    if (!content || aiWorking) return;
+    setMsgInput("");
+    setAiWorking(true);
+    setError(null);
+
+    // Optimistic student message
+    setMessages(prev => [...prev, {
+      id:          `local-${Date.now()}`,
+      role:        "student",
+      messageType: "question",
+      content,
+      sequence:    prev.length + 1,
+      createdAt:   new Date().toISOString(),
+    }]);
+
     try {
-      if (studyPeriodId) {
-        await api.finishStudyPeriod(sessionId, studyPeriodId);
-      }
-      setCurrentState("study_complete");
+      const msg = await api.sendStudentMessage(sessionId, content);
+      setMessages(prev => [...prev, msg]);
     } catch (err) {
-      console.error("Failed to finish study period:", err);
-      setCurrentState("study_complete");
+      setError(err.message || "Failed to send message.");
+    } finally {
+      setAiWorking(false);
+    }
+  }
+
+  // ── Retrieval ─────────────────────────────────────────────────────────────
+  async function triggerRetrieval() {
+    try {
+      const qs = await api.generateRetrievalQuestions(sessionId, 3);
+      // qs is an array directly (not {questions: []})
+      const arr = Array.isArray(qs) ? qs : (qs.questions || []);
+      setQuestions(arr);
+      setQIndex(0);
+      setAnswerInput("");
+      setLastEval(null);
+      setSession(prev => ({ ...prev, status: "retrieval" }));
+      setPhase("retrieval");
+    } finally {
+      setAiWorking(false);
     }
   }
 
   async function handleStartRetrieval() {
-    setSending(true);
+    setAiWorking(true);
+    setError(null);
     try {
-      const response = await api.generateRetrievalQuestions(sessionId, 3);
-      setQuestions(response.questions || []);
-      setCurrentQuestionIndex(0);
-      setAnswer("");
-      setCurrentState("retrieval");
+      await triggerRetrieval();
     } catch (err) {
-      alert(err.message || "Failed to generate questions");
-    } finally {
-      setSending(false);
+      setError(err.message || "Failed to generate questions.");
+      setAiWorking(false);
     }
   }
 
+  // ── Answer submission ─────────────────────────────────────────────────────
   async function handleSubmitAnswer() {
-    if (!answer.trim() || submitting) return;
-    
-    const currentQuestion = questions[currentQuestionIndex];
+    if (!answerInput.trim() || submitting) return;
+    const question = questions[qIndex];
+    if (!question) return;
+
     setSubmitting(true);
-    
+    setError(null);
     try {
-      const response = await api.submitAnswer(
+      // Backend returns AnswerOut with understanding/needsReteach fields
+      const evaluation = await api.submitAnswer(
         sessionId,
-        currentQuestion.id,
-        answer,
-        null
+        question.id,
+        answerInput.trim(),
+        null,
       );
-      
-      // Show evaluation
-      if (response.evaluation) {
+      setLastEval(evaluation);
+      setAnswerInput("");
+
+      // Add feedback message to conversation
+      if (evaluation.feedback) {
         setMessages(prev => [...prev, {
-          role: "tutor",
-          content: response.evaluation.feedback,
-          messageType: "evaluation",
-          createdAt: new Date().toISOString(),
+          id:          `local-eval-${Date.now()}`,
+          role:        "ai",
+          messageType: "feedback",
+          content:     evaluation.feedback,
+          sequence:    prev.length + 1,
+          createdAt:   new Date().toISOString(),
+          extra:       {
+            score:          evaluation.score,
+            understanding:  evaluation.understanding,
+            isCorrect:      evaluation.isCorrect,
+          },
         }]);
       }
-      
-      // Check if reteaching needed
-      if (response.needsReteaching) {
-        setCurrentState("reteaching");
-        // Trigger reteaching
-        const reteach = await api.generateAdaptiveReteach(sessionId);
-        if (reteach.message) {
-          setMessages(prev => [...prev, reteach.message]);
-        }
-      } else if (currentQuestionIndex < questions.length - 1) {
-        // Next question
-        setCurrentQuestionIndex(prev => prev + 1);
-        setAnswer("");
+
+      // Refresh session status from server
+      const sess = await api.getAISession(sessionId);
+      setSession(sess);
+
+      // Determine next step from server state + evaluation
+      if (evaluation.needsReteach) {
+        // Server has already transitioned to 'reteaching' — trigger reteach
+        setPhase("reteaching");
+        await doReteach(evaluation.misconception, evaluation.recommendedStrategy);
+      } else if (qIndex < questions.length - 1) {
+        // More questions remaining
+        setQIndex(prev => prev + 1);
+        setLastEval(null);
       } else {
-        // All questions done
-        handleGenerateSummary();
+        // All questions answered with passing scores — go to summary
+        await doSummary();
       }
     } catch (err) {
-      alert(err.message || "Failed to submit answer");
+      setError(err.message || "Failed to submit answer.");
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function handleGenerateSummary() {
-    setSending(true);
+  // ── Adaptive reteaching ───────────────────────────────────────────────────
+  async function doReteach(misconception, recommendedStrategy) {
+    setAiWorking(true);
+    setError(null);
     try {
-      const response = await api.generateSessionSummary(sessionId);
-      if (response.summary) {
-        setSession(prev => ({ ...prev, summary: response.summary }));
+      const reason = misconception
+        ? `Student misconception: ${misconception}`
+        : "Student answer score below threshold";
+      const t = await api.generateAdaptiveReteach(sessionId, reason);
+      setTeaching(t);
+
+      // Add reteach message to conversation
+      if (t?.explanation) {
+        setMessages(prev => [...prev, {
+          id:          `local-reteach-${Date.now()}`,
+          role:        "ai",
+          messageType: "reteach",
+          content:     t.explanation,
+          sequence:    prev.length + 1,
+          createdAt:   new Date().toISOString(),
+          extra:       { strategy: t.strategy },
+        }]);
       }
-      setCurrentState("summary");
+
+      setPhase("reteaching");
+      setLastEval(null);
     } catch (err) {
-      alert(err.message || "Failed to generate summary");
+      setError(err.message || "Failed to generate new explanation.");
     } finally {
-      setSending(false);
+      setAiWorking(false);
     }
   }
 
-  async function handleEndSession() {
-    if (confirm("Are you sure you want to end this session?")) {
-      try {
-        await api.completeAISession(sessionId);
-        navigate("/app/learn/ai");
-      } catch (err) {
-        alert(err.message || "Failed to end session");
-      }
+  async function handleRequestReteach() {
+    await doReteach(null, null);
+  }
+
+  // ── After reteach: study again ────────────────────────────────────────────
+  async function handleStudyReteach() {
+    setAiWorking(true);
+    setError(null);
+    try {
+      const period = await api.startStudyPeriod(sessionId, 240); // 4 min for reteach
+      setStudyPeriod(period);
+      setSession(prev => ({ ...prev, status: "studying" }));
+      setPhase("studying");
+      startClientTimer(period.durationSeconds, period.id);
+    } catch (err) {
+      setError(err.message || "Failed to start study period.");
+    } finally {
+      setAiWorking(false);
     }
   }
+
+  // ── After reteach: go straight to new questions ───────────────────────────
+  async function handlePracticeAfterReteach() {
+    setAiWorking(true);
+    setError(null);
+    try {
+      const qs = await api.generateRetrievalQuestions(sessionId, 2);
+      const arr = Array.isArray(qs) ? qs : (qs.questions || []);
+      setQuestions(arr);
+      setQIndex(0);
+      setAnswerInput("");
+      setLastEval(null);
+      // Server may be in 'reteaching' — questions endpoint accepts 'reteaching' too
+      setPhase("practice");
+    } catch (err) {
+      setError(err.message || "Failed to generate practice questions.");
+    } finally {
+      setAiWorking(false);
+    }
+  }
+
+  // ── Summary ───────────────────────────────────────────────────────────────
+  async function doSummary() {
+    setAiWorking(true);
+    setError(null);
+    try {
+      const s = await api.generateSessionSummary(sessionId);
+      // generateSessionSummary returns SummaryOut directly (not {summary: …})
+      setSummary(s);
+      setSession(prev => ({ ...prev, status: "completed" }));
+      setPhase("summary");
+    } catch (err) {
+      setError(err.message || "Failed to generate summary.");
+    } finally {
+      setAiWorking(false);
+    }
+  }
+
+  // ── End session (early exit = abandon) ───────────────────────────────────
+  async function handleEndSession() {
+    if (!window.confirm(
+      "End this session?\n\nYour progress so far will be saved but the session won't be marked as completed."
+    )) return;
+    try {
+      await api.abandonAISession(sessionId);
+      navigate("/app/learn/ai");
+    } catch (err) {
+      setError(err.message || "Failed to end session.");
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════════════════════════════════════
 
   if (loading) {
     return (
-      <div className="ai-learning-room">
-        <div className="ai-room-topbar">
-          <div className="skeleton skeleton-text" style={{ width: "150px", height: "24px" }} />
+      <div className="air-shell">
+        <div className="air-topbar">
+          <div className="skeleton skeleton-text" style={{ width: 140, height: 20 }} />
         </div>
-        <div className="ai-room-content">
-          <div className="skeleton skeleton-text" style={{ width: "80%", height: "60px", margin: "20px 0" }} />
+        <div className="air-body">
+          <div className="skeleton skeleton-text" style={{ width: "70%", height: 80, margin: "32px auto" }} />
+          <div className="skeleton skeleton-text" style={{ width: "50%", height: 20, margin: "12px auto" }} />
         </div>
       </div>
     );
   }
 
-  if (!session) {
+  if (error && !session) {
     return (
-      <div className="ai-learning-room">
-        <div className="ai-empty-state">
-          <p className="ai-empty-text">Session not found.</p>
+      <div className="air-shell">
+        <div className="air-body" style={{ textAlign: "center", padding: "80px 24px" }}>
+          <p style={{ color: "var(--ai-error)", marginBottom: 20 }}>{error}</p>
           <button className="ai-btn-secondary" onClick={() => navigate("/app/learn/ai")}>
             Back to AI Learning
           </button>
@@ -267,299 +546,727 @@ export default function AILearningRoom() {
     );
   }
 
+  if (phase === "abandoned") {
+    return (
+      <div className="air-shell">
+        <div className="air-body" style={{ textAlign: "center", padding: "80px 24px" }}>
+          <p style={{ color: "var(--ai-text-secondary)", marginBottom: 20 }}>
+            This session was ended early.
+          </p>
+          <button className="ai-btn-primary" onClick={() => navigate("/app/learn/ai")}>
+            Back to AI Learning
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const conceptName  = session?.conceptName  || "Concept";
+  const subjectName  = session?.subjectName  || "";
+  const topicName    = session?.topicName    || "";
+
   return (
-    <div className="ai-learning-room">
-      {/* Top Bar */}
-      <div className="ai-room-topbar">
-        <button className="ai-room-back" onClick={() => navigate("/app/learn/ai")}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <div className="air-shell">
+      {/* ── Top bar ──────────────────────────────────────────────────────── */}
+      <header className="air-topbar">
+        <button
+          className="air-topbar-back"
+          aria-label="Back to AI Learning"
+          onClick={() => navigate("/app/learn/ai")}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
             <path d="M19 12H5M12 19l-7-7 7-7" />
           </svg>
         </button>
-        <div className="ai-room-info">
-          <h1 className="ai-room-title">AI Learning</h1>
-          <p className="ai-room-meta">
-            {session.subjectName} · {session.topicName}
-          </p>
+
+        <div className="air-topbar-info">
+          <span className="air-topbar-title">AI Learning</span>
+          {(subjectName || topicName) && (
+            <span className="air-topbar-meta">
+              {[subjectName, topicName].filter(Boolean).join(" · ")}
+            </span>
+          )}
         </div>
-        <div className="ai-room-status">
-          <span className={`status-badge status-${session.status}`}>
-            {formatStatus(session.status)}
-          </span>
-        </div>
-        <button className="ai-btn-danger-outline ai-btn-small" onClick={handleEndSession}>
-          End Session
+
+        <SessionProgress currentPhase={phase} />
+
+        <button
+          className="air-end-btn"
+          onClick={handleEndSession}
+          aria-label="End session"
+        >
+          End
         </button>
-      </div>
+      </header>
 
-      {/* Main Content */}
-      <div className="ai-room-content">
-        <div className="ai-room-messages">
-          {/* Messages */}
-          {messages.map((msg, idx) => (
-            <div key={idx} className={`ai-message ${msg.role === "tutor" ? "ai-message-tutor" : "ai-message-student"}`}>
-              {msg.role === "tutor" && (
-                <div className="ai-message-avatar">
-                  <svg width="32" height="32" viewBox="0 0 120 120" fill="none">
-                    <circle cx="60" cy="60" r="50" fill="url(#grad3)" />
-                    <circle cx="45" cy="50" r="6" fill="#fff" />
-                    <circle cx="75" cy="50" r="6" fill="#fff" />
-                    <path d="M40 70 Q60 80 80 70" stroke="#fff" strokeWidth="3" strokeLinecap="round" fill="none" />
-                    <defs>
-                      <linearGradient id="grad3" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#4f6ef7" />
-                        <stop offset="100%" stopColor="#6366f1" />
-                      </linearGradient>
-                    </defs>
-                  </svg>
-                </div>
-              )}
-              <div className="ai-message-content">
-                {msg.role === "tutor" && <div className="ai-message-label">PeerUp AI</div>}
-                <div className="ai-message-text">
-                  <MessageContent content={msg.content} />
-                </div>
-              </div>
-            </div>
-          ))}
+      {/* ── Main body ────────────────────────────────────────────────────── */}
+      <main className="air-body">
 
-          {/* Intent Selection */}
-          {currentState === "intent_selection" && (
-            <div className="ai-intent-section">
-              <h2 className="ai-intent-title">What would you like to do first?</h2>
-              <div className="ai-intent-options">
-                <button className="ai-intent-btn" onClick={() => handleIntent("teach")} disabled={sending}>
-                  <span className="ai-intent-icon">📚</span>
-                  <span>Teach me this</span>
-                </button>
-                <button className="ai-intent-btn" onClick={() => handleIntent("explain_simply")} disabled={sending}>
-                  <span className="ai-intent-icon">💡</span>
-                  <span>Explain it simply</span>
-                </button>
-                <button className="ai-intent-btn" onClick={() => handleIntent("give_examples")} disabled={sending}>
-                  <span className="ai-intent-icon">📝</span>
-                  <span>Give me examples</span>
-                </button>
-                <button className="ai-intent-btn" onClick={() => handleIntent("broaden")} disabled={sending}>
-                  <span className="ai-intent-icon">🌐</span>
-                  <span>Broaden this</span>
-                </button>
-                <button className="ai-intent-btn" onClick={() => handleIntent("go_deeper")} disabled={sending}>
-                  <span className="ai-intent-icon">🔬</span>
-                  <span>Go deeper</span>
-                </button>
-                <button className="ai-intent-btn" onClick={() => handleIntent("quiz_me")} disabled={sending}>
-                  <span className="ai-intent-icon">✅</span>
-                  <span>Quiz me</span>
-                </button>
-              </div>
-              <div className="ai-intent-custom">
-                <input
-                  type="text"
-                  className="ai-intent-input"
-                  placeholder="Ask your own question..."
-                  value={userInput}
-                  onChange={e => setUserInput(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && handleSendMessage()}
-                />
-                <button className="ai-btn-primary" onClick={handleSendMessage} disabled={sending || !userInput.trim()}>
-                  Ask
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Teaching State Actions */}
-          {currentState === "teaching" && !sending && (
-            <div className="ai-teaching-actions">
-              <button className="ai-action-btn" onClick={handleStartStudy}>
-                Start Study Period
-              </button>
-              <button className="ai-action-btn-outline" onClick={() => handleIntent("show_example")}>
-                Show an example
-              </button>
-              <button className="ai-action-btn-outline" onClick={() => handleIntent("explain_differently")}>
-                Explain differently
-              </button>
-              <button className="ai-action-btn-outline" onClick={() => handleIntent("make_simpler")}>
-                Make it simpler
-              </button>
-            </div>
-          )}
-
-          {/* Study Timer */}
-          {currentState === "study" && studyTimer !== null && (
-            <div className="ai-study-timer">
-              <h3 className="ai-study-title">Study this explanation</h3>
-              <p className="ai-study-subtitle">Take a few minutes to understand the concept</p>
-              <div className="ai-timer-display">
-                <svg className="ai-timer-circle" viewBox="0 0 100 100">
-                  <circle
-                    className="ai-timer-bg"
-                    cx="50"
-                    cy="50"
-                    r="45"
-                    fill="none"
-                    stroke="rgba(255,255,255,0.1)"
-                    strokeWidth="8"
-                  />
-                  <circle
-                    className="ai-timer-progress"
-                    cx="50"
-                    cy="50"
-                    r="45"
-                    fill="none"
-                    stroke="#4f6ef7"
-                    strokeWidth="8"
-                    strokeDasharray="283"
-                    strokeDashoffset={283 * (1 - studyTimer / 300)}
-                    strokeLinecap="round"
-                  />
-                </svg>
-                <div className="ai-timer-text">
-                  {formatTime(studyTimer)}
-                </div>
-              </div>
-              {studyTimer < 60 && (
-                <p className="ai-study-warning">Almost done. Finish reading the explanation.</p>
-              )}
-            </div>
-          )}
-
-          {/* Study Complete */}
-          {currentState === "study_complete" && (
-            <div className="ai-study-complete">
-              <h3 className="ai-study-title">Study time is up.</h3>
-              <p className="ai-study-subtitle">Let's see what you remember.</p>
-              <button className="ai-btn-primary" onClick={handleStartRetrieval} disabled={sending}>
-                Start Check
-              </button>
-            </div>
-          )}
-
-          {/* Retrieval Questions */}
-          {currentState === "retrieval" && questions.length > 0 && (
-            <div className="ai-retrieval-section">
-              <div className="ai-question-header">
-                <h3 className="ai-question-title">Question {currentQuestionIndex + 1} of {questions.length}</h3>
-              </div>
-              <div className="ai-question-card">
-                <p className="ai-question-text">{questions[currentQuestionIndex].questionText}</p>
-                <textarea
-                  className="ai-answer-input"
-                  placeholder="Type your answer here..."
-                  value={answer}
-                  onChange={e => setAnswer(e.target.value)}
-                  rows={4}
-                />
-                <button
-                  className="ai-btn-primary"
-                  onClick={handleSubmitAnswer}
-                  disabled={!answer.trim() || submitting}
-                >
-                  {submitting ? "Submitting..." : "Submit Answer"}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Summary */}
-          {currentState === "summary" && session.summary && (
-            <div className="ai-summary-section">
-              <h2 className="ai-summary-title">Session Complete</h2>
-              <div className="ai-summary-card">
-                <h3 className="ai-summary-subtitle">What you learned</h3>
-                <p className="ai-summary-text">{session.summary.conceptCovered}</p>
-                
-                {session.summary.understood && (
-                  <div className="ai-summary-item">
-                    <h4 className="ai-summary-item-title">What you understood</h4>
-                    <p>{session.summary.understood}</p>
-                  </div>
-                )}
-                
-                {session.summary.needsPractice && (
-                  <div className="ai-summary-item">
-                    <h4 className="ai-summary-item-title">What needs more practice</h4>
-                    <p>{session.summary.needsPractice}</p>
-                  </div>
-                )}
-                
-                {session.summary.timeSpent && (
-                  <div className="ai-summary-meta">
-                    Time spent: {formatDuration(session.summary.timeSpent)}
-                  </div>
-                )}
-              </div>
-              
-              <div className="ai-summary-actions">
-                <button className="ai-btn-primary" onClick={() => navigate("/app/learn/ai")}>
-                  Continue Learning
-                </button>
-                <button className="ai-btn-secondary" onClick={() => window.location.reload()}>
-                  Practice Again
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input (for teaching/reteaching states) */}
-        {(currentState === "teaching" || currentState === "reteaching") && (
-          <div className="ai-room-input">
-            <input
-              type="text"
-              className="ai-input-field"
-              placeholder="Ask a question or request clarification..."
-              value={userInput}
-              onChange={e => setUserInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleSendMessage()}
-            />
+        {/* Error banner */}
+        {error && (
+          <div className="air-error-banner" role="alert">
+            {error}
             <button
-              className="ai-send-btn"
-              onClick={handleSendMessage}
-              disabled={sending || !userInput.trim()}
+              className="air-error-dismiss"
+              onClick={() => setError(null)}
+              aria-label="Dismiss error"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
-              </svg>
+              ✕
             </button>
           </div>
+        )}
+
+        {/* ── Message history ──────────────────────────────────────────── */}
+        <div className="air-messages" aria-live="polite" aria-label="Learning conversation">
+          {messages
+            .filter(m => m.messageType !== "welcome" && m.messageType !== "system"
+              && m.messageType !== "timer_start" && m.messageType !== "timer_end")
+            .map((msg, idx) => (
+              <Message
+                key={msg.id || idx}
+                msg={msg}
+                isHidden={phase === "retrieval" && msg.messageType === "teaching"}
+              />
+            ))
+          }
+
+          {aiWorking && <TypingIndicator />}
+
+          {/* ── Phase-specific overlays ─────────────────────────────── */}
+
+          {/* INTENT SELECTION */}
+          {phase === "intent_selection" && !aiWorking && (
+            <IntentPanel
+              conceptName={conceptName}
+              onSelect={handleIntentSelect}
+              msgInput={msgInput}
+              setMsgInput={setMsgInput}
+              onSend={() => handleSendMessage()}
+            />
+          )}
+
+          {/* TEACHING ACTIONS */}
+          {phase === "teaching" && !aiWorking && (
+            <TeachingActions
+              onStartStudy={handleStartStudy}
+              onAction={handleTeachingAction}
+            />
+          )}
+
+          {/* STUDYING — timer */}
+          {phase === "studying" && (
+            <StudyTimerPanel
+              seconds={timerSeconds}
+              totalSeconds={studyPeriod?.durationSeconds || 300}
+              paused={timerPaused}
+              onTogglePause={toggleTimerPause}
+            />
+          )}
+
+          {/* RETRIEVAL */}
+          {(phase === "retrieval" || phase === "practice") && (
+            questions.length > 0 ? (
+              <RetrievalPanel
+                question={questions[qIndex]}
+                questionNumber={qIndex + 1}
+                totalQuestions={questions.length}
+                answer={answerInput}
+                setAnswer={setAnswerInput}
+                onSubmit={handleSubmitAnswer}
+                submitting={submitting}
+                lastEval={lastEval}
+                onNext={qIndex < questions.length - 1
+                  ? () => { setQIndex(q => q + 1); setLastEval(null); }
+                  : null
+                }
+                onSummary={doSummary}
+                onReteach={() => doReteach(lastEval?.misconception, lastEval?.recommendedStrategy)}
+              />
+            ) : (
+              <div className="air-action-panel">
+                <button className="ai-btn-primary" onClick={handleStartRetrieval} disabled={aiWorking}>
+                  {aiWorking ? "Generating questions…" : "Start Recall Check"}
+                </button>
+              </div>
+            )
+          )}
+
+          {/* RETEACHING ACTIONS */}
+          {phase === "reteaching" && !aiWorking && (
+            <ReteachActions
+              onStudyAgain={handleStudyReteach}
+              onPracticeNow={handlePracticeAfterReteach}
+              onAskQuestion={() => inputRef.current?.focus()}
+            />
+          )}
+
+          {/* SUMMARY */}
+          {phase === "summary" && summary && (
+            <SummaryPanel
+              summary={summary}
+              conceptName={conceptName}
+              onContinue={() => navigate("/app/learn/ai")}
+              onPracticeAgain={handlePracticeAfterReteach}
+              onBackToTopic={() => navigate(-2)}
+            />
+          )}
+
+          {phase === "summary" && !summary && aiWorking && (
+            <div className="air-action-panel">
+              <TypingIndicator label="Generating your session summary…" />
+            </div>
+          )}
+
+          <div ref={bottomRef} />
+        </div>
+
+        {/* ── Input bar — visible during teaching/reteaching only ──────── */}
+        {(phase === "teaching" || phase === "reteaching" || phase === "intent_selection") && (
+          <div className="air-input-bar">
+            <input
+              ref={inputRef}
+              type="text"
+              className="air-input"
+              placeholder={
+                phase === "intent_selection"
+                  ? "Or ask your own question…"
+                  : "Ask a follow-up question…"
+              }
+              value={msgInput}
+              onChange={e => setMsgInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && !aiWorking && handleSendMessage()}
+              aria-label="Message your tutor"
+              disabled={aiWorking}
+            />
+            <button
+              className="air-send-btn"
+              onClick={() => handleSendMessage()}
+              disabled={!msgInput.trim() || aiWorking}
+              aria-label="Send message"
+            >
+              <SendIcon />
+            </button>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SUB-COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── Message bubble ────────────────────────────────────────────────────────────
+function Message({ msg, isHidden }) {
+  const isAI      = msg.role === "ai";
+  const isFeedback= msg.messageType === "feedback";
+
+  if (isHidden) {
+    // Teaching content is hidden during retrieval — show placeholder
+    return (
+      <div className="air-msg air-msg-tutor">
+        <div className="air-msg-avatar"><TutorAvatar size={32} /></div>
+        <div className="air-msg-body">
+          <span className="air-msg-label">PeerUp AI</span>
+          <div className="air-msg-bubble air-msg-hidden">
+            <span>📖 Teaching content — available after recall check completes.</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`air-msg ${isAI ? "air-msg-tutor" : "air-msg-student"}`}>
+      {isAI && (
+        <div className="air-msg-avatar" aria-hidden="true">
+          <TutorAvatar size={32} />
+        </div>
+      )}
+      <div className="air-msg-body">
+        {isAI && (
+          <span className="air-msg-label">
+            {msg.messageType === "reteach" ? "PeerUp AI · New Approach" : "PeerUp AI"}
+          </span>
+        )}
+        <div className={`air-msg-bubble ${isFeedback ? "air-msg-feedback" : ""}`}>
+          <RichText content={msg.content} />
+          {isFeedback && msg.extra?.score !== undefined && msg.extra.score !== null && (
+            <div className={`air-eval-badge understanding-${msg.extra.understanding || "partial"}`}>
+              <UnderstandingLabel understanding={msg.extra.understanding} score={msg.extra.score} />
+            </div>
+          )}
+        </div>
+        {msg.extra?.strategy && (
+          <span className="air-msg-strategy">
+            Strategy: {formatStrategy(msg.extra.strategy)}
+          </span>
         )}
       </div>
     </div>
   );
 }
 
-function MessageContent({ content }) {
-  // Simple markdown-like rendering
-  return content.split("\n").map((line, i) => (
-    <p key={i}>{line}</p>
-  ));
-}
-
-function formatStatus(status) {
-  const map = {
-    active: "Active",
-    in_progress: "In Progress",
-    completed: "Completed",
-    paused: "Paused",
+function UnderstandingLabel({ understanding, score }) {
+  const labels = {
+    strong:  "✓ Strong understanding",
+    partial: "◑ Partial understanding",
+    weak:    "✗ Needs more practice",
   };
-  return map[status] || status;
+  return (
+    <span>
+      {labels[understanding] || "Evaluated"} · {score}/100
+    </span>
+  );
 }
 
+// ── Rich text renderer (simple markdown) ─────────────────────────────────────
+function RichText({ content }) {
+  if (!content) return null;
+
+  // Split on blank lines → paragraphs; handle bold, code, lists
+  return (
+    <div className="air-richtext">
+      {content.split(/\n\n+/).map((para, i) => {
+        // Code block
+        if (para.startsWith("```")) {
+          const inner = para.replace(/^```\w*\n?/, "").replace(/```$/, "");
+          return <pre key={i} className="air-code-block"><code>{inner}</code></pre>;
+        }
+        // Bullet list
+        if (para.split("\n").every(l => l.trim().startsWith("- ") || l.trim() === "")) {
+          return (
+            <ul key={i} className="air-list">
+              {para.split("\n").filter(l => l.trim().startsWith("- ")).map((l, j) => (
+                <li key={j}>{renderInline(l.replace(/^- /, ""))}</li>
+              ))}
+            </ul>
+          );
+        }
+        return <p key={i}>{renderInline(para)}</p>;
+      })}
+    </div>
+  );
+}
+
+function renderInline(text) {
+  // Bold **text**
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) =>
+    part.startsWith("**") && part.endsWith("**")
+      ? <strong key={i}>{part.slice(2, -2)}</strong>
+      : part
+  );
+}
+
+// ── Typing indicator ─────────────────────────────────────────────────────────
+function TypingIndicator({ label = "PeerUp AI is thinking…" }) {
+  return (
+    <div className="air-msg air-msg-tutor">
+      <div className="air-msg-avatar" aria-hidden="true"><TutorAvatar size={32} /></div>
+      <div className="air-msg-body">
+        <span className="air-msg-label">PeerUp AI</span>
+        <div className="air-typing" aria-label={label}>
+          <span /><span /><span />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Session progress bar ──────────────────────────────────────────────────────
+function SessionProgress({ currentPhase }) {
+  const phases = [
+    { key: "teaching",   label: "Learn" },
+    { key: "studying",   label: "Study" },
+    { key: "retrieval",  label: "Recall" },
+    { key: "practice",   label: "Practice" },
+    { key: "summary",    label: "Done" },
+  ];
+  const idx = phases.findIndex(p =>
+    currentPhase === p.key ||
+    (currentPhase === "reteaching" && p.key === "practice")
+  );
+
+  return (
+    <div className="air-progress" aria-label="Session progress">
+      {phases.map((p, i) => (
+        <div
+          key={p.key}
+          className={`air-progress-step ${i < idx ? "done" : ""} ${i === idx ? "active" : ""}`}
+          aria-current={i === idx ? "step" : undefined}
+          title={p.label}
+        >
+          <span className="air-progress-dot" />
+          <span className="air-progress-label">{p.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Intent selection panel ────────────────────────────────────────────────────
+function IntentPanel({ conceptName, onSelect, msgInput, setMsgInput, onSend }) {
+  return (
+    <div className="air-intent-panel">
+      <div className="air-intent-header">
+        <TutorAvatar size={48} />
+        <div>
+          <h2 className="air-intent-title">What would you like to do?</h2>
+          <p className="air-intent-subtitle">Learning: <strong>{conceptName}</strong></p>
+        </div>
+      </div>
+      <div className="air-intent-grid">
+        {ROOM_INTENTS.map(opt => (
+          <button
+            key={opt.value}
+            className="air-intent-btn"
+            onClick={() => onSelect(opt.value)}
+          >
+            <span className="air-intent-icon" aria-hidden="true">{opt.icon}</span>
+            <span>{opt.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Teaching action bar ───────────────────────────────────────────────────────
+function TeachingActions({ onStartStudy, onAction }) {
+  return (
+    <div className="air-action-panel">
+      <div className="air-action-primary">
+        <button className="ai-btn-primary" onClick={onStartStudy}>
+          📖 Start Study Timer
+        </button>
+      </div>
+      <div className="air-action-tools">
+        <span className="air-action-tools-label">Ask for:</span>
+        {[
+          { key: "show_example",        label: "An example" },
+          { key: "explain_differently", label: "Different approach" },
+          { key: "make_simpler",        label: "Simpler explanation" },
+          { key: "go_deeper",           label: "More depth" },
+          { key: "why",                 label: "Why this works" },
+          { key: "real_world",          label: "Real-world example" },
+        ].map(a => (
+          <button key={a.key} className="air-tool-btn" onClick={() => onAction(a.key)}>
+            {a.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Study timer panel ─────────────────────────────────────────────────────────
+function StudyTimerPanel({ seconds, totalSeconds, paused, onTogglePause }) {
+  const pct        = totalSeconds > 0 ? seconds / totalSeconds : 0;
+  const radius     = 54;
+  const circumference = 2 * Math.PI * radius;
+  const dash       = circumference * pct;
+  const isWarning  = seconds > 0 && seconds <= 60;
+
+  return (
+    <div className="air-study-panel" aria-live="polite">
+      <h3 className="air-study-title">Study this explanation</h3>
+      <p className="air-study-subtitle">
+        Read carefully — you'll be tested on this when the timer ends.
+      </p>
+      <div className="air-timer-wrap">
+        <svg
+          className="air-timer-svg"
+          viewBox="0 0 120 120"
+          aria-label={`${formatTime(seconds)} remaining`}
+        >
+          <circle cx="60" cy="60" r={radius} className="air-timer-track" />
+          <circle
+            cx="60" cy="60" r={radius}
+            className={`air-timer-fill ${isWarning ? "warning" : ""}`}
+            strokeDasharray={`${dash} ${circumference}`}
+            transform="rotate(-90 60 60)"
+            strokeLinecap="round"
+          />
+        </svg>
+        <div className="air-timer-center" aria-hidden="true">
+          <span className={`air-timer-digits ${isWarning ? "warning" : ""}`}>
+            {formatTime(seconds)}
+          </span>
+          {paused && <span className="air-timer-paused-label">Paused</span>}
+        </div>
+      </div>
+      {isWarning && seconds > 0 && (
+        <p className="air-study-warning">
+          ⏰ Almost done — finish reading the explanation above.
+        </p>
+      )}
+      {seconds === 0 && (
+        <p className="air-study-warning">
+          ⏱ Time's up! Transitioning to recall check…
+        </p>
+      )}
+      <button
+        className="ai-btn-secondary"
+        onClick={onTogglePause}
+        aria-pressed={paused}
+        style={{ marginTop: 12 }}
+      >
+        {paused ? "Resume" : "Pause"}
+      </button>
+    </div>
+  );
+}
+
+// ── Retrieval question panel ──────────────────────────────────────────────────
+function RetrievalPanel({
+  question, questionNumber, totalQuestions,
+  answer, setAnswer, onSubmit, submitting,
+  lastEval, onNext, onSummary, onReteach,
+}) {
+  if (!question) return null;
+
+  const showResult = !!lastEval;
+
+  return (
+    <div className="air-retrieval-panel">
+      <div className="air-q-header">
+        <span className="air-q-badge">Question {questionNumber} of {totalQuestions}</span>
+        <span className={`air-q-type type-${question.questionType}`}>
+          {formatQType(question.questionType)}
+        </span>
+      </div>
+
+      <div className="air-q-card">
+        <p className="air-q-text">{question.question}</p>
+
+        {/* Multiple choice */}
+        {question.questionType === "multiple_choice" && question.options?.length > 0 ? (
+          <div className="air-mc-options" role="radiogroup" aria-label="Answer options">
+            {question.options.map(opt => (
+              <button
+                key={opt.label}
+                role="radio"
+                aria-checked={answer === opt.label}
+                className={`air-mc-btn${answer === opt.label ? " selected" : ""}`}
+                onClick={() => !showResult && setAnswer(opt.label)}
+                disabled={showResult}
+              >
+                <span className="air-mc-label">{opt.label}</span>
+                <span className="air-mc-text">{opt.text}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <textarea
+            className="air-answer-input"
+            placeholder="Type your answer here…"
+            value={answer}
+            onChange={e => setAnswer(e.target.value)}
+            rows={4}
+            disabled={showResult || submitting}
+            aria-label="Your answer"
+          />
+        )}
+
+        {/* Submit / Next / Reteach buttons */}
+        {!showResult ? (
+          <button
+            className="ai-btn-primary"
+            onClick={onSubmit}
+            disabled={!answer.trim() || submitting}
+            aria-busy={submitting}
+          >
+            {submitting ? "Checking…" : "Submit Answer"}
+          </button>
+        ) : (
+          <EvalResult
+            eval={lastEval}
+            hasNext={!!onNext}
+            onNext={onNext}
+            onSummary={onSummary}
+            onReteach={onReteach}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EvalResult({ eval: ev, hasNext, onNext, onSummary, onReteach }) {
+  const understanding = ev?.understanding || "partial";
+  const isStrong  = understanding === "strong";
+  const isWeak    = understanding === "weak";
+
+  return (
+    <div className="air-eval-result">
+      <div className={`air-eval-tag understanding-${understanding}`}>
+        {isStrong  ? "✓ Strong understanding" : ""}
+        {understanding === "partial" ? "◑ Getting there" : ""}
+        {isWeak    ? "✗ Let's try again" : ""}
+        {ev?.score !== null && ev?.score !== undefined ? ` · ${ev.score}/100` : ""}
+      </div>
+
+      {ev?.misconception && (
+        <p className="air-eval-misconception">
+          💡 <strong>Misconception identified:</strong> {ev.misconception}
+        </p>
+      )}
+
+      <div className="air-eval-actions">
+        {ev?.needsReteach ? (
+          <button className="ai-btn-primary" onClick={onReteach}>
+            Let's try a different approach
+          </button>
+        ) : hasNext ? (
+          <button className="ai-btn-primary" onClick={onNext}>
+            Next Question →
+          </button>
+        ) : (
+          <button className="ai-btn-primary" onClick={onSummary}>
+            View Session Summary
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Reteach action panel ──────────────────────────────────────────────────────
+function ReteachActions({ onStudyAgain, onPracticeNow, onAskQuestion }) {
+  return (
+    <div className="air-action-panel">
+      <p className="air-action-hint">
+        A fresh explanation has been provided above. What would you like to do?
+      </p>
+      <div className="air-action-buttons">
+        <button className="ai-btn-primary" onClick={onStudyAgain}>
+          📖 Study this explanation
+        </button>
+        <button className="ai-btn-secondary" onClick={onPracticeNow}>
+          ✅ Try practice questions now
+        </button>
+        <button className="air-tool-btn" onClick={onAskQuestion}>
+          💬 Ask a question
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Session summary panel ─────────────────────────────────────────────────────
+function SummaryPanel({ summary, conceptName, onContinue, onPracticeAgain, onBackToTopic }) {
+  return (
+    <div className="air-summary-panel">
+      <div className="air-summary-header">
+        <div className="air-summary-icon">🎓</div>
+        <h2 className="air-summary-title">Session Complete</h2>
+        <p className="air-summary-concept">{conceptName}</p>
+      </div>
+
+      {summary.overallScore !== null && summary.overallScore !== undefined && (
+        <div className="air-summary-score">
+          <div className="air-score-ring" style={{
+            "--score-pct": `${summary.overallScore}%`,
+            "--score-color": summary.overallScore >= 70 ? "var(--ai-success)" : summary.overallScore >= 50 ? "var(--ai-warning)" : "var(--ai-error)",
+          }}>
+            <span className="air-score-num">{summary.overallScore}</span>
+            <span className="air-score-label">/ 100</span>
+          </div>
+          <p className="air-score-subtext">
+            {summary.questionsCorrect} of {summary.questionsAnswered} questions correct
+            {summary.reteachCount > 0 ? ` · ${summary.reteachCount} reteaching round${summary.reteachCount > 1 ? "s" : ""}` : ""}
+          </p>
+        </div>
+      )}
+
+      {summary.summaryText && (
+        <div className="air-summary-section">
+          <h3 className="air-summary-section-title">What you learned</h3>
+          <p className="air-summary-text">{summary.summaryText}</p>
+        </div>
+      )}
+
+      {summary.strengths?.length > 0 && (
+        <div className="air-summary-section">
+          <h3 className="air-summary-section-title">✓ What you understood well</h3>
+          <ul className="air-summary-list">
+            {summary.strengths.map((s, i) => <li key={i}>{s}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {summary.areasForPractice?.length > 0 && (
+        <div className="air-summary-section">
+          <h3 className="air-summary-section-title">📝 What needs more practice</h3>
+          <ul className="air-summary-list">
+            {summary.areasForPractice.map((a, i) => <li key={i}>{a}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {summary.keyIdeas?.length > 0 && (
+        <div className="air-summary-section">
+          <h3 className="air-summary-section-title">💡 Key ideas to remember</h3>
+          <ul className="air-summary-list">
+            {summary.keyIdeas.map((k, i) => <li key={i}>{k}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {summary.recommendedNext && (
+        <div className="air-summary-next">
+          <h3 className="air-summary-section-title">→ Recommended next step</h3>
+          <p>{summary.recommendedNext}</p>
+        </div>
+      )}
+
+      <div className="air-summary-actions">
+        <button className="ai-btn-primary" onClick={onContinue}>
+          Continue Learning
+        </button>
+        <button className="ai-btn-secondary" onClick={onPracticeAgain}>
+          Practice Again
+        </button>
+        <button className="air-tool-btn" onClick={onBackToTopic}>
+          Back to Topic
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Icon components ───────────────────────────────────────────────────────────
+function SendIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+    </svg>
+  );
+}
+
+// ── Utility formatters ────────────────────────────────────────────────────────
 function formatTime(seconds) {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, "0")}`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-function formatDuration(seconds) {
-  const mins = Math.floor(seconds / 60);
-  if (mins < 60) return `${mins} minutes`;
-  const hours = Math.floor(mins / 60);
-  const remainingMins = mins % 60;
-  return `${hours}h ${remainingMins}m`;
+function formatStrategy(s) {
+  return s?.replace(/_/g, " ") || "";
+}
+
+function formatQType(t) {
+  const map = {
+    short_answer:    "Short answer",
+    multiple_choice: "Multiple choice",
+    calculation:     "Calculation",
+    explanation:     "Explain in your own words",
+    true_false:      "True / False",
+    application:     "Application",
+  };
+  return map[t] || t;
 }

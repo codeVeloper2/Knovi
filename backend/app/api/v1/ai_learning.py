@@ -84,8 +84,30 @@ async def get_session(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ):
-    """Get a full learning session (owner only)."""
+    """
+    Get a full learning session (owner only).
+
+    Teaching content is automatically hidden when the session is in
+    retrieval or practice states to prevent answer leakage.
+    """
     return await svc.get_session(session_id=session_id, user_id=user.id, db=db)
+
+
+@router.get("/learning/sessions/{session_id}/messages", response_model=list[MessageOut])
+async def get_session_messages(
+    session_id: int,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+):
+    """
+    Return session messages (owner only).
+
+    Teaching/reteach messages are filtered out during protected states
+    (retrieval, practice) to prevent answer leakage.
+    """
+    return await svc.get_session_messages(
+        session_id=session_id, user_id=user.id, db=db
+    )
 
 
 @router.post("/learning/sessions/{session_id}/abandon", response_model=SessionOut)
@@ -94,7 +116,7 @@ async def abandon_session(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ):
-    """Abandon a session."""
+    """Abandon a session (marks it as abandoned, not completed)."""
     return await svc.abandon_session(session_id=session_id, user_id=user.id, db=db)
 
 
@@ -104,7 +126,13 @@ async def complete_session(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ):
-    """Force-complete a session without generating a summary."""
+    """
+    Mark a session as completed.
+
+    Guard: session must have reached retrieval or practice state first.
+    Attempting to complete from 'created' or 'teaching' raises 409.
+    Use /abandon to exit early sessions.
+    """
     return await svc.complete_session(session_id=session_id, user_id=user.id, db=db)
 
 
@@ -118,7 +146,11 @@ async def teach_concept(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ):
-    """Generate AI teaching content for this session's concept."""
+    """
+    Generate AI teaching content for this session's concept.
+
+    The strategy is selected based on session intent and previous strategies used.
+    """
     return await svc.teach_concept(session_id=session_id, user_id=user.id, db=db)
 
 
@@ -147,7 +179,11 @@ async def start_study_period(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ):
-    """Start a study/reading timer period."""
+    """
+    Start a study/reading timer period.
+
+    Rejects if an active study period already exists for this session.
+    """
     return await svc.start_study_period(
         session_id=session_id, user_id=user.id,
         duration_seconds=body.duration_seconds, db=db,
@@ -161,7 +197,12 @@ async def finish_study_period(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ):
-    """Complete a study period and transition to retrieval."""
+    """
+    Complete a study period and transition to retrieval.
+
+    Server-authoritative: validates server time against expected_end_at.
+    Rejects if less than 20% of allocated study time has elapsed.
+    """
     return await svc.finish_study_period(
         session_id=session_id, user_id=user.id,
         study_period_id=body.study_period_id, db=db,
@@ -179,7 +220,11 @@ async def generate_questions(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ):
-    """Generate retrieval questions grounded in what was taught."""
+    """
+    Generate retrieval questions grounded in what was actually taught.
+
+    expected_answer and rubric are stored server-side and never sent to the student.
+    """
     return await svc.generate_retrieval_questions(
         session_id=session_id, user_id=user.id, db=db, count=count,
     )
@@ -196,7 +241,15 @@ async def submit_answer(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ):
-    """Submit and evaluate a student answer."""
+    """
+    Submit and evaluate a student answer.
+
+    Returns AnswerOut including:
+      - understanding: strong | partial | weak
+      - needsReteach: bool
+      - misconception: identified misconception or null
+      - recommendedStrategy: reteach strategy suggestion or null
+    """
     return await svc.submit_answer(
         session_id=session_id, user_id=user.id,
         question_id=body.question_id,
@@ -217,7 +270,12 @@ async def reteach(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ):
-    """Generate adaptive reteaching using a fresh strategy."""
+    """
+    Generate adaptive reteaching using a fresh strategy.
+
+    The new strategy is chosen to be different from all previously used strategies.
+    Identified misconceptions from answer evaluations are passed to the AI.
+    """
     return await svc.generate_adaptive_reteach(
         session_id=session_id, user_id=user.id,
         reason=body.reason, db=db,
@@ -234,7 +292,12 @@ async def generate_summary(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ):
-    """Generate (or regenerate) the session summary."""
+    """
+    Generate (or regenerate) the session summary.
+
+    Uses best-per-question scoring: multiple failed attempts on one question
+    do not dilute the final score if the student eventually answered correctly.
+    """
     return await svc.generate_session_summary(
         session_id=session_id, user_id=user.id, db=db,
     )
@@ -251,7 +314,11 @@ async def record_integrity_event(
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_session),
 ):
-    """Record a browser integrity signal (learning signal, not anti-cheat)."""
+    """
+    Record a browser integrity signal.
+
+    This is a learning signal system — it records context, not anti-cheat enforcement.
+    """
     return await svc.record_integrity_event(
         session_id=session_id, user_id=user.id,
         event_type=body.event_type, meta=body.meta, db=db,
