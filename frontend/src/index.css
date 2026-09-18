@@ -13488,9 +13488,9 @@ kbd {
     bottom: calc(var(--bottom-nav-h, 72px) + 28px);
     left: 50%;
     transform: translateX(-50%);
-    /* Smaller container for circular items: 260px × 260px */
-    width: 260px;
-    height: 260px;
+    /* 3-item triangle container: 220px × 120px */
+    width: 220px;
+    height: 120px;
     z-index: 1100;
     pointer-events: none;
     opacity: 0;
@@ -13566,17 +13566,20 @@ kbd {
     text-overflow: ellipsis;
   }
 
-  /* 5-item circular layout - compact circles
-     Container: 260×260px, center at (130, 130)
-     Radius: 90px from center
-     Pentagon angles: 0°, 72°, 144°, 216°, 288°
-     Each item: 72px circle, positioned by top-left corner
+  /* 3-item triangle layout
+     Container: 220×180px, center-x at 110px
+     Radius: 80px from center (center-y at 100px)
+     Triangle angles: 270° (top), 150° (bottom-left), 30° (bottom-right)
+     Each item: 72px circle, offset by half its size (36px)
+
+     top:         cx=110, cy=100-80=20  → left=74px, top=−16px
+     bottom-left: cx=110+80*cos(150°)=110−69=41, cy=100−80*sin(150°)=100−40=60 → left=5px, top=24px
+     bottom-right:cx=110+80*cos(30°)=110+69=179, cy=100−80*sin(30°)=100−40=60 → left=143px, top=24px
   */
-  
-  /* Friend Requests: top center (0° / 12 o'clock) 
-     x = 130, y = 130 - 90 = 40, offset for 72px item = 40 - 36 = 4px */
+
+  /* Friend Requests: top center */
   .fab-item--top {
-    top: 4px;
+    top: -16px;
     left: 50%;
     transform: translate(-50%, 0) scale(0.85);
   }
@@ -13584,52 +13587,20 @@ kbd {
     transform: translate(-50%, 0) scale(1);
   }
 
-  /* Progress: upper-left (288° / 10 o'clock) 
-     x = 130 + 90*sin(288°) = 130 - 86 = 44
-     y = 130 - 90*cos(288°) = 130 - 28 = 102
-     offset: (44-36, 102-36) = (8, 66) */
-  .fab-item--left {
-    top: 66px;
-    left: 8px;
+  /* Learn: bottom-left */
+  .fab-item--bottom-left {
+    top: 24px;
+    left: 5px;
     transform: scale(0.85);
   }
-  .fab-diamond.open .fab-item--left {
+  .fab-diamond.open .fab-item--bottom-left {
     transform: scale(1);
   }
 
-  /* UpSkilling: upper-right (72° / 2 o'clock)
-     x = 130 + 90*sin(72°) = 130 + 86 = 216
-     y = 130 - 90*cos(72°) = 130 - 28 = 102
-     offset: (216-36, 102-36) = (180, 66) */
-  .fab-item--top-right {
-    top: 66px;
-    right: 8px;
-    transform: scale(0.85);
-  }
-  .fab-diamond.open .fab-item--top-right {
-    transform: scale(1);
-  }
-
-  /* Sync: lower-left (216° / 7 o'clock)
-     x = 130 + 90*sin(216°) = 130 - 53 = 77
-     y = 130 - 90*cos(216°) = 130 + 73 = 203
-     offset: (77-36, 203-36) = (41, 167) */
-  .fab-item--bottom {
-    bottom: 21px;
-    left: 41px;
-    transform: scale(0.85);
-  }
-  .fab-diamond.open .fab-item--bottom {
-    transform: scale(1);
-  }
-
-  /* Resources: lower-right (144° / 5 o'clock)
-     x = 130 + 90*sin(144°) = 130 + 53 = 183
-     y = 130 - 90*cos(144°) = 130 + 73 = 203
-     offset: (183-36, 203-36) = (147, 167) */
+  /* Progress: bottom-right */
   .fab-item--bottom-right {
-    bottom: 21px;
-    right: 41px;
+    top: 24px;
+    right: 5px;
     transform: scale(0.85);
   }
   .fab-diamond.open .fab-item--bottom-right {
@@ -13638,10 +13609,8 @@ kbd {
 
   /* Staggered appear delays */
   .fab-diamond.open .fab-item--top          { transition-delay: 0.00s; }
-  .fab-diamond.open .fab-item--left         { transition-delay: 0.04s; }
-  .fab-diamond.open .fab-item--top-right    { transition-delay: 0.04s; }
-  .fab-diamond.open .fab-item--bottom       { transition-delay: 0.08s; }
-  .fab-diamond.open .fab-item--bottom-right { transition-delay: 0.08s; }
+  .fab-diamond.open .fab-item--bottom-left  { transition-delay: 0.05s; }
+  .fab-diamond.open .fab-item--bottom-right { transition-delay: 0.05s; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════

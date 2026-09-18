@@ -15,15 +15,15 @@ import {
  */
 
 const FAB_ITEMS = [
-  { to: "/app/match-requests", label: "Friend Requests", Icon: FriendRequestsIcon, pos: "top"   },
-  { to: "/app/progress",       label: "Progress",        Icon: ProgressIcon,       pos: "left"  },
-  { to: "/app/learn",          label: "Learn",           Icon: LearnIcon,          pos: "right" },
+  { to: "/app/match-requests", label: "Friend Requ...", Icon: FriendRequestsIcon, pos: "top"          },
+  { to: "/app/learn",          label: "Learn",           Icon: LearnIcon,          pos: "bottom-left"  },
+  { to: "/app/progress",       label: "Progress",        Icon: ProgressIcon,       pos: "bottom-right" },
 ];
 
 function getCurrentSection(pathname) {
   if (pathname.startsWith("/app/match-requests")) return FAB_ITEMS[0];
-  if (pathname.startsWith("/app/progress"))       return FAB_ITEMS[1];
-  if (pathname.startsWith("/app/learn"))          return FAB_ITEMS[2];
+  if (pathname.startsWith("/app/learn"))          return FAB_ITEMS[1];
+  if (pathname.startsWith("/app/progress"))       return FAB_ITEMS[2];
   return null;
 }
 
