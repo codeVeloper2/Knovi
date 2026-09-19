@@ -9,29 +9,31 @@ import {
 } from "./DashIcons";
 
 /**
- * MobileFabMenu — Floating Action Button with quick-access menu
+ * MobileFabMenu — 3-item fan arc spreading upward from the FAB button.
  *
- * Items: Friend Requests | Progress | Learn
+ *   left  → Learn
+ *   top   → Friend Requests  (tallest point, centre)
+ *   right → Progress
  */
 
 const FAB_ITEMS = [
-  { to: "/app/match-requests", label: "Friend Requ...", Icon: FriendRequestsIcon, pos: "top"          },
-  { to: "/app/learn",          label: "Learn",           Icon: LearnIcon,          pos: "bottom-left"  },
-  { to: "/app/progress",       label: "Progress",        Icon: ProgressIcon,       pos: "bottom-right" },
+  { to: "/app/learn",          label: "Learn",           Icon: LearnIcon,          pos: "left"  },
+  { to: "/app/match-requests", label: "Friend Requ...",  Icon: FriendRequestsIcon, pos: "top"   },
+  { to: "/app/progress",       label: "Progress",        Icon: ProgressIcon,       pos: "right" },
 ];
 
 function getCurrentSection(pathname) {
-  if (pathname.startsWith("/app/match-requests")) return FAB_ITEMS[0];
-  if (pathname.startsWith("/app/learn"))          return FAB_ITEMS[1];
+  if (pathname.startsWith("/app/learn"))          return FAB_ITEMS[0];
+  if (pathname.startsWith("/app/match-requests")) return FAB_ITEMS[1];
   if (pathname.startsWith("/app/progress"))       return FAB_ITEMS[2];
   return null;
 }
 
 export default function MobileFabMenu() {
   const [isOpen, setIsOpen] = useState(false);
-  const navigate  = useNavigate();
-  const location  = useLocation();
-  const current   = getCurrentSection(location.pathname);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const current  = getCurrentSection(location.pathname);
 
   // Close on route change
   useEffect(() => { setIsOpen(false); }, [location.pathname]);
@@ -57,33 +59,37 @@ export default function MobileFabMenu() {
     <>
       {/* Dim overlay */}
       {isOpen && (
-        <div className="mobile-fab-overlay" onClick={() => setIsOpen(false)} aria-hidden="true" />
+        <div
+          className="mobile-fab-overlay"
+          onClick={() => setIsOpen(false)}
+          aria-hidden="true"
+        />
       )}
 
-      {/* FAB menu */}
-      <div className={`fab-diamond ${isOpen ? "open" : ""}`} aria-hidden={!isOpen}>
-        {FAB_ITEMS.map((item) => {
-          const isActive = current?.to === item.to;
-          return (
-            <button
-              key={item.to}
-              type="button"
-              className={`fab-item fab-item--${item.pos} ${isActive ? "active" : ""}`}
-              onClick={() => go(item.to)}
-              aria-label={item.label}
-              tabIndex={isOpen ? 0 : -1}
-            >
-              <span className="fab-item-icon"><item.Icon width={22} height={22} /></span>
-              <span className="fab-item-label">{item.label}</span>
-            </button>
-          );
-        })}
+      {/* Arc menu */}
+      <div
+        className={`fab-diamond${isOpen ? " open" : ""}`}
+        aria-hidden={!isOpen}
+      >
+        {FAB_ITEMS.map(item => (
+          <button
+            key={item.to}
+            type="button"
+            className={`fab-item fab-item--${item.pos}${current?.to === item.to ? " active" : ""}`}
+            onClick={() => go(item.to)}
+            aria-label={item.label}
+            tabIndex={isOpen ? 0 : -1}
+          >
+            <span className="fab-item-icon"><item.Icon width={20} height={20} /></span>
+            <span className="fab-item-label">{item.label}</span>
+          </button>
+        ))}
       </div>
 
-      {/* FAB button */}
+      {/* FAB trigger button */}
       <button
         type="button"
-        className={`mobile-fab ${isOpen ? "open" : ""} ${current ? "has-section" : ""}`}
+        className={`mobile-fab${isOpen ? " open" : ""}${current ? " has-section" : ""}`}
         onClick={() => setIsOpen(o => !o)}
         aria-label={isOpen ? "Close menu" : current ? current.label : "Open menu"}
         aria-expanded={isOpen}

@@ -959,6 +959,8 @@
 }
 
 .learn-mobile-context { display: none; }
+/* Tab bar hidden on desktop, shown only inside the @media block */
+.learn-mobile-tabs { display: none; }
 
 .learn-empty {
   min-height: 240px;
@@ -1026,7 +1028,8 @@
   .dash-main--learn {
     margin-top: 56px !important;
     min-height: calc(100vh - 56px);
-    padding-bottom: 88px !important;
+    /* room for: learn-tab-bar (56px) + global bottom-nav (68px) + gap */
+    padding-bottom: 140px !important;
   }
 
   .learn-shell {
@@ -1034,43 +1037,6 @@
     min-height: calc(100vh - 56px);
   }
   .learn-sidebar { display: none; }
-
-  .learn-mobile-context {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 12px 16px 8px;
-    background: #030b19;
-  }
-  .learn-mobile-title {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-  }
-  .learn-mobile-title .learn-sidebar-brand-icon {
-    width: 34px;
-    height: 34px;
-    flex-basis: 34px;
-    border-radius: 9px;
-  }
-  .learn-mobile-title .learn-sidebar-brand-icon svg { width: 21px; height: 21px; }
-  .learn-mobile-title > div:last-child {
-    display: grid;
-    gap: 1px;
-  }
-  .learn-mobile-title strong { font-size: .9rem; }
-  .learn-mobile-title span { color: #7892b8; font-size: .61rem; }
-  .learn-mobile-resume {
-    height: 34px;
-    border: 1px solid #195fc1;
-    border-radius: 9px;
-    background: #0b2e66;
-    color: #dcecff;
-    padding: 0 10px;
-    font-size: .67rem;
-    font-weight: 700;
-  }
 
   .learn-home { padding: 8px 12px 24px; }
   .learn-hero {
@@ -1114,6 +1080,80 @@
   .learn-progress-panel h2 { font-size: .9rem; }
   .learn-quick-action { min-height: 59px; }
 }
+
+
+  /* ── Learn mobile bottom tab bar ───────────────────────────────────────── */
+  .learn-mobile-tabs {
+    display: flex;
+    position: fixed;
+    /* sits directly on top of the global bottom nav (68px tall) */
+    bottom: 68px;
+    left: 0;
+    right: 0;
+    height: 56px;
+    z-index: 99;
+    background: #06101f;
+    border-top: 1px solid rgba(64, 108, 169, .22);
+    /* subtle gradient lift */
+    box-shadow: 0 -4px 20px rgba(2, 10, 24, .7);
+    align-items: stretch;
+  }
+
+  .learn-mobile-tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    color: #6a85aa;
+    text-decoration: none;
+    padding: 0 4px;
+    border-top: 2px solid transparent;
+    transition: color .15s, border-color .15s, background .15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .learn-mobile-tab:hover {
+    color: #a8c0e0;
+    background: rgba(64, 108, 169, .07);
+  }
+
+  .learn-mobile-tab.active {
+    color: #4f8ef7;
+    border-top-color: #4f8ef7;
+    background: rgba(37, 99, 235, .07);
+  }
+
+  .learn-mobile-tab-icon {
+    width: 20px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+  }
+
+  .learn-mobile-tab-icon svg {
+    width: 19px;
+    height: 19px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .learn-mobile-tab-label {
+    font-size: .57rem;
+    font-weight: 650;
+    letter-spacing: .01em;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    line-height: 1.1;
+  }
 
 @media (max-width: 390px) {
   .learn-subject-grid { grid-template-columns: 1fr; }

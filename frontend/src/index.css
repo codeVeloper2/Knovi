@@ -13474,23 +13474,36 @@ kbd {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   FAB DIAMOND MENU  (fab-diamond / fab-item)
-   Replaces old mobile-fab-menu / mobile-fab-menu-item classes
+   FAB MENU  (fab-diamond / fab-item)
+   3-item fan arc spreading upward from the FAB button.
    ═══════════════════════════════════════════════════════════════════════ */
 
+/* Hidden on desktop */
 .fab-diamond { display: none; }
 
 @media (max-width: 820px) {
+  /*
+   * Container:
+   *   Fixed, centred over the FAB. We size it just big enough to hold
+   *   the 3 circular items (72px each) arranged in an arc.
+   *   Arc radius = 90px from the FAB centre.
+   *   Items: left (-45°), centre (0°/up), right (+45°) — fan spread.
+   *
+   *   FAB centre is at:
+   *     from-bottom = 44px (FAB bottom) + 26px (FAB half-height) = 70px
+   *
+   *   Container is 260px wide × 200px tall, anchored so its bottom
+   *   aligns with the FAB centre so items spread upward cleanly.
+   */
   .fab-diamond {
     display: block;
     position: fixed;
-    /* centred over the FAB button */
-    bottom: calc(var(--bottom-nav-h, 72px) + 28px);
+    width: 260px;
+    height: 200px;
+    /* align container bottom with FAB centre */
+    bottom: 70px;
     left: 50%;
     transform: translateX(-50%);
-    /* 3-item triangle container: 220px × 120px */
-    width: 220px;
-    height: 120px;
     z-index: 1100;
     pointer-events: none;
     opacity: 0;
@@ -13501,7 +13514,7 @@ kbd {
     opacity: 1;
   }
 
-  /* Each item is absolutely positioned in the diamond */
+  /* ── Each item: 72px circle ── */
   .fab-item {
     position: absolute;
     display: flex;
@@ -13509,37 +13522,35 @@ kbd {
     align-items: center;
     justify-content: center;
     gap: 4px;
-    padding: 0;
-    /* Circular items: 72px diameter */
     width: 72px;
     height: 72px;
-    background: var(--navy-panel);
-    border: 1px solid var(--navy-line);
-    border-radius: 50%; /* CIRCULAR */
-    color: var(--text);
+    border-radius: 50%;
+    background: #0d1e3a;
+    border: 1px solid rgba(64, 108, 169, 0.35);
+    color: #c8daff;
     cursor: pointer;
-    font-size: 0;           /* hide label until open */
-    transition: background 0.15s, border-color 0.15s, transform 0.15s;
-    -webkit-tap-highlight-color: transparent;
-    transform: scale(0.85);
+    font-size: 0;
+    font-weight: 650;
+    transition:
+      background 0.15s,
+      border-color 0.15s,
+      opacity 0.2s ease,
+      transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
     opacity: 0;
+    -webkit-tap-highlight-color: transparent;
   }
   .fab-diamond.open .fab-item {
-    font-size: 0.65rem; /* smaller for circular */
-    font-weight: 600;
     opacity: 1;
-    transform: scale(1);
-    transition: background 0.15s, border-color 0.15s,
-                opacity 0.2s ease, transform 0.2s ease;
+    font-size: 0.6rem;
   }
   .fab-item:hover,
   .fab-item:active {
-    background: rgba(91,110,245,0.12);
-    border-color: rgba(91,110,245,0.5);
+    background: rgba(91, 110, 245, 0.15);
+    border-color: rgba(91, 110, 245, 0.55);
   }
   .fab-item.active {
-    background: rgba(91,110,245,0.18);
-    border-color: var(--blue);
+    background: rgba(91, 110, 245, 0.2);
+    border-color: #6366f1;
     color: #a5b4fc;
   }
 
@@ -13547,70 +13558,64 @@ kbd {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: inherit;
-    /* Slightly smaller icons for circular */
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
   }
   .fab-item-icon svg {
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
   }
   .fab-item-label {
     white-space: nowrap;
     line-height: 1.1;
-    color: inherit;
     text-align: center;
-    max-width: 68px; /* fit in circle */
+    max-width: 66px;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  /* 3-item triangle layout
-     Container: 220×180px, center-x at 110px
-     Radius: 80px from center (center-y at 100px)
-     Triangle angles: 270° (top), 150° (bottom-left), 30° (bottom-right)
-     Each item: 72px circle, offset by half its size (36px)
+  /*
+   * Arc positions — container is 260×200px, bottom edge = FAB centre.
+   * Arc centre = (130, 200) — bottom-centre of the container.
+   * Arc radius  = 105px.
+   *
+   *   left   (−45°): x = 130 + 105*sin(−45°) = 130 − 74 = 56,  y = 200 − 105*cos(45°) = 200 − 74 = 126  → top=126−36=90, left=56−36=20
+   *   centre (  0°): x = 130,                                   y = 200 − 105          = 95              → top=95−36=59,  left=130−36=94
+   *   right  (+45°): x = 130 + 105*sin(45°)  = 130 + 74 = 204, y = 126                                   → top=90,        right=260−204−36=20 (left=168)
+   */
 
-     top:         cx=110, cy=100-80=20  → left=74px, top=−16px
-     bottom-left: cx=110+80*cos(150°)=110−69=41, cy=100−80*sin(150°)=100−40=60 → left=5px, top=24px
-     bottom-right:cx=110+80*cos(30°)=110+69=179, cy=100−80*sin(30°)=100−40=60 → left=143px, top=24px
-  */
+  /* Left arc item — Learn */
+  .fab-item--left {
+    top: 90px;
+    left: 20px;
+    transform: scale(0.7) translate(-12px, 20px);
+  }
+  .fab-diamond.open .fab-item--left {
+    transform: scale(1) translate(0, 0);
+    transition-delay: 0.06s;
+  }
 
-  /* Friend Requests: top center */
+  /* Centre arc item — Friend Requests (top) */
   .fab-item--top {
-    top: -16px;
-    left: 50%;
-    transform: translate(-50%, 0) scale(0.85);
+    top: 59px;
+    left: 94px;
+    transform: scale(0.7) translateY(30px);
   }
   .fab-diamond.open .fab-item--top {
-    transform: translate(-50%, 0) scale(1);
+    transform: scale(1) translateY(0);
+    transition-delay: 0.00s;
   }
 
-  /* Learn: bottom-left */
-  .fab-item--bottom-left {
-    top: 24px;
-    left: 5px;
-    transform: scale(0.85);
+  /* Right arc item — Progress */
+  .fab-item--right {
+    top: 90px;
+    left: 168px;
+    transform: scale(0.7) translate(12px, 20px);
   }
-  .fab-diamond.open .fab-item--bottom-left {
-    transform: scale(1);
+  .fab-diamond.open .fab-item--right {
+    transform: scale(1) translate(0, 0);
+    transition-delay: 0.06s;
   }
-
-  /* Progress: bottom-right */
-  .fab-item--bottom-right {
-    top: 24px;
-    right: 5px;
-    transform: scale(0.85);
-  }
-  .fab-diamond.open .fab-item--bottom-right {
-    transform: scale(1);
-  }
-
-  /* Staggered appear delays */
-  .fab-diamond.open .fab-item--top          { transition-delay: 0.00s; }
-  .fab-diamond.open .fab-item--bottom-left  { transition-delay: 0.05s; }
-  .fab-diamond.open .fab-item--bottom-right { transition-delay: 0.05s; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════

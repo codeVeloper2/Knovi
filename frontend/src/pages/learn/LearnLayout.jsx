@@ -150,19 +150,24 @@ export default function LearnLayout() {
       </aside>
 
       <div className="learn-main">
-        <div className="learn-mobile-context">
-          <div className="learn-mobile-title">
-            <div className="learn-sidebar-brand-icon"><BookIcon /></div>
-            <div>
-              <strong>Learn</strong>
-              <span>AI-powered learning</span>
-            </div>
-          </div>
-          <button type="button" onClick={resume} className="learn-mobile-resume">
-            {lastSession ? "Continue" : "Start learning"}
-          </button>
-        </div>
         <Outlet context={{ lastSession }} />
+
+        {/* Mobile bottom tab bar — replaces the sidebar on small screens */}
+        <nav className="learn-mobile-tabs" aria-label="Learn navigation">
+          {LEARN_NAV.map(item => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.exact}
+              className={({ isActive }) =>
+                `learn-mobile-tab${isActive ? " active" : ""}`
+              }
+            >
+              <span className="learn-mobile-tab-icon">{item.icon}</span>
+              <span className="learn-mobile-tab-label">{item.label}</span>
+            </NavLink>
+          ))}
+        </nav>
       </div>
     </div>
   );
