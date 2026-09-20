@@ -10,6 +10,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import * as api from "../../api";
 import { TutorAvatar } from "./AISessionSetup";
+import "../../styles/ai-learn.css";
 
 // ── Status → room phase mapping ───────────────────────────────────────────────
 function serverStatusToPhase(status, hasMessages) {
@@ -578,7 +579,7 @@ export default function AILearningRoom() {
           />
         )}
 
-        {(phase === "retrieval" || phase === "practice" || (phase === "summary" && questions.length > 0 && Object.keys(answerRecords).length > 0)) && (
+        {(phase === "retrieval" || phase === "practice" || (phase === "summary" && questions.length > 0 && Object.keys(checkResults).length > 0)) && (
           questions.length > 0 ? (
             <RetrievalPanel
               question={questions[qIndex]}
