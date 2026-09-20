@@ -897,34 +897,51 @@ function UnderstandingLabel({ understanding, score }) {
 }
 
 // ── Rich text renderer (simple markdown) ─────────────────────────────────────
+// ── Math rendering via KaTeX ──────────────────────────────────────────────────
+function KatexBlock({ src }) {
+  let html = src;
+  try {
+    const katex = window.__katex__;
+    if (katex) html = katex.renderToString(src, { displayMode: true, throwOnError: false });
+  } catch { /* fall through to raw */ }
+  if (window.__katex__) {
+    return <div className="air-math-block" dangerouslySetInnerHTML={{ __html: html }} />;
+  }
+  return <div className="air-math-block"><code>{src}</code></div>;
+}
+
+function KatexInline({ src }) {
+  let html = src;
+  try {
+    const katex = window.__katex__;
+    if (katex) html = katex.renderToString(src, { displayMode: false, throwOnError: false });
+  } catch { /* fall through */ }
+  if (window.__katex__) {
+    return <span className="air-inline-math" dangerouslySetInnerHTML={{ __html: html }} />;
+  }
+  return <code className="air-inline-math">{src}</code>;
+}
+
 function RichText({ content }) {
   if (!content) return null;
-
-  // Normalise line endings, then split into blocks on blank lines
   const blocks = content.replace(/\r\n/g, "\n").split(/\n\n+/);
 
   return (
     <div className="air-richtext">
       {blocks.map((block, i) => {
-        // ── Fenced code block ──────────────────────────────────────────
+        // Fenced code block
         if (block.startsWith("```")) {
           const inner = block.replace(/^```\w*\n?/, "").replace(/\n?```$/, "");
           return <pre key={i} className="air-code-block"><code>{inner}</code></pre>;
         }
 
-        // ── Display math  $$…$$ ────────────────────────────────────────
+        // Display math $$…$$
         const mathBlock = block.match(/^\$\$\n?([\s\S]+?)\n?\$\$$/);
-        if (mathBlock) {
-          return (
-            <div key={i} className="air-math-block">
-              <code>{mathBlock[1].trim()}</code>
-            </div>
-          );
-        }
+        if (mathBlock) return <KatexBlock key={i} src={mathBlock[1].trim()} />;
 
         const lines = block.split("\n");
 
-        // ── Heading  # / ## / ### ──────────────────────────────────────
+        // Heading # / ## / ###
         const headingMatch = lines[0].match(/^(#{1,3})\s+(.+)/);
         if (headingMatch) {
           const level = headingMatch[1].length;
@@ -938,7 +955,18 @@ function RichText({ content }) {
           );
         }
 
-        // ── Bullet list  - item  or  * item ───────────────────────────
+        // Blockquote > text
+        if (lines.every(l => l.trim() === "" || l.trim().startsWith(">"))) {
+          return (
+            <blockquote key={i} className="air-blockquote">
+              {lines.filter(l => l.trim().startsWith(">")).map((l, j) => (
+                <p key={j}>{renderInline(l.trim().replace(/^>\s?/, ""))}</p>
+              ))}
+            </blockquote>
+          );
+        }
+
+        // Bullet list - or *
         if (lines.every(l => l.trim() === "" || /^[-*]\s/.test(l.trim()))) {
           return (
             <ul key={i} className="air-list">
@@ -949,7 +977,7 @@ function RichText({ content }) {
           );
         }
 
-        // ── Numbered list  1. item ─────────────────────────────────────
+        // Numbered list 1. item
         if (lines.every(l => l.trim() === "" || /^\d+\.\s/.test(l.trim()))) {
           return (
             <ol key={i} className="air-list air-list-ordered">
@@ -960,12 +988,10 @@ function RichText({ content }) {
           );
         }
 
-        // ── Horizontal rule  ---  ──────────────────────────────────────
-        if (/^---+$/.test(block.trim())) {
-          return <hr key={i} className="air-divider" />;
-        }
+        // Horizontal rule ---
+        if (/^---+$/.test(block.trim())) return <hr key={i} className="air-divider" />;
 
-        // ── Default: paragraph ─────────────────────────────────────────
+        // Default: paragraph — but handle embedded numbered items (inline lists)
         return <p key={i}>{renderInline(block)}</p>;
       })}
     </div>
@@ -973,13 +999,11 @@ function RichText({ content }) {
 }
 
 /**
- * Render inline markdown within a single line/paragraph:
- *   **bold**   *italic*   `code`   $math$
+ * Render inline markdown: **bold** *italic* `code` $math$
  */
 function renderInline(text) {
   if (!text) return null;
-  // Split on inline patterns: **bold**, *italic*, `code`, $math$
-  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\$[^$\n]+\$)/g);
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*\n]+\*|`[^`]+`|\$[^$\n]+\$)/g);
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**"))
       return <strong key={i}>{part.slice(2, -2)}</strong>;
@@ -988,7 +1012,7 @@ function renderInline(text) {
     if (part.startsWith("`") && part.endsWith("`"))
       return <code key={i} className="air-inline-code">{part.slice(1, -1)}</code>;
     if (part.startsWith("$") && part.endsWith("$"))
-      return <code key={i} className="air-inline-math">{part.slice(1, -1)}</code>;
+      return <KatexInline key={i} src={part.slice(1, -1)} />;
     return part;
   });
 }

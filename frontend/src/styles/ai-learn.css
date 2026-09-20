@@ -1766,6 +1766,16 @@
   font-style: italic;
 }
 
+/* Blockquote */
+.air-blockquote {
+  border-left: 3px solid var(--ai-accent, #6366f1);
+  margin: 10px 0;
+  padding: 8px 14px;
+  background: rgba(99,102,241,0.08);
+  border-radius: 0 6px 6px 0;
+}
+.air-blockquote p { margin: 0; font-style: italic; color: var(--ai-text-secondary); }
+
 /* Divider --- */
 .air-divider {
   border: none;
