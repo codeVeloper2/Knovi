@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { HomeIcon, DiscoverIcon, ChatIcon, SettingsIcon } from "./DashIcons";
 
 /**
@@ -6,6 +6,8 @@ import { HomeIcon, DiscoverIcon, ChatIcon, SettingsIcon } from "./DashIcons";
  * Tabs: Home | Discover | [FAB placeholder] | Chat | Settings
  */
 export default function MobileBottomNav() {
+  const location = useLocation();
+
   return (
     <nav className="mobile-bottom-nav" aria-label="Main navigation">
       <NavLink
