@@ -123,6 +123,26 @@ async def get_topic_concepts(
     return [ConceptOut(**r.serialize()) for r in rows]
 
 
+@router.get("/concepts/{concept_id}", response_model=ConceptOut)
+async def get_concept(
+    concept_id: int,
+    _user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_session),
+) -> ConceptOut:
+    """Return one curriculum concept by ID.
+
+    The frontend uses the concept ID from the topic concept list when opening
+    the concept page and learning-session setup. Keep this as a dedicated
+    read endpoint so those flows do not need to fetch the entire topic again.
+    """
+    concept = (await session.execute(
+        select(Concept).where(Concept.id == concept_id)
+    )).scalar_one_or_none()
+    if concept is None:
+        raise HTTPException(404, "Concept not found.")
+    return ConceptOut(**concept.serialize())
+
+
 @router.get("/topics/{topic_id}/activities", response_model=list[ActivityOut])
 async def get_topic_activities(
     topic_id: int,
