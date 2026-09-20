@@ -272,21 +272,31 @@ export function TutorAvatar({ size = 40 }) {
     <svg
       width={size}
       height={size}
-      viewBox="0 0 120 120"
+      viewBox="0 0 512 512"
       fill="none"
+      xmlns="http://www.w3.org/2000/svg"
       aria-label="PeerUp AI Tutor"
       role="img"
     >
       <defs>
-        <linearGradient id="tutorGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#4f6ef7" />
-          <stop offset="100%" stopColor="#6366f1" />
+        <linearGradient id="tutorGrad" x1="150" y1="70" x2="360" y2="440" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#2f9bff" />
+          <stop offset="0.5" stopColor="#1fbaf0" />
+          <stop offset="1" stopColor="#25e7c6" />
         </linearGradient>
       </defs>
-      <circle cx="60" cy="60" r="50" fill="url(#tutorGrad)" />
-      <circle cx="45" cy="50" r="8" fill="#fff" />
-      <circle cx="75" cy="50" r="8" fill="#fff" />
-      <path d="M40 70 Q60 85 80 70" stroke="#fff" strokeWidth="4" strokeLinecap="round" fill="none" />
+      {/* U shape */}
+      <path
+        d="M356 96 V300 A100 100 0 0 1 156 300 V300"
+        stroke="url(#tutorGrad)" strokeWidth="64" strokeLinecap="round" fill="none"
+      />
+      {/* Left bar */}
+      <path
+        d="M156 300 V150"
+        stroke="url(#tutorGrad)" strokeWidth="64" strokeLinecap="round" fill="none"
+      />
+      {/* Upward arrowhead */}
+      <path d="M156 70 L226 168 H86 Z" fill="url(#tutorGrad)" />
     </svg>
   );
 }

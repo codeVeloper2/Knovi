@@ -1656,7 +1656,7 @@
   margin-bottom: 6px;
   max-width: 100%;
 }
-.wa-bubble-wrap--ai   { flex-direction: row; }
+.wa-bubble-wrap--ai   { flex-direction: row; align-items: flex-start; }
 .wa-bubble-wrap--user { flex-direction: row-reverse; }
 
 .wa-avatar-col {
@@ -1665,7 +1665,6 @@
   height: 34px;
   border-radius: 50%;
   overflow: hidden;
-  margin-bottom: 2px;
 }
 
 .wa-bubble {

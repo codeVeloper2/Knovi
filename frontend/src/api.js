@@ -14,6 +14,20 @@ export function clearToken() {
   sessionStorage.removeItem(TOKEN_KEY);
 }
 
+// Safely parse JSON that may contain raw LaTeX backslash sequences
+// (e.g. \times, \neq, \sqrt) which are invalid JSON escape characters.
+async function safeJson(res) {
+  const text = await res.text().catch(() => "{}");
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Replace invalid backslash escapes: any \X that isn't a valid JSON
+    // escape (\", \\, \/, \b, \f, \n, \r, \t, \uXXXX) → \\X
+    const sanitized = text.replace(/\\(?!["\\/bfnrtu])/g, "\\\\");
+    try { return JSON.parse(sanitized); } catch { return {}; }
+  }
+}
+
 // ── Core request helper ──────────────────────────────────────
 async function request(path, { method = "GET", body, auth = false, timeoutMs = 60000 } = {}) {
   const token = auth ? getToken() : "";
@@ -39,7 +53,7 @@ async function request(path, { method = "GET", body, auth = false, timeoutMs = 6
   }
   clearTimeout(timer);
 
-  const data = await res.json().catch(() => ({}));
+  const data = await safeJson(res);
   if (!res.ok) {
     const detail = data.detail;
     let message;
