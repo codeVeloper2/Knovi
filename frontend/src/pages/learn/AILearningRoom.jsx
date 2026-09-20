@@ -27,15 +27,6 @@ function serverStatusToPhase(status, hasMessages) {
   }
 }
 
-const ROOM_INTENTS = [
-  { value: "teach_me",       label: "Teach me this",         icon: "📚" },
-  { value: "explain_simply", label: "Explain it simply",     icon: "💡" },
-  { value: "give_examples",  label: "Give me examples",      icon: "📝" },
-  { value: "go_deeper",      label: "Go deeper",             icon: "🔬" },
-  { value: "broaden",        label: "Broaden this",          icon: "🌐" },
-  { value: "already_know",   label: "Test my knowledge",     icon: "🎯" },
-  { value: "quiz_me",        label: "Quiz me straight away", icon: "✅" },
-];
 
 export default function AILearningRoom() {
   const { sessionId } = useParams();
@@ -64,6 +55,7 @@ export default function AILearningRoom() {
   const [checkResults, setCheckResults] = useState({});
 
   const [summary,      setSummary]      = useState(null);
+  const [showSummary,  setShowSummary]  = useState(false);
   const [msgInput,     setMsgInput]     = useState("");
 
   const bottomRef = useRef(null);
@@ -141,7 +133,7 @@ export default function AILearningRoom() {
       }
       setCheckResults(restored);
     }
-    if ((derivedPhase === "retrieval" || derivedPhase === "practice") && sess.questions?.length > 0) {
+    if ((derivedPhase === "retrieval" || derivedPhase === "practice" || derivedPhase === "summary") && sess.questions?.length > 0) {
       const nextQuestions = sess.questions;
       setQuestions(nextQuestions);
       const answered = new Set((sess.answers || []).map(item => Number(item.questionId)));
@@ -419,12 +411,46 @@ export default function AILearningRoom() {
     setError(null);
     try {
       const s = await api.generateSessionSummary(sessionId);
+
+      // The server marks the session completed when the summary is generated.
+      // Reload both session + messages so the teaching conversation that was
+      // hidden during retrieval becomes visible again. The summary itself is
+      // deliberately kept out of the chat transcript and shown on demand.
+      const [freshSession, freshMessages] = await Promise.all([
+        api.getAISession(sessionId),
+        api.getSessionMessages(sessionId),
+      ]);
+
       setSummary(s);
-      setSession(prev => ({ ...prev, status: "completed" }));
+      setSession(freshSession);
+      setMessages(freshMessages || []);
       setPhase("summary");
+      setLastEval(null);
+      setAnswerInput("");
     } catch (err) {
       setError(err.message || "Failed to generate summary.");
     } finally {
+      setAiWorking(false);
+    }
+  }
+
+  async function handlePracticeAgain() {
+    if (!session) return;
+    setAiWorking(true);
+    setError(null);
+    try {
+      const next = await api.createAISession({
+        subjectId: session.subjectId,
+        topicId: session.topicId,
+        conceptId: session.conceptId,
+        familiarity: session.studentFamiliarity || "new",
+        intent: "teach_me",
+        studentNote: session.studentNote || null,
+      });
+      await api.prepareAISession(next.id);
+      navigate(`/app/learn/ai/session/${next.id}`);
+    } catch (err) {
+      setError(err.message || "Could not start another practice session.");
       setAiWorking(false);
     }
   }
@@ -541,7 +567,7 @@ export default function AILearningRoom() {
 
         {/* Message history */}
         {messages
-          .filter(m => !["welcome", "system", "timer_start", "timer_end", "question_ask", "answer", "feedback"].includes(m.messageType))
+          .filter(m => !["welcome", "system", "timer_start", "timer_end", "question_ask", "answer", "feedback", "summary"].includes(m.messageType))
           .map((msg, idx) => (
             <Message
               key={msg.id || idx}
@@ -579,7 +605,7 @@ export default function AILearningRoom() {
           />
         )}
 
-        {(phase === "retrieval" || phase === "practice" || (phase === "summary" && questions.length > 0 && Object.keys(checkResults).length > 0)) && (
+        {(phase === "retrieval" || phase === "practice") && (
           questions.length > 0 ? (
             <RetrievalPanel
               question={questions[qIndex]}
@@ -618,13 +644,22 @@ export default function AILearningRoom() {
         )}
 
         {phase === "summary" && summary && (
-          <SummaryPanel
-            summary={summary}
-            conceptName={conceptName}
-            onContinue={() => navigate("/app/learn/ai")}
-            onPracticeAgain={handlePracticeAfterReteach}
-            onBackToTopic={() => navigate(-2)}
-          />
+          <>
+            <SessionCompleteBar
+              summary={summary}
+              onViewSummary={() => setShowSummary(true)}
+            />
+            {showSummary && (
+              <SummaryModal
+                summary={summary}
+                conceptName={conceptName}
+                onClose={() => setShowSummary(false)}
+                onContinue={() => navigate("/app/learn/ai")}
+                onPracticeAgain={handlePracticeAgain}
+                onBackToTopic={() => navigate(-2)}
+              />
+            )}
+          </>
         )}
 
         {phase === "summary" && !summary && aiWorking && (
@@ -940,6 +975,91 @@ function ReteachActions({ onStudyAgain, onPracticeNow, onAskQuestion }) {
         <button className="wa-btn-secondary" onClick={onPracticeNow}>✅ Try practice questions</button>
         <button className="wa-chip"          onClick={onAskQuestion}>💬 Ask a question</button>
       </div>
+    </div>
+  );
+}
+
+function SessionCompleteBar({ summary, onViewSummary }) {
+  const score = summary?.overallScore;
+  const scoreTone = score >= 70 ? "strong" : score >= 50 ? "partial" : "weak";
+  return (
+    <button type="button" className="wa-session-complete-bar" onClick={onViewSummary}>
+      <span className={`wa-session-complete-icon wa-session-complete-icon--${scoreTone}`}>✓</span>
+      <span className="wa-session-complete-copy">
+        <strong>Session complete</strong>
+        <span>{score != null ? `${score}/100 overall` : "View your session summary"}</span>
+      </span>
+      <span className="wa-session-complete-action">View summary →</span>
+    </button>
+  );
+}
+
+function SummaryModal({ summary, conceptName, onClose, onContinue, onPracticeAgain, onBackToTopic }) {
+  return (
+    <div className="wa-summary-overlay" role="dialog" aria-modal="true" aria-label="Session summary">
+      <button className="wa-summary-backdrop" aria-label="Close summary" onClick={onClose} />
+      <section className="wa-summary-modal">
+        <div className="wa-summary-modal-head">
+          <div>
+            <span className="wa-summary-eyebrow">SESSION SUMMARY</span>
+            <h2>{conceptName}</h2>
+          </div>
+          <button type="button" className="wa-summary-close" onClick={onClose} aria-label="Close">×</button>
+        </div>
+
+        {summary.overallScore != null && (
+          <div className="wa-summary-score-card">
+            <div>
+              <span className="wa-summary-score-label">Overall score</span>
+              <strong>{summary.overallScore}<small>/100</small></strong>
+            </div>
+            <span className="wa-summary-score-meta">
+              {summary.questionsCorrect} of {summary.questionsAnswered} correct
+            </span>
+          </div>
+        )}
+
+        {summary.summaryText && (
+          <div className="wa-summary-section">
+            <h3>What you learned</h3>
+            <p>{summary.summaryText}</p>
+          </div>
+        )}
+
+        {summary.strengths?.length > 0 && (
+          <div className="wa-summary-section">
+            <h3>✓ Understood well</h3>
+            <ul>{summary.strengths.map((s, i) => <li key={i}>{s}</li>)}</ul>
+          </div>
+        )}
+
+        {summary.areasForPractice?.length > 0 && (
+          <div className="wa-summary-section">
+            <h3>Needs more practice</h3>
+            <ul>{summary.areasForPractice.map((a, i) => <li key={i}>{a}</li>)}</ul>
+          </div>
+        )}
+
+        {summary.keyIdeas?.length > 0 && (
+          <div className="wa-summary-section">
+            <h3>Key ideas</h3>
+            <ul>{summary.keyIdeas.map((k, i) => <li key={i}>{k}</li>)}</ul>
+          </div>
+        )}
+
+        {summary.recommendedNext && (
+          <div className="wa-summary-section">
+            <h3>Recommended next step</h3>
+            <p>{summary.recommendedNext}</p>
+          </div>
+        )}
+
+        <div className="wa-summary-modal-actions">
+          <button className="wa-btn-primary" onClick={onContinue}>Continue Learning</button>
+          <button className="wa-btn-secondary" onClick={onPracticeAgain}>Practice Again</button>
+          <button className="wa-chip" onClick={onBackToTopic}>Back to Topic</button>
+        </div>
+      </section>
     </div>
   );
 }

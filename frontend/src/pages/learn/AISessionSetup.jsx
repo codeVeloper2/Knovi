@@ -36,15 +36,6 @@ const FAMILIARITY_OPTIONS = [
   },
 ];
 
-// Maps frontend intent display to backend INTENT_OPTIONS enum values
-const INTENT_OPTIONS = [
-  { value: "teach_me",       label: "Teach me this" },
-  { value: "explain_simply", label: "Explain it simply" },
-  { value: "give_examples",  label: "Give me examples" },
-  { value: "go_deeper",      label: "Go deeper" },
-  { value: "already_know",   label: "Test my knowledge" },
-  { value: "quiz_me",        label: "Quiz me straight away" },
-];
 
 export default function AISessionSetup() {
   const { subjectId, topicId, conceptId } = useParams();
@@ -53,7 +44,6 @@ export default function AISessionSetup() {
   const [loading,    setLoading]    = useState(true);
   const [concept,    setConcept]    = useState(null);
   const [familiarity, setFamiliarity] = useState("");
-  const [intent,     setIntent]     = useState("teach_me");
   const [studentNote, setStudentNote] = useState("");
   const [creating,   setCreating]   = useState(false);
   const [error,      setError]      = useState(null);
@@ -76,7 +66,7 @@ export default function AISessionSetup() {
         topicId:     parseInt(topicId, 10),
         conceptId:   parseInt(conceptId, 10),
         familiarity,
-        intent,
+        intent: "teach_me",
         studentNote: studentNote.trim() || null,
       });
 
@@ -210,22 +200,6 @@ export default function AISessionSetup() {
                   <span className="ai-familiarity-label">{opt.label}</span>
                   <span className="ai-familiarity-desc">{opt.desc}</span>
                 </span>
-              </button>
-            ))}
-          </div>
-
-          {/* Intent */}
-          <h2 className="ai-setup-question" style={{ marginTop: "28px" }}>
-            What would you like to do?
-          </h2>
-          <div className="ai-intent-grid">
-            {INTENT_OPTIONS.map(opt => (
-              <button
-                key={opt.value}
-                className={`ai-intent-chip${intent === opt.value ? " active" : ""}`}
-                onClick={() => setIntent(opt.value)}
-              >
-                {opt.label}
               </button>
             ))}
           </div>
