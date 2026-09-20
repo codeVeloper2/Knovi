@@ -10,7 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_session
+from app.core.database import get_session as get_db
 from app.core.security import current_user
 from app.models.user import User
 from app.schemas.ai_learning import (
@@ -44,7 +44,7 @@ router = APIRouter()
 async def create_session(
     body: CreateSessionRequest,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db),
 ):
     """Create a new AI learning session."""
     session = await svc.create_session(
@@ -68,7 +68,7 @@ async def list_sessions(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db),
 ):
     """List the authenticated user's learning sessions."""
     return await svc.list_sessions(
@@ -82,7 +82,7 @@ async def list_sessions(
 async def get_session(
     session_id: int,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Get a full learning session (owner only).
@@ -97,7 +97,7 @@ async def get_session(
 async def prepare_session(
     session_id: int,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db),
 ):
     """Prepare the first AI teaching response from the saved session context."""
     return await svc.teach_concept(session_id=session_id, user_id=user.id, db=db)
@@ -107,7 +107,7 @@ async def prepare_session(
 async def get_session_messages(
     session_id: int,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Return session messages (owner only).
@@ -124,7 +124,7 @@ async def get_session_messages(
 async def abandon_session(
     session_id: int,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db),
 ):
     """Abandon a session (marks it as abandoned, not completed)."""
     return await svc.abandon_session(session_id=session_id, user_id=user.id, db=db)
@@ -134,7 +134,7 @@ async def abandon_session(
 async def complete_session(
     session_id: int,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Mark a session as completed.
@@ -154,7 +154,7 @@ async def complete_session(
 async def teach_concept(
     session_id: int,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Generate AI teaching content for this session's concept.
@@ -169,7 +169,7 @@ async def student_message(
     session_id: int,
     body: StudentMessageRequest,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db),
 ):
     """Send a student message and receive an AI tutor response."""
     return await svc.respond_to_student(
@@ -187,7 +187,7 @@ async def start_study_period(
     session_id: int,
     body: StartStudyPeriodRequest,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Start a study/reading timer period.
@@ -205,7 +205,7 @@ async def finish_study_period(
     session_id: int,
     body: FinishStudyPeriodRequest,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Complete a study period and transition to retrieval.
@@ -228,7 +228,7 @@ async def generate_questions(
     session_id: int,
     count: int = Query(default=3, ge=1, le=10),
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Generate retrieval questions grounded in what was actually taught.
@@ -249,7 +249,7 @@ async def submit_answer(
     session_id: int,
     body: SubmitAnswerRequest,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Submit and evaluate a student answer.
@@ -278,7 +278,7 @@ async def reteach(
     session_id: int,
     body: RequestReteachRequest,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Generate adaptive reteaching using a fresh strategy.
@@ -300,7 +300,7 @@ async def reteach(
 async def generate_summary(
     session_id: int,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Generate (or regenerate) the session summary.
@@ -322,7 +322,7 @@ async def record_integrity_event(
     session_id: int,
     body: IntegrityEventRequest,
     user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_session),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Record a browser integrity signal.
