@@ -253,6 +253,21 @@ export default function AILearningRoom() {
     }
   }
 
+  function injectQuestionBubble(questionArr, idx) {
+    const q = questionArr[idx];
+    if (!q) return;
+    setMessages(prev => {
+      // avoid duplicate if already present
+      if (prev.some(m => m.id === `q-${q.id}`)) return prev;
+      return [...prev, {
+        id: `q-${q.id}`, role: "ai", messageType: "question_ask",
+        content: q.question, sequence: prev.length + 1,
+        createdAt: new Date().toISOString(),
+        extra: { questionType: q.questionType, questionNumber: idx + 1, totalQuestions: questionArr.length },
+      }];
+    });
+  }
+
   async function triggerRetrieval() {
     try {
       const qs = await api.generateRetrievalQuestions(sessionId, 3);
@@ -263,6 +278,8 @@ export default function AILearningRoom() {
       setLastEval(null);
       setSession(prev => ({ ...prev, status: "retrieval" }));
       setPhase("retrieval");
+      // Inject first question as chat bubble
+      injectQuestionBubble(arr, 0);
     } finally {
       setAiWorking(false);
     }
@@ -281,10 +298,30 @@ export default function AILearningRoom() {
     if (!question) return;
     setSubmitting(true);
     setError(null);
+
+    // Add the question as an AI chat bubble (if not already in messages)
+    const qAlreadyInMessages = messages.some(m => m.id === `q-${question.id}`);
+    if (!qAlreadyInMessages) {
+      setMessages(prev => [...prev, {
+        id: `q-${question.id}`, role: "ai", messageType: "question_ask",
+        content: question.question, sequence: prev.length + 1,
+        createdAt: new Date().toISOString(),
+        extra: { questionType: question.questionType, questionNumber: qIndex + 1, totalQuestions: questions.length },
+      }]);
+    }
+
+    // Add the student's answer as a user bubble immediately
+    const studentAnswer = answerInput.trim();
+    setMessages(prev => [...prev, {
+      id: `ans-${Date.now()}`, role: "student", messageType: "answer",
+      content: studentAnswer, sequence: prev.length + 1,
+      createdAt: new Date().toISOString(),
+    }]);
+    setAnswerInput("");
+
     try {
-      const evaluation = await api.submitAnswer(sessionId, question.id, answerInput.trim(), null);
+      const evaluation = await api.submitAnswer(sessionId, question.id, studentAnswer, null);
       setLastEval(evaluation);
-      setAnswerInput("");
       if (evaluation.feedback) {
         setMessages(prev => [...prev, {
           id: `local-eval-${Date.now()}`, role: "ai", messageType: "feedback",
@@ -335,6 +372,13 @@ export default function AILearningRoom() {
   }
 
   async function handleStudyReteach() {
+    // First scroll up to the reteach explanation so the user can read it
+    const reteachMsg = document.querySelector('[data-msgtype="reteach"]');
+    if (reteachMsg) {
+      reteachMsg.scrollIntoView({ behavior: "smooth", block: "start" });
+      // Give user 1.5s to see the message before starting the timer flow
+      await new Promise(r => setTimeout(r, 1500));
+    }
     setAiWorking(true);
     setError(null);
     try {
@@ -361,6 +405,7 @@ export default function AILearningRoom() {
       setAnswerInput("");
       setLastEval(null);
       setPhase("practice");
+      injectQuestionBubble(arr, 0);
     } catch (err) {
       setError(err.message || "Failed to generate practice questions.");
     } finally {
@@ -544,7 +589,12 @@ export default function AILearningRoom() {
               onSubmit={handleSubmitAnswer}
               submitting={submitting}
               lastEval={lastEval}
-              onNext={qIndex < questions.length - 1 ? () => { setQIndex(q => q + 1); setLastEval(null); } : null}
+              onNext={qIndex < questions.length - 1 ? () => {
+                const nextIdx = qIndex + 1;
+                setQIndex(nextIdx);
+                setLastEval(null);
+                injectQuestionBubble(questions, nextIdx);
+              } : null}
               onSummary={doSummary}
               onReteach={() => doReteach(lastEval?.misconception, lastEval?.recommendedStrategy)}
             />
@@ -665,13 +715,21 @@ function Message({ msg, isHidden }) {
   }
 
   return (
-    <div className={`wa-bubble-wrap ${isAI ? "wa-bubble-wrap--ai" : "wa-bubble-wrap--user"}`}>
+    <div className={`wa-bubble-wrap ${isAI ? "wa-bubble-wrap--ai" : "wa-bubble-wrap--user"}`} data-msgtype={msg.messageType}>
       {isAI && <div className="wa-avatar-col"><TutorAvatar size={34} /></div>}
       <div className={`wa-bubble ${isAI ? "wa-bubble--ai" : "wa-bubble--user"}`}>
         {isAI && (
           <span className="wa-bubble-sender">
-            {msg.messageType === "reteach" ? "PeerUp AI · New Approach" : "PeerUp AI"}
+            {msg.messageType === "reteach"       ? "PeerUp AI · New Approach" :
+             msg.messageType === "question_ask"  ? "PeerUp AI · Question" :
+             "PeerUp AI"}
           </span>
+        )}
+        {msg.messageType === "question_ask" && msg.extra && (
+          <div className="wa-q-meta-inline">
+            <span className="wa-q-badge">Q{msg.extra.questionNumber}/{msg.extra.totalQuestions}</span>
+            <span className="wa-q-type">{formatQType(msg.extra.questionType)}</span>
+          </div>
         )}
         <RichText content={msg.content} />
         {msg.messageType === "feedback" && msg.extra?.score !== undefined && msg.extra.score !== null && (
@@ -780,19 +838,23 @@ function StudyTimerPanel({ seconds, totalSeconds, paused, onTogglePause }) {
 function RetrievalPanel({ question, questionNumber, totalQuestions, answer, setAnswer, onSubmit, submitting, lastEval, onNext, onSummary, onReteach }) {
   if (!question) return null;
   const showResult = !!lastEval;
+  // If there's a result to show, display the EvalResult action card
+  if (showResult) {
+    return (
+      <div className="wa-action-card wa-retrieval-panel">
+        <EvalResult eval={lastEval} hasNext={!!onNext} onNext={onNext} onSummary={onSummary} onReteach={onReteach} />
+      </div>
+    );
+  }
+  // Otherwise show the answer input (question is already in the chat as a bubble)
   return (
     <div className="wa-action-card wa-retrieval-panel">
-      <div className="wa-q-header">
-        <span className="wa-q-badge">Question {questionNumber} / {totalQuestions}</span>
-        <span className="wa-q-type">{formatQType(question.questionType)}</span>
-      </div>
-      <p className="wa-q-text">{question.question}</p>
       {question.questionType === "multiple_choice" && question.options?.length > 0 ? (
-        <div className="wa-mc-options" role="radiogroup">
+        <div className="wa-mc-options" role="radiogroup" aria-label="Choose your answer">
           {question.options.map(opt => (
             <button key={opt.label} role="radio" aria-checked={answer === opt.label}
               className={`wa-mc-btn ${answer === opt.label ? "selected" : ""}`}
-              onClick={() => !showResult && setAnswer(opt.label)} disabled={showResult}>
+              onClick={() => setAnswer(opt.label)}>
               <span className="wa-mc-label">{opt.label}</span>
               <span className="wa-mc-text">{opt.text}</span>
             </button>
@@ -801,15 +863,11 @@ function RetrievalPanel({ question, questionNumber, totalQuestions, answer, setA
       ) : (
         <textarea className="wa-answer-input" placeholder="Type your answer here…"
           value={answer} onChange={e => setAnswer(e.target.value)}
-          rows={3} disabled={showResult || submitting} aria-label="Your answer" />
+          rows={3} disabled={submitting} aria-label="Your answer" />
       )}
-      {!showResult ? (
-        <button className="wa-btn-primary" onClick={onSubmit} disabled={!answer.trim() || submitting}>
-          {submitting ? "Checking…" : "Submit Answer"}
-        </button>
-      ) : (
-        <EvalResult eval={lastEval} hasNext={!!onNext} onNext={onNext} onSummary={onSummary} onReteach={onReteach} />
-      )}
+      <button className="wa-btn-primary" onClick={onSubmit} disabled={!answer.trim() || submitting}>
+        {submitting ? "Checking…" : "Submit Answer"}
+      </button>
     </div>
   );
 }

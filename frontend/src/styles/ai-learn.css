@@ -1902,6 +1902,14 @@
 .wa-q-type   { font-size: 0.75rem; color: var(--wa-text-muted); }
 .wa-q-text   { font-size: 0.9375rem; color: var(--wa-text); line-height: 1.6; margin: 0; }
 
+/* Question metadata line inside the AI chat bubble */
+.wa-q-meta-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
 .wa-mc-options { display: flex; flex-direction: column; gap: 8px; }
 .wa-mc-btn {
   display: flex;
