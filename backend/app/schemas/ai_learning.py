@@ -174,6 +174,12 @@ class AnswerOut(BaseModel):
     needsReteach:        Optional[bool] = None
     misconception:       Optional[str] = None
     recommendedStrategy: Optional[str] = None
+    # Review-only fields returned after submission; never used for active grading.
+    question: Optional[str] = None
+    questionType: Optional[str] = None
+    options: Optional[list] = None
+    correctAnswer: Optional[str] = None
+    correctOptionLabel: Optional[str] = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────

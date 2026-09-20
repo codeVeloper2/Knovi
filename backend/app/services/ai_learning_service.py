@@ -488,6 +488,39 @@ async def get_session(session_id: int, user_id: int, db: AsyncSession) -> dict:
     data["messages"] = safe_messages
 
     data["questions"]        = [q.serialize() for q in session.questions]
+
+    # Return submitted answers for review/resume. Never expose expected answers here;
+    # review details are only needed after a student has actually submitted.
+    answers_result = await db.execute(
+        select(AISessionAnswer)
+        .where(AISessionAnswer.session_id == session_id)
+        .order_by(AISessionAnswer.question_id, AISessionAnswer.attempt_number.desc())
+    )
+    latest_answers = {}
+    for answer_row in answers_result.scalars().all():
+        latest_answers.setdefault(answer_row.question_id, answer_row)
+
+    review_answers = []
+    question_by_id = {q.id: q for q in session.questions}
+    for question_id, answer_row in latest_answers.items():
+        q = question_by_id.get(question_id)
+        if not q:
+            continue
+        evaluation = answer_row.ai_evaluation or {}
+        item = {
+            **answer_row.serialize(),
+            "understanding": evaluation.get("understanding"),
+            "needsReteach": evaluation.get("needsReteach", False),
+            "misconception": evaluation.get("misconception"),
+            "recommendedStrategy": evaluation.get("recommendedStrategy"),
+            "question": q.question,
+            "questionType": q.question_type,
+            "options": q.options,
+            "correctAnswer": q.expected_answer if q.question_type != "multiple_choice" else None,
+            "correctOptionLabel": _correct_option_label(q),
+        }
+        review_answers.append(item)
+    data["answers"] = review_answers
     data["teachingAttempts"] = [a.serialize() for a in session.teaching_attempts]
     data["summary"]          = session.summary.serialize() if session.summary else None
 
@@ -959,7 +992,7 @@ Return JSON:
   ]
 }}
 
-For multiple_choice: options must be [{{"label":"A","text":"..."}}, ...]. All others: null.
+For multiple_choice: options must be [{{"label":"A","text":"..."}}, ...] and expected_answer MUST be exactly the correct option label (for example "A"). All others: null.
 """
     try:
         raw, _ = await call_with_fallback(
@@ -1011,6 +1044,29 @@ For multiple_choice: options must be [{{"label":"A","text":"..."}}, ...]. All ot
 # ─────────────────────────────────────────────────────────────────────────────
 # ANSWER SUBMISSION + EVALUATION
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _correct_option_label(question: AISessionQuestion) -> Optional[str]:
+    """Return the MC option label when the server-side expected answer identifies one."""
+    if question.question_type != "multiple_choice" or not question.options:
+        return None
+    expected = (question.expected_answer or "").strip().lower()
+    if not expected:
+        return None
+    for opt in question.options:
+        if not isinstance(opt, dict):
+            continue
+        label = str(opt.get("label") or "").strip()
+        text = str(opt.get("text") or "").strip()
+        if expected == label.lower() or expected == text.lower() or expected == f"option {label}".lower():
+            return label
+    # Common model format: "A - ..." or "A) ..."
+    for opt in question.options:
+        if not isinstance(opt, dict):
+            continue
+        label = str(opt.get("label") or "").strip()
+        if label and expected.startswith(label.lower()) and expected[len(label):len(label)+1] in ("-", ")", ":", ".", " "):
+            return label
+    return None
 
 async def submit_answer(
     session_id: int,
@@ -1150,13 +1206,19 @@ Scoring guide:
     await db.commit()
     await db.refresh(answer)
 
-    return {
+    result = {
         **answer.serialize(),
         "understanding":       understanding,
         "needsReteach":        needs_reteach,
         "misconception":       parsed.get("misconception"),
         "recommendedStrategy": parsed.get("recommended_strategy"),
+        "question":            question.question,
+        "questionType":        question.question_type,
+        "options":             question.options,
+        "correctAnswer":       question.expected_answer if question.question_type != "multiple_choice" else None,
+        "correctOptionLabel":  _correct_option_label(question),
     }
+    return result
 
 
 # ─────────────────────────────────────────────────────────────────────────────

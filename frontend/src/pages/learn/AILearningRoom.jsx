@@ -60,6 +60,7 @@ export default function AILearningRoom() {
   const [answerInput,  setAnswerInput]  = useState("");
   const [submitting,   setSubmitting]   = useState(false);
   const [lastEval,     setLastEval]     = useState(null);
+  const [checkResults, setCheckResults] = useState({});
 
   const [summary,      setSummary]      = useState(null);
   const [msgInput,     setMsgInput]     = useState("");
@@ -131,20 +132,20 @@ export default function AILearningRoom() {
       if (remaining > 0) startClientTimer(remaining, sess.activeStudyPeriod.id);
       else handleServerTimerExpired(sess.activeStudyPeriod.id);
     }
+    if (sess.answers) {
+      const restored = {};
+      for (const item of sess.answers) {
+        if (item?.questionId == null) continue;
+        restored[Number(item.questionId)] = item;
+      }
+      setCheckResults(restored);
+    }
     if ((derivedPhase === "retrieval" || derivedPhase === "practice") && sess.questions?.length > 0) {
       const nextQuestions = sess.questions;
       setQuestions(nextQuestions);
-
-      // Resume on the first question that has not already been evaluated.
-      // Feedback messages carry questionId, so the server history remains the
-      // source of truth even after a refresh or reopening the session.
-      const answeredIds = new Set(
-        (msgs || [])
-          .filter(m => m.messageType === "feedback" && m.extra?.questionId != null)
-          .map(m => Number(m.extra.questionId))
-      );
-      const nextIndex = nextQuestions.findIndex(q => !answeredIds.has(Number(q.id)));
-      setQIndex(nextIndex === -1 ? nextQuestions.length - 1 : nextIndex);
+      const answered = new Set((sess.answers || []).map(item => Number(item.questionId)));
+      const nextIndex = nextQuestions.findIndex(q => !answered.has(Number(q.id)));
+      setQIndex(nextIndex === -1 ? Math.max(0, nextQuestions.length - 1) : nextIndex);
     }
   }
 
@@ -307,42 +308,30 @@ export default function AILearningRoom() {
     if (!answerInput.trim() || submitting) return;
     const question = questions[qIndex];
     if (!question) return;
+
     setSubmitting(true);
     setError(null);
-
-    // Add the question as an AI chat bubble (if not already in messages)
-    const qAlreadyInMessages = messages.some(m => m.id === `q-${question.id}`);
-    if (!qAlreadyInMessages) {
-      setMessages(prev => [...prev, {
-        id: `q-${question.id}`, role: "ai", messageType: "question_ask",
-        content: question.question, sequence: prev.length + 1,
-        createdAt: new Date().toISOString(),
-        extra: { questionType: question.questionType, questionNumber: qIndex + 1, totalQuestions: questions.length },
-      }]);
-    }
-
-    // Add the student's answer as a user bubble immediately
     const studentAnswer = answerInput.trim();
-    setMessages(prev => [...prev, {
-      id: `ans-${Date.now()}`, role: "student", messageType: "answer",
-      content: studentAnswer, sequence: prev.length + 1,
-      createdAt: new Date().toISOString(),
-    }]);
-    setAnswerInput("");
 
     try {
       const evaluation = await api.submitAnswer(sessionId, question.id, studentAnswer, null);
+      setCheckResults(prev => ({
+        ...prev,
+        [question.id]: {
+          ...evaluation,
+          questionId: question.id,
+          question: question.question,
+          questionType: question.questionType,
+          options: question.options || null,
+          studentAnswer,
+        },
+      }));
+      setAnswerInput("");
       setLastEval(evaluation);
-      if (evaluation.feedback) {
-        setMessages(prev => [...prev, {
-          id: `local-eval-${Date.now()}`, role: "ai", messageType: "feedback",
-          content: evaluation.feedback, sequence: prev.length + 1,
-          createdAt: new Date().toISOString(),
-          extra: { score: evaluation.score, understanding: evaluation.understanding, isCorrect: evaluation.isCorrect },
-        }]);
-      }
+
       const sess = await api.getAISession(sessionId);
       setSession(sess);
+
       if (evaluation.needsReteach) {
         setPhase("reteaching");
         await doReteach(evaluation.misconception, evaluation.recommendedStrategy);
@@ -551,9 +540,7 @@ export default function AILearningRoom() {
 
         {/* Message history */}
         {messages
-          .filter(m => !["welcome", "system", "timer_start", "timer_end"].includes(m.messageType))
-          .filter(m => !((phase === "retrieval" || phase === "practice") &&
-            ["question_ask", "answer", "feedback"].includes(m.messageType)))
+          .filter(m => !["welcome", "system", "timer_start", "timer_end", "question_ask", "answer", "feedback"].includes(m.messageType))
           .map((msg, idx) => (
             <Message
               key={msg.id || idx}
@@ -591,26 +578,18 @@ export default function AILearningRoom() {
           />
         )}
 
-        {(phase === "retrieval" || phase === "practice") && (
+        {(phase === "retrieval" || phase === "practice" || (phase === "summary" && questions.length > 0 && Object.keys(answerRecords).length > 0)) && (
           questions.length > 0 ? (
             <RetrievalPanel
               question={questions[qIndex]}
               questionNumber={qIndex + 1}
               totalQuestions={questions.length}
+              questions={questions}
               answer={answerInput}
               setAnswer={setAnswerInput}
               onSubmit={handleSubmitAnswer}
               submitting={submitting}
-              lastEval={lastEval}
-              messages={messages}
-              onNext={qIndex < questions.length - 1 ? () => {
-                const nextIdx = qIndex + 1;
-                setQIndex(nextIdx);
-                setLastEval(null);
-                injectQuestionBubble(questions, nextIdx);
-              } : null}
-              onSummary={doSummary}
-              onReteach={() => doReteach(lastEval?.misconception, lastEval?.recommendedStrategy)}
+              results={checkResults}
             />
           ) : (
             <div className="wa-action-card">
@@ -621,12 +600,20 @@ export default function AILearningRoom() {
           )
         )}
 
+        {phase === "reteaching" && Object.keys(checkResults).length > 0 && (
+          <QuickCheckHistory questions={questions} results={checkResults} />
+        )}
+
         {phase === "reteaching" && !aiWorking && (
           <ReteachActions
             onStudyAgain={handleStudyReteach}
             onPracticeNow={handlePracticeAfterReteach}
             onAskQuestion={() => inputRef.current?.focus()}
           />
+        )}
+
+        {phase === "summary" && Object.keys(checkResults).length > 0 && (
+          <QuickCheckHistory questions={questions} results={checkResults} />
         )}
 
         {phase === "summary" && summary && (
@@ -849,212 +836,98 @@ function StudyTimerPanel({ seconds, totalSeconds, paused, onTogglePause }) {
   );
 }
 
-function RetrievalPanel({
-  question,
-  questionNumber,
-  totalQuestions,
-  answer,
-  setAnswer,
-  onSubmit,
-  submitting,
-  lastEval,
-  onNext,
-  onSummary,
-  onReteach,
-  messages = [],
-}) {
-  if (!question) return null;
-
-  const feedbackByQuestion = new Map(
-    messages
-      .filter(m => m.messageType === "feedback" && m.extra?.questionId != null)
-      .map(m => [Number(m.extra.questionId), m.extra])
-  );
-
-  const answeredCount = Math.min(
-    totalQuestions,
-    [...feedbackByQuestion.keys()].filter(id => messages.some(
-      m => m.messageType === "feedback" && Number(m.extra?.questionId) === id
-    )).length
-  );
-
-  const isAnswered = feedbackByQuestion.has(Number(question.id));
-  const selectedLabel = answer?.trim() || "";
-
+function QuickCheckHistory({ questions = [], results = {} }) {
+  const [expandedId, setExpandedId] = useState(null);
+  const answered = questions.map((q, index) => ({ q, index, result: results[q.id] })).filter(x => x.result);
+  if (!answered.length) return null;
   return (
-    <section className="wa-check-flow" aria-label={`Quick check, ${totalQuestions} questions`}>
-      <div className="wa-check-heading">
-        <div className="wa-check-rule" />
-        <span>QUICK CHECK · {totalQuestions} QUESTIONS</span>
-        <div className="wa-check-rule" />
-      </div>
-
-      <div className="wa-check-stack">
-        {Array.from({ length: totalQuestions }, (_, idx) => {
-          const q = idx === questionNumber - 1 ? question : null;
-          const result = q ? feedbackByQuestion.get(Number(q.id)) : null;
-          const isCurrent = idx === questionNumber - 1;
-          const isDone = !!result || idx < questionNumber - 1;
-
-          if (!q && !isDone) return null;
-
-          if (!isCurrent && isDone) {
-            const score = result?.score;
-            const understanding = result?.understanding || "partial";
-            const label = result?.isCorrect === false
-              ? "Needs practice"
-              : understanding === "strong"
-                ? "Correct"
-                : "Getting there";
-
-            return (
-              <button
-                type="button"
-                key={`done-${idx}`}
-                className={`wa-check-collapsed wa-check-collapsed--${understanding}`}
-                aria-label={`Question ${idx + 1}, ${label}${score != null ? `, ${score} out of 100` : ""}`}
-              >
-                <span className="wa-check-collapsed-icon">
-                  {understanding === "strong" ? "✓" : understanding === "partial" ? "◐" : "!"}
-                </span>
-                <span className="wa-check-collapsed-label">
-                  Q{idx + 1} · {label}
-                  {score != null ? ` · ${score}/100` : ""}
-                </span>
-                <span className="wa-check-chevron">⌄</span>
-              </button>
-            );
-          }
-
-          if (!q) return null;
-
-          const progressPct = ((questionNumber - 1) / totalQuestions) * 100;
-          const options = Array.isArray(q.options) ? q.options : [];
-          const isMultipleChoice = q.questionType === "multiple_choice" && options.length > 0;
-
-          return (
-            <div className="wa-check-card" key={`active-${q.id}`}>
-              <div className="wa-check-progress" aria-hidden="true">
-                {Array.from({ length: totalQuestions }, (_, i) => (
-                  <span
-                    key={i}
-                    className={
-                      i < questionNumber - 1
-                        ? "is-complete"
-                        : i === questionNumber - 1
-                          ? "is-current"
-                          : ""
-                    }
-                  />
-                ))}
-              </div>
-
-              <div className="wa-check-card-header">
-                <div>
-                  <div className="wa-check-kicker">
-                    Q{questionNumber} OF {totalQuestions} · {formatQType(q.questionType).toUpperCase()}
-                  </div>
-                  <h3>{q.question}</h3>
-                </div>
-              </div>
-
-              {isMultipleChoice ? (
-                <div className="wa-check-options" role="radiogroup" aria-label="Choose your answer">
-                  {options.map((opt, optIndex) => {
-                    const value = typeof opt === "string" ? opt : opt.label;
-                    const text = typeof opt === "string" ? opt : opt.text;
-                    const letter = typeof opt === "string"
-                      ? String.fromCharCode(65 + optIndex)
-                      : opt.label;
-
-                    const selected = selectedLabel === value;
-                    return (
-                      <button
-                        type="button"
-                        key={`${q.id}-${value}`}
-                        role="radio"
-                        aria-checked={selected}
-                        className={`wa-check-option${selected ? " selected" : ""}`}
-                        onClick={() => setAnswer(value)}
-                        disabled={submitting}
-                      >
-                        <span className="wa-check-option-letter">{letter}</span>
-                        <span>{text}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="wa-check-open-answer">
-                  <span className="wa-check-open-label">
-                    {formatQType(q.questionType)}
-                  </span>
-                  <textarea
-                    className="wa-check-textarea"
-                    placeholder="Write your answer in your own words…"
-                    value={answer}
-                    onChange={e => setAnswer(e.target.value)}
-                    rows={4}
-                    disabled={submitting}
-                  />
-                  <span className="wa-check-word-count">
-                    {answer.trim() ? `${answer.trim().split(/\s+/).length} words` : "Open answer"}
-                  </span>
-                </div>
-              )}
-
-              <div className="wa-check-submit-row">
-                <button
-                  type="button"
-                  className="wa-check-submit"
-                  onClick={onSubmit}
-                  disabled={!selectedLabel || submitting}
-                >
-                  {submitting ? "Checking…" : "Submit"}
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {lastEval && (
-        <div className="wa-check-eval-inline">
-          <EvalResult
-            eval={lastEval}
-            hasNext={!!onNext}
-            onNext={onNext}
-            onSummary={onSummary}
-            onReteach={onReteach}
-          />
-        </div>
-      )}
+    <section className="wa-check-history-only" aria-label="Quick check results">
+      <div className="wa-check-heading"><div className="wa-check-rule" /><span>QUICK CHECK · RESULTS</span><div className="wa-check-rule" /></div>
+      {answered.map(({ q, index, result }) => {
+        const status = statusForResult(result); const expanded = expandedId === q.id;
+        return <div className="wa-check-result" key={`history-${q.id}`}>
+          <button type="button" className={`wa-check-result-row wa-check-result-row--${status.key}`} onClick={() => setExpandedId(expanded ? null : q.id)} aria-expanded={expanded}>
+            <span className="wa-check-result-icon">{status.icon}</span><span className="wa-check-result-main">Q{index + 1} · {status.label}</span>
+            {result.score != null && <span className="wa-check-result-score">{result.score}/100</span>}
+            <span className="wa-check-result-review">{expanded ? "Review ↑" : "Review ↓"}</span>
+          </button>
+          {expanded && <ReviewDetails question={q} result={result} />}
+        </div>;
+      })}
     </section>
   );
 }
 
-function EvalResult({ eval: ev, hasNext, onNext, onSummary, onReteach }) {
-  const u = ev?.understanding || "partial";
+function statusForResult(result) {
+  if (result.isCorrect === true || result.understanding === "strong") return { key: "strong", label: "Correct", icon: "✓" };
+  if (result.understanding === "weak" || result.needsReteach || (result.score != null && result.score < 50)) return { key: "weak", label: "Needs practice", icon: "✕" };
+  return { key: "partial", label: "Getting there", icon: "◐" };
+}
+
+function RetrievalPanel({
+  question, questionNumber, totalQuestions, questions = [], answer, setAnswer, onSubmit, submitting, results = {},
+}) {
+  const [expandedId, setExpandedId] = useState(null);
+  if (!question) return null;
+  const answered = questions.map((q, index) => ({ q, index, result: results[q.id] })).filter(x => x.result);
   return (
-    <div className="wa-eval-result">
-      <div className={`wa-eval-tag understanding-${u}`}>
-        {u === "strong" ? "✓ Strong understanding" : u === "partial" ? "◑ Getting there" : "✗ Let's try again"}
-        {ev?.score != null ? ` · ${ev.score}/100` : ""}
+    <section className="wa-check-flow" aria-label={`Quick check, ${totalQuestions} questions`}>
+      <div className="wa-check-heading"><div className="wa-check-rule" /><span>QUICK CHECK · {totalQuestions} QUESTIONS</span><div className="wa-check-rule" /></div>
+      <div className="wa-check-history">
+        {answered.map(({ q, index, result }) => {
+          const status = statusForResult(result); const expanded = expandedId === q.id;
+          return <div className="wa-check-result" key={`result-${q.id}`}>
+            <button type="button" className={`wa-check-result-row wa-check-result-row--${status.key}`} onClick={() => setExpandedId(expanded ? null : q.id)} aria-expanded={expanded}>
+              <span className="wa-check-result-icon">{status.icon}</span><span className="wa-check-result-main">Q{index + 1} · {status.label}</span>
+              {result.score != null && <span className="wa-check-result-score">{result.score}/100</span>}
+              <span className="wa-check-result-review">{expanded ? "Review ↑" : "Review ↓"}</span>
+            </button>
+            {expanded && <ReviewDetails question={q} result={result} />}
+          </div>;
+        })}
       </div>
-      {ev?.misconception && (
-        <p className="wa-eval-misconception">💡 <strong>Misconception:</strong> {ev.misconception}</p>
-      )}
-      <div className="wa-eval-actions">
-        {ev?.needsReteach ? (
-          <button className="wa-btn-primary" onClick={onReteach}>Try a different approach</button>
-        ) : hasNext ? (
-          <button className="wa-btn-primary" onClick={onNext}>Next Question →</button>
+      <div className="wa-check-card">
+        <div className="wa-check-progress" aria-hidden="true">{Array.from({ length: totalQuestions }, (_, i) => <span key={i} className={i < questionNumber - 1 ? "is-complete" : i === questionNumber - 1 ? "is-current" : ""} />)}</div>
+        <div className="wa-check-card-header"><div className="wa-check-kicker">Q{questionNumber} OF {totalQuestions} · {formatQType(question.questionType).toUpperCase()}</div><h3>{question.question}</h3></div>
+        {question.questionType === "multiple_choice" && question.options?.length > 0 ? (
+          <div className="wa-check-options" role="radiogroup" aria-label="Choose your answer">
+            {question.options.map((opt, index) => {
+              const value = typeof opt === "string" ? opt : opt.label; const text = typeof opt === "string" ? opt : opt.text; const label = typeof opt === "string" ? String.fromCharCode(65 + index) : opt.label; const selected = answer === value;
+              return <button type="button" key={`${question.id}-${label}`} role="radio" aria-checked={selected} className={`wa-check-option${selected ? " selected" : ""}`} onClick={() => setAnswer(value)} disabled={submitting}><span className="wa-check-option-letter">{label}</span><span>{text}</span></button>;
+            })}
+          </div>
         ) : (
-          <button className="wa-btn-primary" onClick={onSummary}>View Session Summary</button>
+          <div className="wa-check-open-answer"><span className="wa-check-open-label">Explain in your own words</span><textarea className="wa-check-textarea" placeholder="Write your answer in your own words…" value={answer} onChange={e => setAnswer(e.target.value)} rows={4} disabled={submitting} /><span className="wa-check-word-count">{answer.trim() ? `${answer.trim().split(/\s+/).length} words` : "Open answer"}</span></div>
         )}
+        <div className="wa-check-submit-row"><button type="button" className="wa-check-submit" onClick={onSubmit} disabled={!answer.trim() || submitting}>{submitting ? "Checking…" : "Submit"}</button></div>
       </div>
-    </div>
+    </section>
   );
+}
+
+function ReviewDetails({ question, result }) {
+  const options = Array.isArray(question.options) ? question.options : [];
+  const isMC = question.questionType === "multiple_choice" && options.length > 0;
+  const correct = result.correctOptionLabel || result.correctAnswer || null;
+  if (isMC) return <div className="wa-check-review">
+    <div className="wa-check-review-question">{question.question}</div>
+    <div className="wa-check-review-options">
+      {options.map((opt, index) => {
+        const label = typeof opt === "string" ? String.fromCharCode(65 + index) : opt.label; const text = typeof opt === "string" ? opt : opt.text;
+        const selected = result.studentAnswer === label || result.studentAnswer === text; const correctOption = correct && (correct === label || correct === text || correct === `Option ${label}`);
+        const cls = correctOption ? "correct" : selected && result.isCorrect === false ? "wrong" : selected && result.isCorrect !== false ? "correct" : "";
+        return <div className={`wa-check-review-option ${cls}`} key={`${question.id}-review-${label}`}><span className="wa-check-review-letter">{correctOption || (selected && result.isCorrect) ? "✓" : selected ? "✕" : label}</span><span>{text}</span>{selected && <small>Your answer</small>}{correctOption && !selected && <small>Correct answer</small>}</div>;
+      })}
+    </div>
+    {result.feedback && <div className="wa-check-review-feedback"><strong>PeerUp AI</strong><p>{result.feedback}</p></div>}
+  </div>;
+  return <div className="wa-check-review"><div className="wa-check-review-question">{question.question}</div><div className="wa-check-answer-label">YOUR ANSWER</div><div className="wa-check-student-answer">{result.studentAnswer}</div>{result.feedback && <div className="wa-check-review-feedback"><strong>PeerUp AI</strong><p>{result.feedback}</p></div>}{result.score != null && <span className={`wa-check-review-score wa-check-review-score--${result.understanding || "partial"}`}>{statusText(result)} · {result.score}/100</span>}</div>;
+}
+
+function statusText(result) {
+  if (result.isCorrect === true || result.understanding === "strong") return "Correct";
+  if (result.understanding === "weak" || result.needsReteach || (result.score != null && result.score < 50)) return "Needs practice";
+  return "Getting there";
 }
 
 function ReteachActions({ onStudyAgain, onPracticeNow, onAskQuestion }) {
