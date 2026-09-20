@@ -760,32 +760,37 @@ export default function AILearningRoom() {
             <div ref={bottomRef} />
           </div>
 
-          {/* ── Input bar — visible during teaching/reteaching only ──────── */}
-        {(phase === "teaching" || phase === "reteaching") && (
-          <div className="air-input-bar">
+          {/* Persistent composer: remains anchored while the conversation scrolls. */}
+          <form
+            className={`air-input-bar ${phase !== "teaching" && phase !== "reteaching" ? "air-input-bar--inactive" : ""}`}
+            onSubmit={e => { e.preventDefault(); handleSendMessage(); }}
+          >
             <input
               ref={inputRef}
               type="text"
               className="air-input"
               placeholder={
+                phase === "studying" ? "Focus time — chat resumes after study…" :
+                phase === "retrieval" || phase === "practice" ? "Answer the recall question above…" :
+                phase === "summary" ? "Your session is complete" :
+                phase === "preparing" ? "Your tutor is getting ready…" :
                 "Ask your tutor a question…"
               }
               value={msgInput}
               onChange={e => setMsgInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && !aiWorking && handleSendMessage()}
+              onKeyDown={e => e.key === "Enter" && !e.shiftKey && !aiWorking && (e.preventDefault(), handleSendMessage())}
               aria-label="Message your tutor"
-              disabled={aiWorking}
+              disabled={aiWorking || (phase !== "teaching" && phase !== "reteaching")}
             />
             <button
+              type="submit"
               className="air-send-btn"
-              onClick={() => handleSendMessage()}
-              disabled={!msgInput.trim() || aiWorking}
+              disabled={!msgInput.trim() || aiWorking || (phase !== "teaching" && phase !== "reteaching")}
               aria-label="Send message"
             >
               <SendIcon />
             </button>
-          </div>
-        )}
+          </form>
         </section>
 
         <aside className="air-context-panel" aria-label="Session details">
