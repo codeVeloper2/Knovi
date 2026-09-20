@@ -168,7 +168,7 @@ export default function LearnLayout() {
               <span className="learn-mobile-tab-label">{item.label}</span>
             </NavLink>
           ))}
-        </nav>
+        </nav>}
       </div>
     </div>
   );
