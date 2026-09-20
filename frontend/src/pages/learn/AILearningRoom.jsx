@@ -900,39 +900,97 @@ function UnderstandingLabel({ understanding, score }) {
 function RichText({ content }) {
   if (!content) return null;
 
-  // Split on blank lines → paragraphs; handle bold, code, lists
+  // Normalise line endings, then split into blocks on blank lines
+  const blocks = content.replace(/\r\n/g, "\n").split(/\n\n+/);
+
   return (
     <div className="air-richtext">
-      {content.split(/\n\n+/).map((para, i) => {
-        // Code block
-        if (para.startsWith("```")) {
-          const inner = para.replace(/^```\w*\n?/, "").replace(/```$/, "");
+      {blocks.map((block, i) => {
+        // ── Fenced code block ──────────────────────────────────────────
+        if (block.startsWith("```")) {
+          const inner = block.replace(/^```\w*\n?/, "").replace(/\n?```$/, "");
           return <pre key={i} className="air-code-block"><code>{inner}</code></pre>;
         }
-        // Bullet list
-        if (para.split("\n").every(l => l.trim().startsWith("- ") || l.trim() === "")) {
+
+        // ── Display math  $$…$$ ────────────────────────────────────────
+        const mathBlock = block.match(/^\$\$\n?([\s\S]+?)\n?\$\$$/);
+        if (mathBlock) {
+          return (
+            <div key={i} className="air-math-block">
+              <code>{mathBlock[1].trim()}</code>
+            </div>
+          );
+        }
+
+        const lines = block.split("\n");
+
+        // ── Heading  # / ## / ### ──────────────────────────────────────
+        const headingMatch = lines[0].match(/^(#{1,3})\s+(.+)/);
+        if (headingMatch) {
+          const level = headingMatch[1].length;
+          const Tag = level === 1 ? "h2" : level === 2 ? "h3" : "h4";
+          const rest = lines.slice(1).join("\n").trim();
+          return (
+            <div key={i}>
+              <Tag className={`air-h${level}`}>{renderInline(headingMatch[2])}</Tag>
+              {rest && <RichText content={rest} />}
+            </div>
+          );
+        }
+
+        // ── Bullet list  - item  or  * item ───────────────────────────
+        if (lines.every(l => l.trim() === "" || /^[-*]\s/.test(l.trim()))) {
           return (
             <ul key={i} className="air-list">
-              {para.split("\n").filter(l => l.trim().startsWith("- ")).map((l, j) => (
-                <li key={j}>{renderInline(l.replace(/^- /, ""))}</li>
+              {lines.filter(l => /^[-*]\s/.test(l.trim())).map((l, j) => (
+                <li key={j}>{renderInline(l.trim().replace(/^[-*]\s/, ""))}</li>
               ))}
             </ul>
           );
         }
-        return <p key={i}>{renderInline(para)}</p>;
+
+        // ── Numbered list  1. item ─────────────────────────────────────
+        if (lines.every(l => l.trim() === "" || /^\d+\.\s/.test(l.trim()))) {
+          return (
+            <ol key={i} className="air-list air-list-ordered">
+              {lines.filter(l => /^\d+\.\s/.test(l.trim())).map((l, j) => (
+                <li key={j}>{renderInline(l.trim().replace(/^\d+\.\s/, ""))}</li>
+              ))}
+            </ol>
+          );
+        }
+
+        // ── Horizontal rule  ---  ──────────────────────────────────────
+        if (/^---+$/.test(block.trim())) {
+          return <hr key={i} className="air-divider" />;
+        }
+
+        // ── Default: paragraph ─────────────────────────────────────────
+        return <p key={i}>{renderInline(block)}</p>;
       })}
     </div>
   );
 }
 
+/**
+ * Render inline markdown within a single line/paragraph:
+ *   **bold**   *italic*   `code`   $math$
+ */
 function renderInline(text) {
-  // Bold **text**
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
-  return parts.map((part, i) =>
-    part.startsWith("**") && part.endsWith("**")
-      ? <strong key={i}>{part.slice(2, -2)}</strong>
-      : part
-  );
+  if (!text) return null;
+  // Split on inline patterns: **bold**, *italic*, `code`, $math$
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\$[^$\n]+\$)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**"))
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
+    if (part.startsWith("*") && part.endsWith("*"))
+      return <em key={i}>{part.slice(1, -1)}</em>;
+    if (part.startsWith("`") && part.endsWith("`"))
+      return <code key={i} className="air-inline-code">{part.slice(1, -1)}</code>;
+    if (part.startsWith("$") && part.endsWith("$"))
+      return <code key={i} className="air-inline-math">{part.slice(1, -1)}</code>;
+    return part;
+  });
 }
 
 // ── Typing indicator ─────────────────────────────────────────────────────────
