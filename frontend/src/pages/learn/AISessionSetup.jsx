@@ -75,10 +75,20 @@ export default function AISessionSetup() {
         subjectId:   parseInt(subjectId, 10),
         topicId:     parseInt(topicId, 10),
         conceptId:   parseInt(conceptId, 10),
-        familiarity,            // correct backend field name via api.js wrapper
+        familiarity,
         intent,
         studentNote: studentNote.trim() || null,
       });
+
+      // The setup choices are the AI's session context. Prepare the first
+      // teaching response now so the room opens directly into the conversation.
+      try {
+        await api.prepareAISession(session.id);
+      } catch (aiErr) {
+        // Keep the session usable; the room will retry preparation automatically.
+        console.warn('AI session preparation deferred:', aiErr);
+      }
+
       setSessionData(session);
       setShowWelcome(true);
     } catch (err) {

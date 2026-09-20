@@ -568,6 +568,10 @@ export function teachConcept(sessionId) {
   return post(`/api/learning/sessions/${sessionId}/teach`);
 }
 
+export function prepareAISession(sessionId) {
+  return post(`/api/learning/sessions/${sessionId}/prepare`);
+}
+
 export function sendStudentMessage(sessionId, content) {
   return post(`/api/learning/sessions/${sessionId}/message`, { content });
 }

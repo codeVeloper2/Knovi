@@ -24,8 +24,8 @@ import { TutorAvatar } from "./AISessionSetup";
 // ── Status → room phase mapping ───────────────────────────────────────────────
 function serverStatusToPhase(status, hasMessages) {
   switch (status) {
-    case "created":    return "intent_selection";
-    case "teaching":   return hasMessages ? "teaching" : "intent_selection";
+    case "created":    return "preparing";
+    case "teaching":   return hasMessages ? "teaching" : "preparing";
     case "studying":   return "studying";
     case "retrieval":  return "retrieval";
     case "reteaching": return "reteaching";
@@ -48,7 +48,7 @@ const ROOM_INTENTS = [
 ];
 
 const PHASE_LABELS = {
-  intent_selection: "Getting started",
+  preparing:        "Preparing",
   teaching:         "Learning",
   studying:         "Studying",
   retrieval:        "Recall",
@@ -67,7 +67,7 @@ export default function AILearningRoom() {
   const [loading,      setLoading]      = useState(true);
   const [session,      setSession]      = useState(null);
   const [messages,     setMessages]     = useState([]);
-  const [phase,        setPhase]        = useState("intent_selection");
+  const [phase,        setPhase]        = useState("preparing");
   const [error,        setError]        = useState(null);
 
   // ── Teaching ──────────────────────────────────────────────────────────────
@@ -117,10 +117,33 @@ export default function AILearningRoom() {
         api.getSessionMessages(sessionId),
       ]);
       applyServerState(sess, msgs);
+      if (sess.status === "created") {
+        await prepareSessionIfNeeded(sess);
+      }
     } catch (err) {
       setError(err.message || "Failed to load session.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function prepareSessionIfNeeded(sess) {
+    if (!sess || sess.status !== "created") return;
+
+    setAiWorking(true);
+    setPhase("preparing");
+    setError(null);
+    try {
+      await api.prepareAISession(sessionId);
+      const [freshSession, freshMessages] = await Promise.all([
+        api.getAISession(sessionId),
+        api.getSessionMessages(sessionId),
+      ]);
+      applyServerState(freshSession, freshMessages);
+    } catch (err) {
+      setError(err.message || "The AI tutor could not prepare this session.");
+    } finally {
+      setAiWorking(false);
     }
   }
 
@@ -564,6 +587,22 @@ export default function AILearningRoom() {
   const conceptName  = session?.conceptName  || "Concept";
   const subjectName  = session?.subjectName  || "";
   const topicName    = session?.topicName    || "";
+  const familiarityLabel = {
+    new: "Completely new",
+    seen_before: "Seen it before",
+    know_basics: "Understands the basics",
+    know_well: "Knows it well",
+    need_help: "Needs help with something specific",
+  }[session?.studentFamiliarity] || session?.studentFamiliarity || "";
+  const intentLabel = {
+    teach_me: "Teach me this",
+    explain_simply: "Explain it simply",
+    give_examples: "Give me examples",
+    go_deeper: "Go deeper",
+    broaden: "Broaden this",
+    already_know: "Test my knowledge",
+    quiz_me: "Quiz me straight away",
+  }[session?.intent] || session?.intent || "";
 
   return (
     <div className="air-shell">
@@ -602,23 +641,23 @@ export default function AILearningRoom() {
 
       {/* ── Main body ────────────────────────────────────────────────────── */}
       <main className="air-body">
+        <section className="air-chat-column">
+          {/* Error banner */}
+          {error && (
+            <div className="air-error-banner" role="alert">
+              {error}
+              <button
+                className="air-error-dismiss"
+                onClick={() => setError(null)}
+                aria-label="Dismiss error"
+              >
+                ✕
+              </button>
+            </div>
+          )}
 
-        {/* Error banner */}
-        {error && (
-          <div className="air-error-banner" role="alert">
-            {error}
-            <button
-              className="air-error-dismiss"
-              onClick={() => setError(null)}
-              aria-label="Dismiss error"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-
-        {/* ── Message history ──────────────────────────────────────────── */}
-        <div className="air-messages" aria-live="polite" aria-label="Learning conversation">
+          {/* ── Message history ──────────────────────────────────────────── */}
+          <div className="air-messages" aria-live="polite" aria-label="Learning conversation">
           {messages
             .filter(m => m.messageType !== "welcome" && m.messageType !== "system"
               && m.messageType !== "timer_start" && m.messageType !== "timer_end")
@@ -635,15 +674,15 @@ export default function AILearningRoom() {
 
           {/* ── Phase-specific overlays ─────────────────────────────── */}
 
-          {/* INTENT SELECTION */}
-          {phase === "intent_selection" && !aiWorking && (
-            <IntentPanel
-              conceptName={conceptName}
-              onSelect={handleIntentSelect}
-              msgInput={msgInput}
-              setMsgInput={setMsgInput}
-              onSend={() => handleSendMessage()}
-            />
+          {/* PREPARING */}
+          {phase === "preparing" && (
+            <div className="air-preparing-panel">
+              <TutorAvatar size={44} />
+              <div>
+                <h2>Getting your lesson ready…</h2>
+                <p>Your subject, concept, familiarity, and learning goal are being used to prepare your tutor.</p>
+              </div>
+            </div>
           )}
 
           {/* TEACHING ACTIONS */}
@@ -718,20 +757,18 @@ export default function AILearningRoom() {
             </div>
           )}
 
-          <div ref={bottomRef} />
-        </div>
+            <div ref={bottomRef} />
+          </div>
 
-        {/* ── Input bar — visible during teaching/reteaching only ──────── */}
-        {(phase === "teaching" || phase === "reteaching" || phase === "intent_selection") && (
+          {/* ── Input bar — visible during teaching/reteaching only ──────── */}
+        {(phase === "teaching" || phase === "reteaching") && (
           <div className="air-input-bar">
             <input
               ref={inputRef}
               type="text"
               className="air-input"
               placeholder={
-                phase === "intent_selection"
-                  ? "Or ask your own question…"
-                  : "Ask a follow-up question…"
+                "Ask your tutor a question…"
               }
               value={msgInput}
               onChange={e => setMsgInput(e.target.value)}
@@ -749,6 +786,43 @@ export default function AILearningRoom() {
             </button>
           </div>
         )}
+        </section>
+
+        <aside className="air-context-panel" aria-label="Session details">
+          <div className="air-context-card air-context-card-primary">
+            <div className="air-context-kicker">YOU'RE LEARNING</div>
+            <h2>{conceptName}</h2>
+            <p>{[subjectName, topicName].filter(Boolean).join(" · ")}</p>
+          </div>
+
+          <div className="air-context-card">
+            <h3>Session setup</h3>
+            <div className="air-context-row">
+              <span>Familiarity</span>
+              <strong>{familiarityLabel}</strong>
+            </div>
+            <div className="air-context-row">
+              <span>Goal</span>
+              <strong>{intentLabel}</strong>
+            </div>
+            {session?.studentNote && (
+              <div className="air-context-note">
+                <span>Your note</span>
+                <p>{session.studentNote}</p>
+              </div>
+            )}
+          </div>
+
+          <div className="air-context-card">
+            <h3>How this session works</h3>
+            <div className="air-flow-list">
+              <div><span>1</span><p>Learn with your AI tutor</p></div>
+              <div><span>2</span><p>Study the explanation</p></div>
+              <div><span>3</span><p>Recall what you learned</p></div>
+              <div><span>4</span><p>Practice and adapt if needed</p></div>
+            </div>
+          </div>
+        </aside>
       </main>
     </div>
   );

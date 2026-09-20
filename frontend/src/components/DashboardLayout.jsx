@@ -83,6 +83,7 @@ export default function DashboardLayout() {
 
   const inSettings = location.pathname.startsWith("/app/settings");
   const isLearn = location.pathname.startsWith("/app/learn");
+  const isAISessionRoom = location.pathname.startsWith("/app/learn/ai/session/");
 
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   useEffect(() => {
@@ -209,8 +210,8 @@ export default function DashboardLayout() {
       {isMobile && (
         <>
           <MobileTopBar />
-          <MobileBottomNav />
-          <MobileFabMenu />
+          {!isAISessionRoom && <MobileBottomNav />}
+          {!isAISessionRoom && <MobileFabMenu />}
         </>
       )}
 

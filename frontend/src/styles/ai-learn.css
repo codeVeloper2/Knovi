@@ -2294,3 +2294,181 @@
   .air-topbar-meta { display: none; }
   .air-msg { max-width: 100%; }
 }
+
+/* ═══════════════════════════════════════
+   AI SESSION ROOM — focused tutor workspace
+   ═══════════════════════════════════════ */
+.air-body {
+  width: min(1240px, 100%);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 16px;
+  padding: 16px 20px 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.air-chat-column {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(15, 30, 53, 0.55);
+  border: 1px solid var(--ai-border);
+  border-radius: 14px 14px 0 0;
+  overflow: hidden;
+}
+
+.air-chat-column .air-messages {
+  padding: 22px 24px 14px;
+}
+
+.air-context-panel {
+  min-width: 0;
+  overflow-y: auto;
+  padding-bottom: 16px;
+}
+
+.air-context-card {
+  background: var(--ai-card);
+  border: 1px solid var(--ai-border);
+  border-radius: 14px;
+  padding: 18px;
+  margin-bottom: 12px;
+}
+
+.air-context-card-primary {
+  background: linear-gradient(145deg, rgba(79,110,247,0.16), rgba(15,30,53,0.92));
+  border-color: rgba(79,110,247,0.24);
+}
+
+.air-context-kicker {
+  color: var(--ai-primary);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  margin-bottom: 7px;
+}
+
+.air-context-card h2 {
+  color: var(--ai-text);
+  font-size: 1.15rem;
+  line-height: 1.3;
+  margin: 0 0 6px;
+}
+
+.air-context-card h3 {
+  color: var(--ai-text);
+  font-size: 0.88rem;
+  margin: 0 0 14px;
+}
+
+.air-context-card-primary p,
+.air-context-note p {
+  color: var(--ai-text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.air-context-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+.air-context-row:first-of-type { border-top: 0; padding-top: 0; }
+.air-context-row span,
+.air-context-note > span {
+  color: var(--ai-text-secondary);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.air-context-row strong {
+  color: var(--ai-text);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+.air-context-note {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.025);
+  border-radius: 9px;
+}
+.air-context-note p { margin-top: 5px; }
+
+.air-flow-list {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+.air-flow-list > div {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+.air-flow-list span {
+  width: 21px;
+  height: 21px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 21px;
+  border-radius: 50%;
+  background: rgba(79,110,247,0.14);
+  color: var(--ai-primary);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+.air-flow-list p {
+  margin: 1px 0 0;
+  color: var(--ai-text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.air-preparing-panel {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: 620px;
+  margin: 30px auto;
+  padding: 20px;
+  background: rgba(79,110,247,0.07);
+  border: 1px solid rgba(79,110,247,0.18);
+  border-radius: 14px;
+}
+.air-preparing-panel h2 {
+  color: var(--ai-text);
+  font-size: 1rem;
+  margin: 0 0 5px;
+}
+.air-preparing-panel p {
+  color: var(--ai-text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .air-body { grid-template-columns: 1fr; padding: 12px 14px 0; }
+  .air-context-panel { display: none; }
+}
+
+@media (max-width: 768px) {
+  .air-shell { height: calc(100dvh - 56px); }
+  .air-topbar { min-height: 52px; padding: 8px 12px; }
+  .air-topbar-info { min-width: 0; }
+  .air-topbar-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+  .air-body { padding: 8px 8px 0; }
+  .air-chat-column { border-radius: 12px 12px 0 0; }
+  .air-chat-column .air-messages { padding: 14px 12px 10px; }
+  .air-msg-bubble { font-size: 0.9rem; line-height: 1.58; }
+  .air-input-bar { padding: 9px 10px; }
+  .air-input { min-width: 0; }
+  .air-progress { display: none; }
+  .air-end-btn { padding: 6px 10px; }
+}

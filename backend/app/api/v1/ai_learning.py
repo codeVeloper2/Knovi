@@ -93,6 +93,16 @@ async def get_session(
     return await svc.get_session(session_id=session_id, user_id=user.id, db=db)
 
 
+@router.post("/learning/sessions/{session_id}/prepare", response_model=TeachingOut)
+async def prepare_session(
+    session_id: int,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_session),
+):
+    """Prepare the first AI teaching response from the saved session context."""
+    return await svc.teach_concept(session_id=session_id, user_id=user.id, db=db)
+
+
 @router.get("/learning/sessions/{session_id}/messages", response_model=list[MessageOut])
 async def get_session_messages(
     session_id: int,

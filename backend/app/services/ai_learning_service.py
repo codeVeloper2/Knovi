@@ -432,6 +432,23 @@ async def get_session(session_id: int, user_id: int, db: AsyncSession) -> dict:
         load_study_periods=True,
     )
     data = session.serialize()
+
+    # Hydrate the curriculum labels needed by the learning room header/context.
+    subject, topic, concept = await _load_curriculum_chain(
+        session.subject_id, session.topic_id, session.concept_id, db
+    )
+    data["subjectName"] = subject.name
+    data["topicName"] = topic.name
+    data["conceptName"] = concept.name
+    data["conceptExplanation"] = concept.explanation
+    data["learningObjectives"] = [
+        {
+            "title": lo.title,
+            "description": lo.description,
+        }
+        for lo in (topic.learning_objectives or [])
+    ]
+
     in_protected_state = session.status in _PROTECTED_STATES
 
     # Current teaching snapshot (stripped during protected states)
@@ -635,7 +652,7 @@ Adapt depth and language to the student's familiarity ({session.student_familiar
 
 Return JSON (all fields required; arrays may be empty []):
 {{
-  "explanation": "Main teaching text — markdown supported inside this string. 400–800 words.",
+  "explanation": "Start with a short, natural tutor greeting that acknowledges the student's familiarity and goal, then teach the concept. Markdown is supported inside this string. 400–800 words.",
   "key_points": ["point 1", "point 2"],
   "examples": ["example 1", "example 2"],
   "formulas": ["formula 1"],

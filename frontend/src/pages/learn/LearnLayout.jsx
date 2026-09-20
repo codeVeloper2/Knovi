@@ -98,6 +98,7 @@ export default function LearnLayout() {
   const { profile, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const isAISessionRoom = location.pathname.includes("/app/learn/ai/session/");
 
   const [lastSession, setLastSession] = useState(null);
 
@@ -153,7 +154,7 @@ export default function LearnLayout() {
         <Outlet context={{ lastSession }} />
 
         {/* Mobile bottom tab bar — replaces the sidebar on small screens */}
-        <nav className="learn-mobile-tabs" aria-label="Learn navigation">
+        {!isAISessionRoom && <nav className="learn-mobile-tabs" aria-label="Learn navigation">
           {LEARN_NAV.map(item => (
             <NavLink
               key={item.to}
