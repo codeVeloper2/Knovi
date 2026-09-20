@@ -132,8 +132,19 @@ export default function AILearningRoom() {
       else handleServerTimerExpired(sess.activeStudyPeriod.id);
     }
     if ((derivedPhase === "retrieval" || derivedPhase === "practice") && sess.questions?.length > 0) {
-      setQuestions(sess.questions);
-      setQIndex(0);
+      const nextQuestions = sess.questions;
+      setQuestions(nextQuestions);
+
+      // Resume on the first question that has not already been evaluated.
+      // Feedback messages carry questionId, so the server history remains the
+      // source of truth even after a refresh or reopening the session.
+      const answeredIds = new Set(
+        (msgs || [])
+          .filter(m => m.messageType === "feedback" && m.extra?.questionId != null)
+          .map(m => Number(m.extra.questionId))
+      );
+      const nextIndex = nextQuestions.findIndex(q => !answeredIds.has(Number(q.id)));
+      setQIndex(nextIndex === -1 ? nextQuestions.length - 1 : nextIndex);
     }
   }
 
@@ -541,6 +552,8 @@ export default function AILearningRoom() {
         {/* Message history */}
         {messages
           .filter(m => !["welcome", "system", "timer_start", "timer_end"].includes(m.messageType))
+          .filter(m => !((phase === "retrieval" || phase === "practice") &&
+            ["question_ask", "answer", "feedback"].includes(m.messageType)))
           .map((msg, idx) => (
             <Message
               key={msg.id || idx}
@@ -589,6 +602,7 @@ export default function AILearningRoom() {
               onSubmit={handleSubmitAnswer}
               submitting={submitting}
               lastEval={lastEval}
+              messages={messages}
               onNext={qIndex < questions.length - 1 ? () => {
                 const nextIdx = qIndex + 1;
                 setQIndex(nextIdx);
@@ -835,40 +849,187 @@ function StudyTimerPanel({ seconds, totalSeconds, paused, onTogglePause }) {
   );
 }
 
-function RetrievalPanel({ question, questionNumber, totalQuestions, answer, setAnswer, onSubmit, submitting, lastEval, onNext, onSummary, onReteach }) {
+function RetrievalPanel({
+  question,
+  questionNumber,
+  totalQuestions,
+  answer,
+  setAnswer,
+  onSubmit,
+  submitting,
+  lastEval,
+  onNext,
+  onSummary,
+  onReteach,
+  messages = [],
+}) {
   if (!question) return null;
-  const showResult = !!lastEval;
-  // If there's a result to show, display the EvalResult action card
-  if (showResult) {
-    return (
-      <div className="wa-action-card wa-retrieval-panel">
-        <EvalResult eval={lastEval} hasNext={!!onNext} onNext={onNext} onSummary={onSummary} onReteach={onReteach} />
-      </div>
-    );
-  }
-  // Otherwise show the answer input (question is already in the chat as a bubble)
+
+  const feedbackByQuestion = new Map(
+    messages
+      .filter(m => m.messageType === "feedback" && m.extra?.questionId != null)
+      .map(m => [Number(m.extra.questionId), m.extra])
+  );
+
+  const answeredCount = Math.min(
+    totalQuestions,
+    [...feedbackByQuestion.keys()].filter(id => messages.some(
+      m => m.messageType === "feedback" && Number(m.extra?.questionId) === id
+    )).length
+  );
+
+  const isAnswered = feedbackByQuestion.has(Number(question.id));
+  const selectedLabel = answer?.trim() || "";
+
   return (
-    <div className="wa-action-card wa-retrieval-panel">
-      {question.questionType === "multiple_choice" && question.options?.length > 0 ? (
-        <div className="wa-mc-options" role="radiogroup" aria-label="Choose your answer">
-          {question.options.map(opt => (
-            <button key={opt.label} role="radio" aria-checked={answer === opt.label}
-              className={`wa-mc-btn ${answer === opt.label ? "selected" : ""}`}
-              onClick={() => setAnswer(opt.label)}>
-              <span className="wa-mc-label">{opt.label}</span>
-              <span className="wa-mc-text">{opt.text}</span>
-            </button>
-          ))}
+    <section className="wa-check-flow" aria-label={`Quick check, ${totalQuestions} questions`}>
+      <div className="wa-check-heading">
+        <div className="wa-check-rule" />
+        <span>QUICK CHECK · {totalQuestions} QUESTIONS</span>
+        <div className="wa-check-rule" />
+      </div>
+
+      <div className="wa-check-stack">
+        {Array.from({ length: totalQuestions }, (_, idx) => {
+          const q = idx === questionNumber - 1 ? question : null;
+          const result = q ? feedbackByQuestion.get(Number(q.id)) : null;
+          const isCurrent = idx === questionNumber - 1;
+          const isDone = !!result || idx < questionNumber - 1;
+
+          if (!q && !isDone) return null;
+
+          if (!isCurrent && isDone) {
+            const score = result?.score;
+            const understanding = result?.understanding || "partial";
+            const label = result?.isCorrect === false
+              ? "Needs practice"
+              : understanding === "strong"
+                ? "Correct"
+                : "Getting there";
+
+            return (
+              <button
+                type="button"
+                key={`done-${idx}`}
+                className={`wa-check-collapsed wa-check-collapsed--${understanding}`}
+                aria-label={`Question ${idx + 1}, ${label}${score != null ? `, ${score} out of 100` : ""}`}
+              >
+                <span className="wa-check-collapsed-icon">
+                  {understanding === "strong" ? "✓" : understanding === "partial" ? "◐" : "!"}
+                </span>
+                <span className="wa-check-collapsed-label">
+                  Q{idx + 1} · {label}
+                  {score != null ? ` · ${score}/100` : ""}
+                </span>
+                <span className="wa-check-chevron">⌄</span>
+              </button>
+            );
+          }
+
+          if (!q) return null;
+
+          const progressPct = ((questionNumber - 1) / totalQuestions) * 100;
+          const options = Array.isArray(q.options) ? q.options : [];
+          const isMultipleChoice = q.questionType === "multiple_choice" && options.length > 0;
+
+          return (
+            <div className="wa-check-card" key={`active-${q.id}`}>
+              <div className="wa-check-progress" aria-hidden="true">
+                {Array.from({ length: totalQuestions }, (_, i) => (
+                  <span
+                    key={i}
+                    className={
+                      i < questionNumber - 1
+                        ? "is-complete"
+                        : i === questionNumber - 1
+                          ? "is-current"
+                          : ""
+                    }
+                  />
+                ))}
+              </div>
+
+              <div className="wa-check-card-header">
+                <div>
+                  <div className="wa-check-kicker">
+                    Q{questionNumber} OF {totalQuestions} · {formatQType(q.questionType).toUpperCase()}
+                  </div>
+                  <h3>{q.question}</h3>
+                </div>
+              </div>
+
+              {isMultipleChoice ? (
+                <div className="wa-check-options" role="radiogroup" aria-label="Choose your answer">
+                  {options.map((opt, optIndex) => {
+                    const value = typeof opt === "string" ? opt : opt.label;
+                    const text = typeof opt === "string" ? opt : opt.text;
+                    const letter = typeof opt === "string"
+                      ? String.fromCharCode(65 + optIndex)
+                      : opt.label;
+
+                    const selected = selectedLabel === value;
+                    return (
+                      <button
+                        type="button"
+                        key={`${q.id}-${value}`}
+                        role="radio"
+                        aria-checked={selected}
+                        className={`wa-check-option${selected ? " selected" : ""}`}
+                        onClick={() => setAnswer(value)}
+                        disabled={submitting}
+                      >
+                        <span className="wa-check-option-letter">{letter}</span>
+                        <span>{text}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="wa-check-open-answer">
+                  <span className="wa-check-open-label">
+                    {formatQType(q.questionType)}
+                  </span>
+                  <textarea
+                    className="wa-check-textarea"
+                    placeholder="Write your answer in your own words…"
+                    value={answer}
+                    onChange={e => setAnswer(e.target.value)}
+                    rows={4}
+                    disabled={submitting}
+                  />
+                  <span className="wa-check-word-count">
+                    {answer.trim() ? `${answer.trim().split(/\s+/).length} words` : "Open answer"}
+                  </span>
+                </div>
+              )}
+
+              <div className="wa-check-submit-row">
+                <button
+                  type="button"
+                  className="wa-check-submit"
+                  onClick={onSubmit}
+                  disabled={!selectedLabel || submitting}
+                >
+                  {submitting ? "Checking…" : "Submit"}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {lastEval && (
+        <div className="wa-check-eval-inline">
+          <EvalResult
+            eval={lastEval}
+            hasNext={!!onNext}
+            onNext={onNext}
+            onSummary={onSummary}
+            onReteach={onReteach}
+          />
         </div>
-      ) : (
-        <textarea className="wa-answer-input" placeholder="Type your answer here…"
-          value={answer} onChange={e => setAnswer(e.target.value)}
-          rows={3} disabled={submitting} aria-label="Your answer" />
       )}
-      <button className="wa-btn-primary" onClick={onSubmit} disabled={!answer.trim() || submitting}>
-        {submitting ? "Checking…" : "Submit Answer"}
-      </button>
-    </div>
+    </section>
   );
 }
 
