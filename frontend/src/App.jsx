@@ -52,6 +52,7 @@ import AILearnHome from "./pages/learn/AILearnHome";
 import AISubjectPage from "./pages/learn/AISubjectPage";
 import AITopicPage from "./pages/learn/AITopicPage";
 import AISessionSetup from "./pages/learn/AISessionSetup";
+import AIConceptPage from "./pages/learn/AIConceptPage";
 import AILearningRoom from "./pages/learn/AILearningRoom";
 
 // On mobile shows the settings card list; on desktop redirects to /profile
@@ -99,7 +100,8 @@ function AppRoutes() {
           <Route path="ai"                                                         element={<AILearnHome />} />
           <Route path="ai/subject/:subjectId"                                      element={<AISubjectPage />} />
           <Route path="ai/subject/:subjectId/topic/:topicId"                       element={<AITopicPage />} />
-          <Route path="ai/subject/:subjectId/topic/:topicId/concept/:conceptId"    element={<AISessionSetup />} />
+          <Route path="ai/subject/:subjectId/topic/:topicId/concept/:conceptId"    element={<AIConceptPage />} />
+          <Route path="ai/subject/:subjectId/topic/:topicId/concept/:conceptId/setup" element={<AISessionSetup />} />
           <Route path="ai/session/:sessionId"                                      element={<AILearningRoom />} />
         </Route>
 
