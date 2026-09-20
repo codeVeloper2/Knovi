@@ -922,9 +922,29 @@ function KatexInline({ src }) {
   return <code className="air-inline-math">{src}</code>;
 }
 
+function normalizeMarkdown(text) {
+  // Ensure block-level elements are always preceded by a blank line,
+  // even when the AI writes them without blank line separation.
+  return text
+    .replace(/\r\n/g, "\n")
+    // Blank line before headings
+    .replace(/([^\n])\n(#{1,3} )/g, "$1\n\n$2")
+    // Blank line before blockquotes
+    .replace(/([^\n])\n(> )/g, "$1\n\n$2")
+    // Blank line before bullet items
+    .replace(/([^\n])\n([-*] )/g, "$1\n\n$2")
+    // Blank line before numbered list items (but not inside existing lists)
+    .replace(/([^\n])\n(\d+\. )/g, "$1\n\n$2")
+    // Blank line before $$ math blocks
+    .replace(/([^\n])\n(\$\$)/g, "$1\n\n$2")
+    // Collapse 3+ blank lines to 2
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 function RichText({ content }) {
   if (!content) return null;
-  const blocks = content.replace(/\r\n/g, "\n").split(/\n\n+/);
+  const blocks = normalizeMarkdown(content).split(/\n\n+/);
 
   return (
     <div className="air-richtext">
@@ -1003,7 +1023,9 @@ function RichText({ content }) {
  */
 function renderInline(text) {
   if (!text) return null;
-  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*\n]+\*|`[^`]+`|\$[^$\n]+\$)/g);
+  // Strip trailing * that AI sometimes appends after $math$* or list markers
+  const cleaned = text.replace(/(\$[^$\n]+\$)\*/g, "$1");
+  const parts = cleaned.split(/(\*\*[^*]+\*\*|\*[^*\n]+\*|`[^`]+`|\$[^$\n]+\$)/g);
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**"))
       return <strong key={i}>{part.slice(2, -2)}</strong>;
