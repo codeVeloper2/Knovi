@@ -15,7 +15,7 @@ export function clearToken() {
 }
 
 // ── Core request helper ──────────────────────────────────────
-async function request(path, { method = "GET", body, auth = false, timeoutMs = 20000 } = {}) {
+async function request(path, { method = "GET", body, auth = false, timeoutMs = 60000 } = {}) {
   const token = auth ? getToken() : "";
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
