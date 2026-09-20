@@ -102,8 +102,10 @@ function AppRoutes() {
           <Route path="ai/subject/:subjectId/topic/:topicId"                       element={<AITopicPage />} />
           <Route path="ai/subject/:subjectId/topic/:topicId/concept/:conceptId"    element={<AIConceptPage />} />
           <Route path="ai/subject/:subjectId/topic/:topicId/concept/:conceptId/setup" element={<AISessionSetup />} />
-          <Route path="ai/session/:sessionId"                                      element={<AILearningRoom />} />
         </Route>
+
+        {/* AI Session Room — fullscreen, no sidebar/nav/learn chrome */}
+        <Route path="learn/ai/session/:sessionId" element={<AILearningRoom />} />
 
         {/* ── Progress & Settings ── */}
         <Route path="progress" element={<Progress />} />
