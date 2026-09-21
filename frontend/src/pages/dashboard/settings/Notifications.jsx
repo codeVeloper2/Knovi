@@ -2,7 +2,6 @@ import { useState } from "react";
 import SettingsMobileHeader from "./SettingsMobileHeader";
 
 const OPTIONS = [
-  { key: "matches", label: "Friend requests", desc: "When someone sends you a friend request." },
   { key: "messages", label: "Chat messages", desc: "When someone sends you a message." },
   { key: "sessions", label: "Learning session reminders", desc: "Before a scheduled or saved study session." },
   { key: "progress", label: "Progress & badges", desc: "When you earn XP, badges, or level up." },

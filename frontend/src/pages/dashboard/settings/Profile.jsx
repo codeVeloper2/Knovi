@@ -168,7 +168,7 @@ export default function SettingsProfile() {
             <span className="privacy-toggle-icon">💬</span>
             <div>
               <div className="privacy-toggle-title">Allow direct messages</div>
-              <div className="privacy-toggle-desc">Let anyone message you directly without sending a friend request first. Turning this off means they must send a friend request before chatting.</div>
+              <div className="privacy-toggle-desc">Let other students message you directly from your profile.</div>
             </div>
           </div>
           <button

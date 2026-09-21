@@ -55,8 +55,9 @@ async def learn_home(
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    subjects_need_help = list(user.subjects_need_help or [])
-    return await learn_service.get_home_feed(session, user.id, subjects_need_help)
+    # subjects_need_help removed from User model (peer-matching system deleted).
+    # Pass empty list — get_home_feed falls back to top-rated courses when empty.
+    return await learn_service.get_home_feed(session, user.id, [])
 
 
 # ── Courses ───────────────────────────────────────────────────────────────

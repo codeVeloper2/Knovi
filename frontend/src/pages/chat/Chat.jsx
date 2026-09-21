@@ -267,7 +267,7 @@ function NewChatModal({ onClose, onStart }) {
                 </button>
               ))}
               {!loading && filtered.length === 0 && (
-                <p className="c-hint">{connections.length === 0 ? "No connections yet. Accept a friend request to chat." : "No match found."}</p>
+                <p className="c-hint">{connections.length === 0 ? "No conversations yet. Start a chat from Discover." : "No match found."}</p>
               )}
             </div>
           </>

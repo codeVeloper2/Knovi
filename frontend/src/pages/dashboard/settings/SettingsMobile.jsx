@@ -1,63 +1,98 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../../context/AuthContext";
-import { ChevronRight, ProfileIcon, LearnIcon, SecurityIcon, BellIcon, LogoutIcon } from "../../../components/DashIcons";
+import {
+  ChevronRight,
+  ProfileIcon,
+  LearnIcon,
+  SecurityIcon,
+  BellIcon,
+  LogoutIcon,
+} from "../../../components/DashIcons";
 import ConfirmDialog from "../../../components/ConfirmDialog";
 
 const SECTIONS = [
   {
     icon: ProfileIcon,
     label: "Profile",
-    desc: "Edit name, photo, bio and privacy",
+    desc: "Your name, photo, bio and privacy",
     route: "/app/settings/profile",
-    accent: "#5b6ef5",
-    emoji: "👤",
+    tone: "blue",
   },
   {
     icon: LearnIcon,
     label: "Learning Profile",
-    desc: "Customize how PeerUP's AI teaches you",
+    desc: "Personalize your AI learning experience",
     route: "/app/settings/learning-profile",
-    accent: "#8b5cf6",
-    emoji: "🧠",
+    tone: "purple",
   },
   {
     icon: SecurityIcon,
     label: "Security",
-    desc: "Password and account settings",
+    desc: "Password and account protection",
     route: "/app/settings/security",
-    accent: "#10b981",
-    emoji: "🔒",
+    tone: "green",
   },
   {
     icon: BellIcon,
     label: "Notifications",
-    desc: "Choose what to be notified about",
+    desc: "Choose which updates you receive",
     route: "/app/settings/notifications",
-    accent: "#f59e0b",
-    emoji: "🔔",
+    tone: "amber",
   },
 ];
+
+function SettingsSkeleton() {
+  return (
+    <div className="settings-hub settings-hub--skeleton" aria-label="Loading settings">
+      <div className="settings-skeleton-hero">
+        <span className="settings-skeleton settings-skeleton-avatar" />
+        <div className="settings-skeleton-copy">
+          <span className="settings-skeleton settings-skeleton-title" />
+          <span className="settings-skeleton settings-skeleton-line" />
+          <span className="settings-skeleton settings-skeleton-pill" />
+        </div>
+      </div>
+
+      <div className="settings-skeleton-list">
+        {SECTIONS.map((section) => (
+          <div className="settings-skeleton-row" key={section.route}>
+            <span className="settings-skeleton settings-skeleton-icon" />
+            <span className="settings-skeleton settings-skeleton-row-title" />
+            <span className="settings-skeleton settings-skeleton-arrow" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function SettingsMobile() {
   const { user, profile, logout } = useAuth();
   const navigate = useNavigate();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const name    = profile?.displayName || user?.displayName || "Student";
-  const photo   = profile?.photoURL    || user?.photoURL    || "";
-  const initial = name.trim()[0]?.toUpperCase() || "S";
-  const grade   = profile?.grade   || "";
-  const role    = profile?.role    || "student";
-  const xp      = profile?.xp      || 0;
-  const streak  = profile?.streak  || 0;
+  // Keep the hub visually stable while auth/profile data settles.
+  useEffect(() => {
+    const timer = window.setTimeout(() => setLoading(false), 450);
+    return () => window.clearTimeout(timer);
+  }, []);
 
-  function levelLabel(x) {
-    if (x >= 1000) return "Master";
-    if (x >= 600)  return "Expert";
-    if (x >= 300)  return "Scholar";
-    if (x >= 100)  return "Explorer";
+  const name = profile?.displayName || user?.displayName || "Student";
+  const email = profile?.email || user?.email || "";
+  const photo = profile?.photoURL || user?.photoURL || "";
+  const initial = name.trim().slice(0, 1).toUpperCase() || "S";
+  const grade = profile?.grade || "";
+  const xp = Number(profile?.xp || 0);
+  const streak = Number(profile?.streak || 0);
+
+  function levelLabel(value) {
+    if (value >= 1000) return "Master";
+    if (value >= 600) return "Expert";
+    if (value >= 300) return "Scholar";
+    if (value >= 100) return "Explorer";
     return "Beginner";
   }
 
@@ -72,90 +107,114 @@ export default function SettingsMobile() {
     }
   }
 
+  if (loading) return <SettingsSkeleton />;
+
   return (
-    <div className="sm-wrap">
-
-      {/* ── Hero Card ── */}
-      <div className="sm-hero">
-        <div className="sm-hero-bg" />
-
-        <div className="sm-avatar-ring">
-          {photo
-            ? <img src={photo} alt={name} referrerPolicy="no-referrer" className="sm-avatar-img" />
-            : <span className="sm-avatar-initial">{initial}</span>
-          }
-        </div>
-
-        <div className="sm-hero-info">
-          <h1 className="sm-hero-name">{name}</h1>
-          <p className="sm-hero-meta">
-            {role.charAt(0).toUpperCase() + role.slice(1)}
-            {grade ? ` · ${grade}` : ""}
+    <div className="settings-hub">
+      <header className="settings-hub-header">
+        <div>
+          <p className="settings-eyebrow">ACCOUNT</p>
+          <h1>Settings</h1>
+          <p className="settings-hub-subtitle">
+            Manage your profile, learning preferences, security and notifications.
           </p>
-          <span className="sm-hero-level">{levelLabel(xp)}</span>
         </div>
+      </header>
 
-        <div className="sm-hero-stats">
-          <div className="sm-stat">
-            <span className="sm-stat-val">{xp}</span>
-            <span className="sm-stat-lbl">XP</span>
+      <section className="settings-account-card">
+        <div className="settings-account-main">
+          <div className="settings-account-avatar">
+            {photo ? (
+              <img src={photo} alt={name} referrerPolicy="no-referrer" />
+            ) : (
+              <span>{initial}</span>
+            )}
           </div>
-          <div className="sm-stat-divider" />
-          <div className="sm-stat">
-            <span className="sm-stat-val">{streak}</span>
-            <span className="sm-stat-lbl">Streak 🔥</span>
-          </div>
-        </div>
 
-        <button
-          type="button"
-          className="sm-edit-btn"
-          onClick={() => navigate("/app/settings/profile")}
-        >
-          Edit Profile
-        </button>
-      </div>
-
-      {/* ── Section List ── */}
-      <div className="sm-sections">
-        {SECTIONS.map((s) => (
-          <button
-            key={s.route}
-            type="button"
-            className="sm-section-row"
-            onClick={() => navigate(s.route)}
-          >
-            <span className="sm-section-icon" style={{ "--accent": s.accent }}>
-              {s.emoji}
-            </span>
-            <div className="sm-section-body">
-              <span className="sm-section-label">{s.label}</span>
-              <span className="sm-section-desc">{s.desc}</span>
+          <div className="settings-account-copy">
+            <div className="settings-account-name-row">
+              <h2>{name}</h2>
+              <span className="settings-level">{levelLabel(xp)}</span>
             </div>
-            <ChevronRight width={18} height={18} className="sm-section-arrow" />
-          </button>
-        ))}
-
-        {/* ── Logout Button ── */}
-        <button
-          type="button"
-          className="sm-section-row sm-logout-row"
-          onClick={() => setLogoutOpen(true)}
-        >
-          <span className="sm-section-icon" style={{ "--accent": "#ef4444" }}>
-            🚪
-          </span>
-          <div className="sm-section-body">
-            <span className="sm-section-label">Logout</span>
-            <span className="sm-section-desc">Sign out of your account</span>
+            <p className="settings-account-email">{email || "PeerUP student"}</p>
+            <p className="settings-account-meta">
+              {grade || "Student"} <span aria-hidden="true">·</span> Member account
+            </p>
           </div>
-          <LogoutIcon width={18} height={18} className="sm-section-arrow" />
-        </button>
-      </div>
 
-      <p className="sm-footer">PeerUP · Learn. Teach. Grow.</p>
+          <button
+            type="button"
+            className="settings-edit-profile"
+            onClick={() => navigate("/app/settings/profile")}
+          >
+            Edit profile
+          </button>
+        </div>
 
-      {/* ── Logout Confirmation Dialog ── */}
+        <div className="settings-account-stats">
+          <div>
+            <strong>{xp}</strong>
+            <span>XP earned</span>
+          </div>
+          <div>
+            <strong>{streak}</strong>
+            <span>Day streak</span>
+          </div>
+          <div>
+            <strong>{SECTIONS.length}</strong>
+            <span>Account areas</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="settings-section">
+        <div className="settings-section-heading">
+          <div>
+            <h2>Account settings</h2>
+            <p>Choose an area to update your PeerUP experience.</p>
+          </div>
+        </div>
+
+        <div className="settings-options">
+          {SECTIONS.map(({ icon: Icon, label, desc, route, tone }) => (
+            <button
+              key={route}
+              type="button"
+              className="settings-option"
+              onClick={() => navigate(route)}
+            >
+              <span className={`settings-option-icon settings-option-icon--${tone}`}>
+                <Icon width={20} height={20} />
+              </span>
+              <span className="settings-option-copy">
+                <strong>{label}</strong>
+                <span>{desc}</span>
+              </span>
+              <ChevronRight width={19} height={19} className="settings-option-arrow" />
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="settings-support-card">
+        <div className="settings-support-icon">✓</div>
+        <div>
+          <strong>Your account is protected</strong>
+          <p>Keep your password private and review your security settings regularly.</p>
+        </div>
+      </section>
+
+      <button
+        type="button"
+        className="settings-logout"
+        onClick={() => setLogoutOpen(true)}
+      >
+        <LogoutIcon width={19} height={19} />
+        <span>Log out</span>
+      </button>
+
+      <p className="settings-hub-footer">PeerUP · Learn. Teach. Grow.</p>
+
       <ConfirmDialog
         open={logoutOpen}
         onCancel={() => !loggingOut && setLogoutOpen(false)}

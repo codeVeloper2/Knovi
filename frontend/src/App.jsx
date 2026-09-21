@@ -54,11 +54,9 @@ import AISessionSetup from "./pages/learn/AISessionSetup";
 import AIConceptPage from "./pages/learn/AIConceptPage";
 import AILearningRoom from "./pages/learn/AILearningRoom";
 
-// On mobile shows the settings card list; on desktop redirects to /profile
+// Responsive settings hub used on both desktop and mobile.
 function SettingsIndex() {
-  const isMobile = window.innerWidth <= 820;
-  if (isMobile) return <SettingsMobile />;
-  return <Navigate to="/app/settings/profile" replace />;
+  return <SettingsMobile />;
 }
 
 function AppRoutes() {
