@@ -69,6 +69,34 @@ export default function AILearningRoom() {
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
 
+  // ── Text-to-Speech ────────────────────────────────────────────
+  const [ttsEnabled, setTtsEnabled] = useState(true);
+  const ttsEnabledRef = useRef(true);
+
+  function speak(text) {
+    if (!ttsEnabledRef.current) return;
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const clean = text
+      .replace(/[#*_`~>\-]+/g, " ")
+      .replace(/\[(.*?)\]\(.*?\)/g, "$1")
+      .replace(/\s+/g, " ")
+      .trim();
+    const utt = new SpeechSynthesisUtterance(clean);
+    utt.rate  = 1.05;
+    utt.pitch = 1;
+    window.speechSynthesis.speak(utt);
+  }
+
+  function toggleTts() {
+    const next = !ttsEnabled;
+    ttsEnabledRef.current = next;
+    setTtsEnabled(next);
+    if (!next) window.speechSynthesis?.cancel();
+  }
+
+  useEffect(() => { return () => window.speechSynthesis?.cancel(); }, []);
+
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -125,6 +153,9 @@ export default function AILearningRoom() {
         console.warn("Could not refresh separate session messages; using session snapshot.", messageErr);
       }
       applyServerState(freshSession, freshMessages);
+      // Speak the first teaching message
+      const firstTeaching = freshMessages.find(m => m.messageType === "teaching" && m.role === "ai");
+      if (firstTeaching?.content) speak(firstTeaching.content);
     } catch (err) {
       setError(err.message || "The AI tutor could not prepare this session.");
     } finally {
@@ -305,6 +336,7 @@ export default function AILearningRoom() {
           content: t.explanation, sequence: prev.length + 1,
           createdAt: new Date().toISOString(), extra: { strategy: t.strategy },
         }]);
+        speak(t.explanation);
       }
       setTeaching(t);
 
@@ -363,6 +395,7 @@ export default function AILearningRoom() {
     try {
       const msg = await api.sendStudentMessage(sessionId, content);
       setMessages(prev => [...prev, msg]);
+      speak(msg.content || "");
       // Check if AI flagged a suggestion for a new session (only show once per question)
       const extra = msg.extra || {};
       if (extra.suggestNewSession && !suggestionShown) {
@@ -510,16 +543,23 @@ export default function AILearningRoom() {
           currentTaskIndex
         );
       } else {
-        setCompletedTaskIndexes(prev =>
-          Array.from(new Set([...prev, currentTaskIndex]))
-        );
-
-        const nextIndex = currentTaskIndex + 1;
-        if (learningPlan[nextIndex]) {
-          // Task passed → immediately teach and start the next task timer.
-          await handleStartTask(learningPlan[nextIndex], nextIndex);
+        const nextQIndex = qIndex + 1;
+        if (nextQIndex < questions.length) {
+          // More questions in this quiz — advance to next question
+          setQIndex(nextQIndex);
         } else {
-          await doSummary();
+          // All questions answered and passed — move to next task
+          setCompletedTaskIndexes(prev =>
+            Array.from(new Set([...prev, currentTaskIndex]))
+          );
+
+          const nextTaskIndex = currentTaskIndex + 1;
+          if (learningPlan[nextTaskIndex]) {
+            // Auto-start the next task immediately
+            await handleStartTask(learningPlan[nextTaskIndex], nextTaskIndex);
+          } else {
+            await doSummary();
+          }
         }
       }
     } catch (err) {
@@ -542,6 +582,7 @@ export default function AILearningRoom() {
           content: t.explanation, sequence: prev.length + 1,
           createdAt: new Date().toISOString(), extra: { strategy: t.strategy },
         }]);
+        speak(t.explanation);
       }
       // Return to teaching phase — the AI will signal start_quiz again
       // when it judges the student has understood the reteach content.
@@ -752,6 +793,7 @@ export default function AILearningRoom() {
 
         <SessionProgress currentPhase={phase} />
 
+        <button className="wa-tts-btn" onClick={toggleTts} aria-label={ttsEnabled ? "Mute voice" : "Unmute voice"} title={ttsEnabled ? "Mute voice" : "Unmute voice"} style={{ background: "none", border: "none", cursor: "pointer", padding: "4px 6px", color: "var(--wa-topbar-text, #fff)", opacity: ttsEnabled ? 1 : 0.35 }}>{ttsEnabled ? (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>) : (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>)}</button>
         <button className="wa-end-btn" onClick={handleEndSession}>End</button>
       </header>
 
