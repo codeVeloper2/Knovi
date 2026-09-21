@@ -139,6 +139,37 @@ export default function AILearningRoom() {
       const answered = new Set((sess.answers || []).map(item => Number(item.questionId)));
       const nextIndex = nextQuestions.findIndex(q => !answered.has(Number(q.id)));
       setQIndex(nextIndex === -1 ? Math.max(0, nextQuestions.length - 1) : nextIndex);
+
+      // Rebuild question_ask bubbles from server data so they show on reload.
+      // They are injected optimistically at runtime but never stored server-side.
+      const currentMsgs = msgs || [];
+      const existingQIds = new Set(currentMsgs.filter(m => m.messageType === "question_ask").map(m => m.id));
+      const rebuiltBubbles = nextQuestions
+        .map((q, idx) => {
+          const syntheticId = `q-${q.id}`;
+          if (existingQIds.has(syntheticId)) return null;
+          return {
+            id: syntheticId, role: "ai", messageType: "question_ask",
+            content: q.question, sequence: 10000 + idx,
+            createdAt: q.createdAt || new Date().toISOString(),
+            extra: { questionType: q.questionType, questionNumber: idx + 1, totalQuestions: nextQuestions.length },
+          };
+        })
+        .filter(Boolean);
+
+      if (rebuiltBubbles.length > 0) {
+        setMessages(prev => {
+          // Merge: insert each question bubble after the last non-question message
+          // that has an earlier sequence, so order is preserved.
+          const merged = [...prev];
+          for (const bubble of rebuiltBubbles) {
+            const insertIdx = merged.findIndex(m => m.sequence > bubble.sequence);
+            if (insertIdx === -1) merged.push(bubble);
+            else merged.splice(insertIdx, 0, bubble);
+          }
+          return merged;
+        });
+      }
     }
   }
 
@@ -567,7 +598,7 @@ export default function AILearningRoom() {
 
         {/* Message history */}
         {messages
-          .filter(m => !["welcome", "system", "timer_start", "timer_end", "question_ask", "answer", "feedback", "summary"].includes(m.messageType))
+          .filter(m => !["welcome", "system", "timer_start", "timer_end", "summary"].includes(m.messageType))
           .map((msg, idx) => (
             <Message
               key={msg.id || idx}

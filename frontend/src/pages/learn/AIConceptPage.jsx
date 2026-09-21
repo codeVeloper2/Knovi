@@ -34,12 +34,14 @@ export default function AIConceptPage(){
   const history=useMemo(()=>sessions.filter(s=>Number(s.conceptId)===Number(conceptId)),[sessions,conceptId]);
   const completed=history.filter(s=>s.status==="completed").length;
   const active=history.find(s=>!["completed","abandoned"].includes(s.status));
+  const lastCompleted=useMemo(()=>[...history].filter(s=>s.status==="completed").sort((a,b)=>new Date(b.updatedAt||b.createdAt)-new Date(a.updatedAt||a.createdAt))[0],[history]);
 
   if(loading)return <div className="cp-page"><div className="cp-skeleton hero"/><div className="cp-skeleton block"/></div>;
   if(!concept)return <div className="cp-page"><div className="cp-empty"><h2>Concept not found.</h2><button onClick={()=>navigate(`/app/learn/ai/subject/${subjectId}/topic/${topicId}`)}>Back to Topic</button></div></div>;
 
   const start=()=>{
     if(active?.id) navigate(`/app/learn/ai/session/${active.id}`);
+    else if(lastCompleted?.id) navigate(`/app/learn/ai/session/${lastCompleted.id}`);
     else navigate(`/app/learn/ai/subject/${subjectId}/topic/${topicId}/concept/${conceptId}/setup`);
   };
 
@@ -60,7 +62,7 @@ export default function AIConceptPage(){
         <div className="cp-hero-chips"><span>{subject?.name}</span><span>{topic?.name}</span>{completed>0&&<span>{completed} completed session{completed>1?"s":""}</span>}</div>
       </div>
       <button className="cp-primary cp-start-hero" onClick={start}>
-        <Spark/> {active ? "Continue Learning" : "Start Learning"}
+        <Spark/> {active ? "Continue Learning" : completed ? "Review Session" : "Start Learning"}
       </button>
     </section>
 
@@ -89,7 +91,7 @@ export default function AIConceptPage(){
             <strong>{completed} session{completed!==1?"s":""} completed</strong>
             <small>{history.length ? "You can continue from your latest session." : "Start when you're ready."}</small>
           </div>
-          <button className="cp-primary cp-full" onClick={start}>{active ? "Continue Learning" : "Start AI Session"}</button>
+          <button className="cp-primary cp-full" onClick={start}>{active ? "Continue Learning" : completed ? "Review Session" : "Start AI Session"}</button>
         </div>
         <div className="cp-rail-card cp-rail-tip"><strong>Be honest with your tutor</strong><p>Your familiarity and answers help the AI choose how to teach you. You don't need to pretend you already know something.</p></div>
       </aside>
