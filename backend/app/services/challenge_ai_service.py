@@ -348,6 +348,11 @@ def _question_prompt(
         f"{difficulty.value}={count}"
         for difficulty, count in blueprint.difficultyDistribution.items()
     )
+    concept_key_points = _clean_text("\n".join(concept.key_points or []), 2500)
+    context_a_weak_areas = _clean_text("\n".join(context_a.weak_areas), 1600)
+    context_a_misconceptions = _clean_text("\n".join(context_a.misconceptions), 1600)
+    context_b_weak_areas = _clean_text("\n".join(context_b.weak_areas), 1600)
+    context_b_misconceptions = _clean_text("\n".join(context_b.misconceptions), 1600)
 
     system = (
         "You are PeerUP's assessment generator. You generate rigorous multiple-choice "
@@ -371,21 +376,21 @@ CONCEPT MATERIAL
 {_clean_text(concept.explanation, 3500)}
 
 Concept key points:
-{_clean_text("\\n".join(concept.key_points or []), 2500)}
+{concept_key_points}
 
 LEARNER-EVIDENCE SNAPSHOT A (do not mention this learner)
 Weak areas:
-{_clean_text("\\n".join(context_a.weak_areas), 1600)}
+{context_a_weak_areas}
 Misconceptions:
-{_clean_text("\\n".join(context_a.misconceptions), 1600)}
+{context_a_misconceptions}
 What the AI taught:
 {context_a.teaching_text}
 
 LEARNER-EVIDENCE SNAPSHOT B (do not mention this learner)
 Weak areas:
-{_clean_text("\\n".join(context_b.weak_areas), 1600)}
+{context_b_weak_areas}
 Misconceptions:
-{_clean_text("\\n".join(context_b.misconceptions), 1600)}
+{context_b_misconceptions}
 What the AI taught:
 {context_b.teaching_text}
 
