@@ -18546,56 +18546,155 @@ kbd {
   .chatx-shell .cr-input-bar{padding:7px 7px calc(7px + env(safe-area-inset-bottom))}
 }
 
+
 /* ========================================================================
-   CHAT EDGE-TO-EDGE LAYOUT FIX
-   The chat workspace should use the full desktop content width. The inbox
-   stays compact while the conversation pane takes every remaining pixel.
+   PEERUP CHAT — FINAL LAYOUT + REACTION POLISH
    ======================================================================== */
-@media (min-width: 721px) {
-  .dash-main--desktop:has(.chatx-shell) {
-    width: 100%;
-    max-width: none;
-    margin-left: 0;
-    margin-right: 0;
-    padding: 0;
-    min-height: calc(100vh - 106px);
-    overflow: hidden;
-  }
 
-  .chatx-shell {
-    width: 100%;
-    max-width: none;
-    margin: 0;
-    height: calc(100vh - 106px);
-    max-height: calc(100vh - 106px);
-    min-height: 0;
-    grid-template-columns: 360px minmax(0, 1fr);
-  }
+/* Chat owns the entire content row directly beneath the fixed topbar.
+   The global greeting/search subbar is intentionally collapsed on /app/chat. */
+.dash-main--desktop.dash-main--chat {
+  margin-top: 58px !important;
+  padding: 0 !important;
+  min-height: calc(100vh - 58px) !important;
+  max-width: none !important;
+  width: 100% !important;
+}
 
-  .chatx-sidebar {
-    width: 360px;
-    min-width: 360px;
-    max-width: 360px;
-  }
+.dash-main--chat > .chatx-shell {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  height: calc(100vh - 58px);
+  min-height: 0;
+  grid-template-columns: 360px minmax(0, 1fr);
+  overflow: hidden;
+}
 
-  .chatx-shell .cr {
-    min-width: 0;
-    width: 100%;
-  }
+.dash-main--chat > .chatx-shell .chatx-sidebar {
+  width: 360px;
+  min-width: 360px;
+  max-width: 360px;
+  min-height: 0;
+  overflow: hidden;
+}
 
-  .chatx-shell .cr-messages {
-    min-width: 0;
+.dash-main--chat > .chatx-shell > .cr,
+.dash-main--chat > .chatx-shell .cr {
+  min-width: 0;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Let the conversation actually use the open horizontal space. */
+.dash-main--chat > .chatx-shell .cr-messages {
+  min-width: 0;
+  padding-left: clamp(18px, 3vw, 54px);
+  padding-right: clamp(18px, 3vw, 54px);
+}
+
+.dash-main--chat > .chatx-shell .cmr {
+  min-width: 0;
+}
+
+.dash-main--chat > .chatx-shell .cb-wrap {
+  max-width: min(84%, 920px);
+}
+
+/* Long messages expand; short messages remain naturally compact. */
+.dash-main--chat > .chatx-shell .cb {
+  width: fit-content;
+  max-width: 100%;
+}
+
+/* Reaction = a small floating pill physically attached to the bubble,
+   like WhatsApp after a reaction has been added. */
+.dash-main--chat > .chatx-shell .cb-reactions {
+  bottom: -13px;
+  gap: 0;
+  z-index: 8;
+}
+
+.dash-main--chat > .chatx-shell .cb-reactions--mine {
+  right: 6px;
+  left: auto;
+}
+
+.dash-main--chat > .chatx-shell .cb-reactions--theirs {
+  left: 6px;
+  right: auto;
+}
+
+.dash-main--chat > .chatx-shell .cb-reaction {
+  min-width: 34px;
+  min-height: 27px;
+  height: 27px;
+  padding: 2px 8px;
+  justify-content: center;
+  gap: 3px;
+  border: 2px solid #0b141a;
+  border-radius: 999px;
+  background: #202c33;
+  color: #e9edef;
+  font-size: .82rem;
+  line-height: 1;
+  box-shadow: 0 2px 5px rgba(0,0,0,.38);
+}
+
+.dash-main--chat > .chatx-shell .cb-reaction span {
+  font-size: .67rem;
+  font-weight: 700;
+  color: #d7dde1;
+}
+
+.dash-main--chat > .chatx-shell .cb-reaction--me {
+  background: #103f36;
+  border-color: #00a884;
+}
+
+/* Keep enough vertical room so the attached reaction never collides with
+   the next message. */
+.dash-main--chat > .chatx-shell .cmr {
+  margin-bottom: 9px;
+}
+
+@media (max-width: 1200px) {
+  .dash-main--chat > .chatx-shell {
+    grid-template-columns: 340px minmax(0, 1fr);
+  }
+  .dash-main--chat > .chatx-shell .chatx-sidebar {
+    width: 340px;
+    min-width: 340px;
+    max-width: 340px;
+  }
+  .dash-main--chat > .chatx-shell .cb-wrap {
+    max-width: 86%;
   }
 }
 
-@media (min-width: 721px) and (max-width: 1100px) {
-  .chatx-shell {
+@media (max-width: 900px) {
+  .dash-main--chat > .chatx-shell {
     grid-template-columns: 320px minmax(0, 1fr);
   }
-
-  .chatx-sidebar {
+  .dash-main--chat > .chatx-shell .chatx-sidebar {
     width: 320px;
     min-width: 320px;
     max-width: 320px;
+  }
+}
+
+@media (max-width: 720px) {
+  .dash-main--mobile.dash-main--chat {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    min-height: 100dvh;
+  }
+  .dash-main--chat > .chatx-shell {
+    height: 100dvh;
+    min-height: 0;
+  }
+  .dash-main--chat > .chatx-shell .cb-wrap {
+    max-width: 90%;
   }
 }
