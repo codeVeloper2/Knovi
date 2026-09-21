@@ -10,7 +10,6 @@ import NotificationsBell from "./NotificationsPanel";
 export default function MobileTopBar() {
   const { user, profile } = useAuth();
   const [showAvatar, setShowAvatar] = useState(false);
-
   const name = profile?.displayName || user?.displayName || "peer";
   const initial = name.trim().slice(0, 1).toUpperCase();
   const photo = profile?.photoURL || user?.photoURL || "";
@@ -25,6 +24,7 @@ export default function MobileTopBar() {
           Peer<span className="logo-accent">Up</span>
         </span>
       </div>
+
       <div className="mobile-topbar-actions">
         <NotificationsBell className="mobile-topbar-bell" />
         <button
@@ -58,7 +58,10 @@ export default function MobileTopBar() {
           >
             ×
           </button>
-          <div className="global-avatar-lightbox-content" onClick={(event) => event.stopPropagation()}>
+          <div
+            className="global-avatar-lightbox-content"
+            onClick={(event) => event.stopPropagation()}
+          >
             {photo ? (
               <img src={photo} alt={name} referrerPolicy="no-referrer" />
             ) : (
@@ -68,7 +71,6 @@ export default function MobileTopBar() {
           </div>
         </div>
       )}
-      </div>
     </header>
   );
 }
