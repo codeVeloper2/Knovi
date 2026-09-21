@@ -582,6 +582,10 @@ export function teachConcept(sessionId) {
   return post(`/api/learning/sessions/${sessionId}/teach`);
 }
 
+export function generateTaskList(sessionId) {
+  return post(`/api/learning/sessions/${sessionId}/tasks`, {});
+}
+
 export function prepareAISession(sessionId) {
   return post(`/api/learning/sessions/${sessionId}/prepare`);
 }

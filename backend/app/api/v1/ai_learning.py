@@ -333,3 +333,18 @@ async def record_integrity_event(
         session_id=session_id, user_id=user.id,
         event_type=body.event_type, meta=body.meta, db=db,
     )
+
+@router.post("/learning/sessions/{session_id}/tasks", response_model=list)
+async def generate_task_list(
+    session_id: int,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Generate a task list for the session concept.
+    Called once after session creation / on first room load.
+    Returns a list of task objects.
+    """
+    return await svc.generate_task_list(
+        session_id=session_id, user_id=user.id, db=db,
+    )

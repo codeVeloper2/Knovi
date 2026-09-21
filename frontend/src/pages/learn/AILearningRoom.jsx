@@ -1,18 +1,20 @@
 /**
- * AILearningRoom — WhatsApp-style fullscreen AI chat experience.
+ * AILearningRoom — WhatsApp-style fullscreen AI chat.
  *
- * Layout: fixed topbar + fixed input bar + scrollable messages between them.
- * No bottom nav, no sidebar, no parent chrome — renders standalone.
- *
- * State is driven by the SERVER (session.status), not the frontend timer.
+ * New in this version:
+ *  - Task list: AI generates 3-5 tasks on load. Each task drives one teach→quiz cycle.
+ *  - Clock SVG timer (analog clock face, ticking second hand).
+ *  - Questions rendered inline as chat bubbles, NOT as a card panel.
+ *  - reteaching→reteaching supported (backend fix applied too).
  */
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import * as api from "../../api";
 import { TutorAvatar } from "./AISessionSetup";
-import "../../styles/ai-learn.css";
 
-// ── Status → room phase mapping ───────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// STATUS → PHASE
+// ─────────────────────────────────────────────────────────────────────────────
 function serverStatusToPhase(status, hasMessages) {
   switch (status) {
     case "created":    return "preparing";
@@ -23,81 +25,81 @@ function serverStatusToPhase(status, hasMessages) {
     case "practice":   return "practice";
     case "completed":  return "summary";
     case "abandoned":  return "abandoned";
-    default:           return "intent_selection";
+    default:           return "preparing";
   }
 }
 
-
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN COMPONENT
+// ─────────────────────────────────────────────────────────────────────────────
 export default function AILearningRoom() {
   const { sessionId } = useParams();
-  const navigate      = useNavigate();
+  const navigate = useNavigate();
 
-  const [loading,      setLoading]      = useState(true);
-  const [session,      setSession]      = useState(null);
-  const [messages,     setMessages]     = useState([]);
-  const [phase,        setPhase]        = useState("preparing");
-  const [error,        setError]        = useState(null);
+  const [loading,     setLoading]     = useState(true);
+  const [session,     setSession]     = useState(null);
+  const [messages,    setMessages]    = useState([]);
+  const [phase,       setPhase]       = useState("preparing");
+  const [error,       setError]       = useState(null);
+  const [aiWorking,   setAiWorking]   = useState(false);
+  const [msgInput,    setMsgInput]    = useState("");
 
-  const [teaching,     setTeaching]     = useState(null);
-  const [aiWorking,    setAiWorking]    = useState(false);
+  // Task list state
+  const [tasks,       setTasks]       = useState([]);
+  const [currentTask, setCurrentTask] = useState(0); // index into tasks[]
+  const [tasksDone,   setTasksDone]   = useState([]); // task ids completed
 
+  // Study timer
   const [studyPeriod,  setStudyPeriod]  = useState(null);
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [timerPaused,  setTimerPaused]  = useState(false);
   const timerRef  = useRef(null);
   const pausedRef = useRef(false);
 
-  const [questions,    setQuestions]    = useState([]);
-  const [qIndex,       setQIndex]       = useState(0);
-  const [answerInput,  setAnswerInput]  = useState("");
-  const [submitting,   setSubmitting]   = useState(false);
-  const [lastEval,     setLastEval]     = useState(null);
-  const [checkResults, setCheckResults] = useState({});
+  // Questions (rendered as chat)
+  const [questions,   setQuestions]   = useState([]);
+  const [qIndex,      setQIndex]      = useState(0);
+  const [answerInput, setAnswerInput] = useState("");
+  const [submitting,  setSubmitting]  = useState(false);
+  const [lastEval,    setLastEval]    = useState(null);
 
-  const [summary,      setSummary]      = useState(null);
-  const [showSummary,  setShowSummary]  = useState(false);
-  const [msgInput,     setMsgInput]     = useState("");
-
-  // Optional post-session suggestion state. These must always be defined because
-  // the room can be opened directly for a new, resumed, or completed session.
-  const [postSuggestion, setPostSuggestion] = useState(null);
-  const [suggestionShown, setSuggestionShown] = useState(false);
+  // Summary
+  const [summary, setSummary] = useState(null);
 
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
 
-  // Auto-scroll to bottom on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, phase, lastEval]);
+  }, [messages, phase, aiWorking, lastEval]);
 
   useEffect(() => {
-    loadAndResume();
+    loadSession();
     return () => clearTimer();
   }, [sessionId]);
 
-  async function loadAndResume() {
+  async function loadSession() {
     setLoading(true);
     setError(null);
     try {
-      // The session endpoint is the source of truth. Messages are a secondary
-      // request; if that endpoint fails, the session response already contains
-      // a safe message snapshot, so the room must still render.
-      const sess = await api.getAISession(sessionId);
-      let msgs = Array.isArray(sess?.messages) ? sess.messages : [];
-
-      try {
-        const fetched = await api.getSessionMessages(sessionId);
-        if (Array.isArray(fetched)) msgs = fetched;
-      } catch (messageErr) {
-        // Keep the room usable. The backend session payload already contains
-        // state-appropriate messages, including the restored completed history.
-        console.warn("Could not load separate session messages; using session snapshot.", messageErr);
-      }
-
+      const [sess, msgs] = await Promise.all([
+        api.getAISession(sessionId),
+        api.getSessionMessages(sessionId),
+      ]);
       applyServerState(sess, msgs);
-      if (sess.status === "created") {
-        await prepareSessionIfNeeded(sess);
+
+      // Generate task list if not already loaded from session messages
+      const taskMsg = msgs.find(m => m.messageType === "task_list");
+      if (taskMsg?.extra?.tasks) {
+        setTasks(taskMsg.extra.tasks);
+      } else if (sess.status === "created") {
+        await prepareSession(sess);
+      } else {
+        // Try to load from server
+        try {
+          const t = await api.generateTaskList(sessionId);
+          if (Array.isArray(t) && t.length) setTasks(t);
+        } catch { /* tasks optional */ }
       }
     } catch (err) {
       setError(err.message || "Failed to load session.");
@@ -106,24 +108,26 @@ export default function AILearningRoom() {
     }
   }
 
-  async function prepareSessionIfNeeded(sess) {
-    if (!sess || sess.status !== "created") return;
+  async function prepareSession(sess) {
     setAiWorking(true);
     setPhase("preparing");
     setError(null);
     try {
-      await api.prepareAISession(sessionId);
-      const freshSession = await api.getAISession(sessionId);
-      let freshMessages = Array.isArray(freshSession?.messages) ? freshSession.messages : [];
-      try {
-        const fetched = await api.getSessionMessages(sessionId);
-        if (Array.isArray(fetched)) freshMessages = fetched;
-      } catch (messageErr) {
-        console.warn("Could not refresh separate session messages; using session snapshot.", messageErr);
+      // Generate tasks and teaching content in parallel
+      const [taskResult] = await Promise.allSettled([
+        api.generateTaskList(sessionId),
+      ]);
+      if (taskResult.status === "fulfilled" && Array.isArray(taskResult.value)) {
+        setTasks(taskResult.value);
       }
-      applyServerState(freshSession, freshMessages);
+      await api.prepareAISession(sessionId);
+      const [freshSess, freshMsgs] = await Promise.all([
+        api.getAISession(sessionId),
+        api.getSessionMessages(sessionId),
+      ]);
+      applyServerState(freshSess, freshMsgs);
     } catch (err) {
-      setError(err.message || "The AI tutor could not prepare this session.");
+      setError(err.message || "Could not prepare session.");
     } finally {
       setAiWorking(false);
     }
@@ -131,52 +135,28 @@ export default function AILearningRoom() {
 
   function applyServerState(sess, msgs) {
     setSession(sess);
-    const safeMessages = Array.isArray(msgs) ? msgs : (Array.isArray(sess?.messages) ? sess.messages : []);
-    setMessages(safeMessages);
-    const derivedPhase = serverStatusToPhase(
-      sess.status,
-      safeMessages.filter(m => m.messageType === "teaching" || m.messageType === "reteach").length > 0,
-    );
-    setPhase(derivedPhase);
-    if (sess.teaching)  setTeaching(sess.teaching);
-    if (sess.summary)   setSummary(sess.summary);
+    setMessages(msgs || []);
+    const hasTeaching = (msgs || []).some(m => m.messageType === "teaching" || m.messageType === "reteach");
+    setPhase(serverStatusToPhase(sess.status, hasTeaching));
+    if (sess.summary) setSummary(sess.summary);
     if (sess.activeStudyPeriod && sess.status === "studying") {
-      const remaining = sess.activeStudyPeriod.remainingSeconds ?? 0;
+      const rem = sess.activeStudyPeriod.remainingSeconds ?? 0;
       setStudyPeriod(sess.activeStudyPeriod);
-      if (remaining > 0) startClientTimer(remaining, sess.activeStudyPeriod.id);
-      else handleServerTimerExpired(sess.activeStudyPeriod.id);
+      if (rem > 0) startTimer(rem, sess.activeStudyPeriod.id);
+      else handleTimerExpired(sess.activeStudyPeriod.id);
     }
-    if (sess.answers) {
-      const restored = {};
-      for (const item of sess.answers) {
-        if (item?.questionId == null) continue;
-        restored[Number(item.questionId)] = item;
-      }
-      setCheckResults(restored);
+    if ((sess.status === "retrieval" || sess.status === "practice") && sess.questions?.length > 0) {
+      setQuestions(sess.questions);
+      setQIndex(0);
     }
-    if ((derivedPhase === "retrieval" || derivedPhase === "practice" || derivedPhase === "summary") && sess.questions?.length > 0) {
-      const nextQuestions = sess.questions;
-      setQuestions(nextQuestions);
-      const answered = new Set((sess.answers || []).map(item => Number(item.questionId)));
-      const nextIndex = nextQuestions.findIndex(q => !answered.has(Number(q.id)));
-      setQIndex(nextIndex === -1 ? Math.max(0, nextQuestions.length - 1) : nextIndex);
-
-      // Submitted quiz questions are rendered as ordinary chat history after
-      // answering. The active unanswered question is the only Quick Check card.
-      // Rebuild the answered chat turns on resume because these UI messages are
-      // intentionally not persisted as session messages by the backend.
-      const answeredChat = buildQuizChatMessages(nextQuestions, sess.answers || []);
-      if (answeredChat.length > 0) {
-        setMessages(prev => {
-          const existingIds = new Set(prev.map(m => m.id));
-          const additions = answeredChat.filter(m => !existingIds.has(m.id));
-          return additions.length ? [...prev, ...additions] : prev;
-        });
-      }
+    // Restore completed tasks from summary/score
+    if (sess.summary && tasks.length > 0) {
+      setTasksDone(tasks.map(t => t.id));
     }
   }
 
-  function startClientTimer(seconds, periodId) {
+  // ── Timer ──────────────────────────────────────────────────────────────────
+  function startTimer(seconds, periodId) {
     clearTimer();
     setTimerSeconds(seconds);
     pausedRef.current = false;
@@ -184,7 +164,7 @@ export default function AILearningRoom() {
     timerRef.current = setInterval(() => {
       if (pausedRef.current) return;
       setTimerSeconds(prev => {
-        if (prev <= 1) { clearTimer(); handleServerTimerExpired(periodId); return 0; }
+        if (prev <= 1) { clearTimer(); handleTimerExpired(periodId); return 0; }
         return prev - 1;
       });
     }, 1000);
@@ -194,89 +174,36 @@ export default function AILearningRoom() {
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
   }
 
-  function toggleTimerPause() {
+  function togglePause() {
     pausedRef.current = !pausedRef.current;
     setTimerPaused(pausedRef.current);
   }
 
-  async function handleServerTimerExpired(periodId) {
+  async function handleTimerExpired(periodId) {
     clearTimer();
     try {
       await api.finishStudyPeriod(sessionId, periodId);
-      const sess = await api.getAISession(sessionId);
-      let msgs = Array.isArray(sess?.messages) ? sess.messages : [];
-      try {
-        const fetched = await api.getSessionMessages(sessionId);
-        if (Array.isArray(fetched)) msgs = fetched;
-      } catch (messageErr) {
-        console.warn("Could not refresh messages after study period; using session snapshot.", messageErr);
-      }
+      const [sess, msgs] = await Promise.all([api.getAISession(sessionId), api.getSessionMessages(sessionId)]);
       applyServerState(sess, msgs);
+      // Generate questions after timer expires
+      await startRetrieval();
     } catch (err) {
-      setError(err.message || "Could not transition to retrieval. Please try again.");
-      loadAndResume();
+      setError(err.message);
+      loadSession();
     }
   }
 
-  async function handleIntentSelect(intentValue) {
-    setAiWorking(true);
-    setError(null);
-    try {
-      if (intentValue === "quiz_me" || intentValue === "already_know") {
-        const t = await api.teachConcept(sessionId);
-        setTeaching(t);
-        addOptimisticTeachingMessage(t);
-        await triggerRetrieval();
-        return;
-      }
-      const t = await api.teachConcept(sessionId);
-      setTeaching(t);
-      addOptimisticTeachingMessage(t);
-      const sess = await api.getAISession(sessionId);
-      setSession(sess);
-      setPhase("teaching");
-    } catch (err) {
-      setError(err.message || "AI service error. Please try again.");
-    } finally {
-      setAiWorking(false);
-    }
-  }
-
-  function addOptimisticTeachingMessage(t) {
-    if (!t?.explanation) return;
-    setMessages(prev => [...prev, {
-      id: `local-${Date.now()}`, role: "ai", messageType: "teaching",
-      content: t.explanation, sequence: prev.length + 1,
-      createdAt: new Date().toISOString(), extra: { strategy: t.strategy },
-    }]);
-  }
-
+  // ── Teaching ───────────────────────────────────────────────────────────────
   async function handleStartStudy() {
     setAiWorking(true);
     setError(null);
     try {
-      const period = await api.startStudyPeriod(sessionId, 300);
+      const period = await api.startStudyPeriod(sessionId, 600); // 10 min max
       setStudyPeriod(period);
-      setSession(prev => ({ ...prev, status: "studying" }));
       setPhase("studying");
-      startClientTimer(period.durationSeconds, period.id);
-    } catch (err) {
-      setError(err.message || "Failed to start study period.");
-    } finally {
-      setAiWorking(false);
-    }
-  }
-
-  async function handleTeachingAction(action) {
-    const actionMessages = {
-      show_example:        "Can you show me a concrete example?",
-      explain_differently: "Can you explain this using a different approach?",
-      make_simpler:        "Can you explain this more simply?",
-      go_deeper:           "Can you go into more depth on this?",
-      why:                 "Why does this work this way?",
-      real_world:          "Can you give me a real-world example of this?",
-    };
-    await handleSendMessage(actionMessages[action] || action);
+      startTimer(period.durationSeconds, period.id);
+    } catch (err) { setError(err.message); }
+    finally { setAiWorking(false); }
   }
 
   async function handleSendMessage(text) {
@@ -285,67 +212,30 @@ export default function AILearningRoom() {
     setMsgInput("");
     setAiWorking(true);
     setError(null);
-    // Clear any old suggestion when student asks a new question
-    setPostSuggestion(null);
-    setMessages(prev => [...prev, {
-      id: `local-${Date.now()}`, role: "student", messageType: "question",
-      content, sequence: prev.length + 1, createdAt: new Date().toISOString(),
-    }]);
-
-    // A direct quiz request opens the structured Quick Check UI. It must not
-    // be answered as a normal AI chat message.
-    if (isQuizRequest(content)) {
-      try {
-        await triggerRetrieval();
-      } catch (err) {
-        setError(err.message || "Failed to generate questions.");
-        setAiWorking(false);
-      }
-      return;
-    }
-
+    addLocalMessage({ role: "student", messageType: "question", content });
     try {
       const msg = await api.sendStudentMessage(sessionId, content);
       setMessages(prev => [...prev, msg]);
-      // Check if AI flagged a suggestion for a new session (only show once per question)
-      const extra = msg.extra || {};
-      if (extra.suggestNewSession && !suggestionShown) {
-        setPostSuggestion({
-          subject: extra.detectedSubject || null,
-          topic:   extra.detectedTopic   || null,
-          note:    extra.sessionNote     || null,
-        });
-        setSuggestionShown(true);
-      }
-    } catch (err) {
-      setError(err.message || "Failed to send message.");
-    } finally {
-      setAiWorking(false);
-    }
+    } catch (err) { setError(err.message); }
+    finally { setAiWorking(false); }
   }
 
-  async function handleStartSuggestedSession() {
-    if (!postSuggestion || !session) return;
+  async function handleTeachingAction(action) {
+    const labels = {
+      show_example:        "Can you show me a concrete example?",
+      explain_differently: "Can you explain this using a different approach?",
+      make_simpler:        "Can you explain this more simply?",
+      go_deeper:           "Can you go into more depth on this?",
+      why:                 "Why does this work this way?",
+      real_world:          "Can you give me a real-world example of this?",
+    };
+    await handleSendMessage(labels[action] || action);
+  }
+
+  // ── Retrieval / Questions as chat ──────────────────────────────────────────
+  async function startRetrieval() {
     setAiWorking(true);
-    setPostSuggestion(null);
-    try {
-      const next = await api.createAISession({
-        subjectId:   session.subjectId,
-        topicId:     session.topicId,
-        conceptId:   session.conceptId,
-        familiarity: "revisit",
-        intent:      "teach_me",
-        studentNote: postSuggestion.note || `Follow-up from previous session. Topic of interest: ${postSuggestion.topic || postSuggestion.subject || "related concept"}`,
-      });
-      await api.prepareAISession(next.id);
-      navigate(`/app/learn/ai/session/${next.id}`);
-    } catch (err) {
-      setError(err.message || "Could not start focused session.");
-      setAiWorking(false);
-    }
-  }
-
-  async function triggerRetrieval() {
+    setError(null);
     try {
       const qs = await api.generateRetrievalQuestions(sessionId, 3);
       const arr = Array.isArray(qs) ? qs : (qs.questions || []);
@@ -353,131 +243,118 @@ export default function AILearningRoom() {
       setQIndex(0);
       setAnswerInput("");
       setLastEval(null);
-      setSession(prev => ({ ...prev, status: "retrieval" }));
       setPhase("retrieval");
-      // The unanswered question is rendered as the Quick Check card.
-      // It becomes normal chat history only after submission.
-    } finally {
-      setAiWorking(false);
-    }
+      // Inject question as an AI message in chat
+      if (arr.length > 0) injectQuestionMessage(arr[0], 1, arr.length);
+    } catch (err) { setError(err.message); }
+    finally { setAiWorking(false); }
   }
 
-  async function handleStartRetrieval() {
-    setAiWorking(true);
-    setError(null);
-    try { await triggerRetrieval(); }
-    catch (err) { setError(err.message || "Failed to generate questions."); setAiWorking(false); }
+  function injectQuestionMessage(q, num, total) {
+    if (!q) return;
+    addLocalMessage({
+      role: "ai",
+      messageType: "question_prompt",
+      content: q.question,
+      extra: { questionId: q.id, questionType: q.questionType || q.question_type, options: q.options, num, total },
+    });
   }
 
   async function handleSubmitAnswer() {
-    if (!answerInput.trim() || submitting) return;
     const question = questions[qIndex];
-    if (!question) return;
-
+    if (!question || (!answerInput.trim()) || submitting) return;
     setSubmitting(true);
     setError(null);
-    const studentAnswer = answerInput.trim();
+
+    // Show student answer in chat
+    addLocalMessage({ role: "student", messageType: "answer", content: answerInput.trim() });
+    const submitted = answerInput.trim();
+    setAnswerInput("");
 
     try {
-      const evaluation = await api.submitAnswer(sessionId, question.id, studentAnswer, null);
-      const result = {
-        ...evaluation,
-        questionId: question.id,
-        question: question.question,
-        questionType: question.questionType,
-        options: question.options || null,
-        studentAnswer,
-      };
-
-      setCheckResults(prev => ({ ...prev, [question.id]: result }));
-      setAnswerInput("");
+      const evaluation = await api.submitAnswer(sessionId, question.id, submitted, null);
       setLastEval(evaluation);
 
-      // The Quick Check card is a temporary interaction. Once submitted,
-      // replace it with natural AI/student chat turns instead of a result pill.
-      setMessages(prev => [...prev, ...buildQuizChatMessages(questions, [result])]);
+      // Show AI feedback as a chat message
+      if (evaluation.feedback) {
+        addLocalMessage({
+          role: "ai",
+          messageType: "feedback",
+          content: evaluation.feedback,
+          extra: { score: evaluation.score, understanding: evaluation.understanding, isCorrect: evaluation.isCorrect },
+        });
+      }
 
       const sess = await api.getAISession(sessionId);
       setSession(sess);
 
       if (evaluation.needsReteach) {
+        // Reteach
         setPhase("reteaching");
         await doReteach(evaluation.misconception, evaluation.recommendedStrategy);
       } else if (qIndex < questions.length - 1) {
-        setQIndex(prev => prev + 1);
+        // Next question
+        const nextIdx = qIndex + 1;
+        setQIndex(nextIdx);
         setLastEval(null);
+        injectQuestionMessage(questions[nextIdx], nextIdx + 1, questions.length);
       } else {
-        await doSummary();
+        // All questions done — mark task done and move to next or summarize
+        await finishCurrentTask();
       }
-    } catch (err) {
-      setError(err.message || "Failed to submit answer.");
-    } finally {
-      setSubmitting(false);
-    }
+    } catch (err) { setError(err.message); }
+    finally { setSubmitting(false); }
   }
 
-  async function doReteach(misconception, recommendedStrategy) {
-    setAiWorking(true);
-    setError(null);
-    try {
-      const reason = misconception ? `Student misconception: ${misconception}` : "Student answer score below threshold";
-      const t = await api.generateAdaptiveReteach(sessionId, reason);
-      setTeaching(t);
-      if (t?.explanation) {
-        setMessages(prev => [...prev, {
-          id: `local-reteach-${Date.now()}`, role: "ai", messageType: "reteach",
-          content: t.explanation, sequence: prev.length + 1,
-          createdAt: new Date().toISOString(), extra: { strategy: t.strategy },
-        }]);
-      }
-      setPhase("reteaching");
-      setLastEval(null);
-    } catch (err) {
-      setError(err.message || "Failed to generate new explanation.");
-    } finally {
-      setAiWorking(false);
+  async function finishCurrentTask() {
+    // Mark current task complete
+    const task = tasks[currentTask];
+    if (task) {
+      setTasksDone(prev => [...prev, task.id]);
     }
-  }
 
-  async function handleStudyReteach() {
-    // First scroll up to the reteach explanation so the user can read it
-    const reteachMsg = document.querySelector('[data-msgtype="reteach"]');
-    if (reteachMsg) {
-      reteachMsg.scrollIntoView({ behavior: "smooth", block: "start" });
-      // Give user 1.5s to see the message before starting the timer flow
-      await new Promise(r => setTimeout(r, 1500));
-    }
-    setAiWorking(true);
-    setError(null);
-    try {
-      const period = await api.startStudyPeriod(sessionId, 240);
-      setStudyPeriod(period);
-      setSession(prev => ({ ...prev, status: "studying" }));
-      setPhase("studying");
-      startClientTimer(period.durationSeconds, period.id);
-    } catch (err) {
-      setError(err.message || "Failed to start study period.");
-    } finally {
-      setAiWorking(false);
-    }
-  }
-
-  async function handlePracticeAfterReteach() {
-    setAiWorking(true);
-    setError(null);
-    try {
-      const qs = await api.generateRetrievalQuestions(sessionId, 2);
-      const arr = Array.isArray(qs) ? qs : (qs.questions || []);
-      setQuestions(arr);
+    const nextTaskIdx = currentTask + 1;
+    if (nextTaskIdx < tasks.length) {
+      // Move to next task — teach it
+      setCurrentTask(nextTaskIdx);
+      setPhase("teaching");
       setQIndex(0);
-      setAnswerInput("");
       setLastEval(null);
-      setPhase("practice");
-    } catch (err) {
-      setError(err.message || "Failed to generate practice questions.");
-    } finally {
-      setAiWorking(false);
+      setAiWorking(true);
+      // Announce next task
+      addLocalMessage({
+        role: "ai",
+        messageType: "task_transition",
+        content: `✅ Great work! Task ${currentTask + 1} complete.\n\nMoving to **Task ${nextTaskIdx + 1}: ${tasks[nextTaskIdx]?.title}**.`,
+        extra: { taskIndex: nextTaskIdx },
+      });
+      try {
+        const t = await api.teachConcept(sessionId);
+        if (t?.explanation) {
+          addLocalMessage({ role: "ai", messageType: "teaching", content: t.explanation, extra: { strategy: t.strategy } });
+        }
+      } catch (err) { setError(err.message); }
+      finally { setAiWorking(false); }
+    } else {
+      // All tasks done — generate summary
+      await doSummary();
     }
+  }
+
+  async function doReteach(misconception, strategy) {
+    setAiWorking(true);
+    setError(null);
+    try {
+      const reason = misconception ? `Misconception: ${misconception}` : "Student answer below threshold";
+      const t = await api.generateAdaptiveReteach(sessionId, reason);
+      if (t?.explanation) {
+        addLocalMessage({ role: "ai", messageType: "reteach", content: t.explanation, extra: { strategy: t.strategy } });
+      }
+      // After reteach, re-ask the same question
+      setLastEval(null);
+      injectQuestionMessage(questions[qIndex], qIndex + 1, questions.length);
+    } catch (err) { setError(err.message); }
+    finally { setAiWorking(false); }
   }
 
   async function doSummary() {
@@ -485,330 +362,225 @@ export default function AILearningRoom() {
     setError(null);
     try {
       const s = await api.generateSessionSummary(sessionId);
-
-      // The server marks the session completed when the summary is generated.
-      // Reload the completed session so the previously hidden teaching history
-      // becomes visible again. The summary stays out of the chat transcript.
-      const freshSession = await api.getAISession(sessionId);
-      let freshMessages = Array.isArray(freshSession?.messages) ? freshSession.messages : [];
-      try {
-        const fetched = await api.getSessionMessages(sessionId);
-        if (Array.isArray(fetched)) freshMessages = fetched;
-      } catch (messageErr) {
-        console.warn("Could not reload completed messages; using session snapshot.", messageErr);
-      }
-
-      setSummary(s || freshSession?.summary || null);
-      setSession(freshSession);
-      setMessages([
-        ...freshMessages,
-        ...buildQuizChatMessages(freshSession?.questions || questions, freshSession?.answers || []),
-      ]);
+      setSummary(s);
       setPhase("summary");
-      setLastEval(null);
-      setAnswerInput("");
-    } catch (err) {
-      setError(err.message || "Failed to generate summary.");
-    } finally {
-      setAiWorking(false);
-    }
-  }
-
-  async function handlePracticeAgain() {
-    if (!session) return;
-    setAiWorking(true);
-    setError(null);
-    try {
-      const next = await api.createAISession({
-        subjectId: session.subjectId,
-        topicId: session.topicId,
-        conceptId: session.conceptId,
-        familiarity: session.studentFamiliarity || "new",
-        intent: "teach_me",
-        studentNote: session.studentNote || null,
-      });
-      await api.prepareAISession(next.id);
-      navigate(`/app/learn/ai/session/${next.id}`);
-    } catch (err) {
-      setError(err.message || "Could not start another practice session.");
-      setAiWorking(false);
-    }
+    } catch (err) { setError(err.message); }
+    finally { setAiWorking(false); }
   }
 
   async function handleEndSession() {
-    if (!window.confirm("End this session?\n\nYour progress so far will be saved but the session won't be marked as completed.")) return;
+    if (!window.confirm("End this session? Progress so far will be saved.")) return;
     try {
       await api.abandonAISession(sessionId);
       navigate("/app/learn/ai");
-    } catch (err) {
-      setError(err.message || "Failed to end session.");
-    }
+    } catch (err) { setError(err.message); }
   }
 
-  function isQuizRequest(text) {
-    return /\b(give me (a )?quiz|quiz me|test me|test my knowledge)\b/i.test(text || "");
+  function addLocalMessage(partial) {
+    setMessages(prev => [...prev, {
+      id: `local-${Date.now()}-${Math.random()}`,
+      createdAt: new Date().toISOString(),
+      sequence: prev.length + 1,
+      ...partial,
+    }]);
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // DERIVED VALUES
+  // ─────────────────────────────────────────────────────────────────────────
+  const conceptName = session?.conceptName || "Concept";
+  const canType = (phase === "teaching" || phase === "reteaching") && !aiWorking;
+  const activeTask = tasks[currentTask];
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // LOADING
+  // ─────────────────────────────────────────────────────────────────────────
+  if (loading) return (
+    <div className="wa-shell">
+      <div className="wa-topbar">
+        <div className="wa-topbar-avatar-wrap"><TutorAvatar size={38} /></div>
+        <div className="wa-topbar-info">
+          <span className="wa-topbar-name">PeerUp AI Tutor</span>
+          <span className="wa-topbar-status">Loading session…</span>
+        </div>
+      </div>
+      <div className="wa-messages" style={{ justifyContent: "center", alignItems: "center" }}>
+        <TypingIndicator />
+      </div>
+    </div>
+  );
 
   // ─────────────────────────────────────────────────────────────────────────
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────
-
-  const conceptName = session?.conceptName || "Concept";
-  const subjectName = session?.subjectName || "";
-  const topicName   = session?.topicName   || "";
-  const subtitle    = [subjectName, topicName].filter(Boolean).join(" · ");
-
-  if (loading) {
-    return (
-      <div className="wa-shell">
-        <div className="wa-topbar">
-          <div className="wa-topbar-avatar skeleton" style={{ width: 38, height: 38, borderRadius: "50%" }} />
-          <div style={{ flex: 1 }}>
-            <div className="skeleton skeleton-text" style={{ width: 120, height: 14, marginBottom: 5 }} />
-            <div className="skeleton skeleton-text" style={{ width: 80, height: 10 }} />
-          </div>
-        </div>
-        <div className="wa-messages">
-          {[80, 60, 90, 50].map((w, i) => (
-            <div key={i} className={`wa-bubble-wrap ${i % 2 === 0 ? "wa-bubble-wrap--ai" : "wa-bubble-wrap--user"}`}>
-              <div className="skeleton" style={{ width: `${w}%`, height: 48, borderRadius: 12 }} />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (error && !session) {
-    return (
-      <div className="wa-shell">
-        <div className="wa-messages" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ textAlign: "center", padding: "0 32px" }}>
-            <p style={{ color: "var(--wa-error)", marginBottom: 20, fontSize: "0.95rem" }}>{error}</p>
-            <button className="wa-btn-primary" onClick={() => navigate("/app/learn/ai")}>Back to AI Learning</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (phase === "abandoned") {
-    return (
-      <div className="wa-shell">
-        <div className="wa-messages" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ textAlign: "center", padding: "0 32px" }}>
-            <p style={{ color: "var(--wa-text-muted)", marginBottom: 20 }}>This session was ended early.</p>
-            <button className="wa-btn-primary" onClick={() => navigate("/app/learn/ai")}>Back to AI Learning</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const canType = (phase === "teaching" || phase === "reteaching" || phase === "summary") && !aiWorking;
-
   return (
     <div className="wa-shell">
 
-      {/* ── Fixed top bar ──────────────────────────────────────────────── */}
+      {/* ── Topbar ──────────────────────────────────────────────────────── */}
       <header className="wa-topbar">
         <button className="wa-back-btn" onClick={() => navigate("/app/learn/ai")} aria-label="Back">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
             <path d="M19 12H5M12 19l-7-7 7-7" />
           </svg>
         </button>
-
         <div className="wa-topbar-avatar-wrap" aria-hidden="true">
           <TutorAvatar size={38} />
           <span className="wa-online-dot" />
         </div>
-
         <div className="wa-topbar-info">
           <span className="wa-topbar-name">UPRAD</span>
           <span className="wa-topbar-status">
-            {phase === "preparing" ? "Preparing your lesson…" :
-             phase === "studying"  ? "Study time — focus!" :
-             aiWorking             ? "Thinking…" :
-             "Always here to help you learn"}
+            {aiWorking ? "Thinking…" : phase === "studying" ? "Study time — focus!" : "Always here to help you learn"}
           </span>
         </div>
 
-        <SessionProgress currentPhase={phase} />
+        {/* Task progress dots */}
+        {tasks.length > 0 && (
+          <div className="wa-task-dots" aria-label="Task progress">
+            {tasks.map((t, i) => (
+              <span key={t.id}
+                className={`wa-task-dot ${tasksDone.includes(t.id) ? "done" : ""} ${i === currentTask && !tasksDone.includes(t.id) ? "active" : ""}`}
+                title={t.title}
+              />
+            ))}
+          </div>
+        )}
 
         <button className="wa-end-btn" onClick={handleEndSession}>End</button>
       </header>
 
-      {/* ── Scrollable message area ────────────────────────────────────── */}
-      <main className="wa-messages" aria-live="polite" aria-label="Learning conversation">
+      {/* ── Messages ────────────────────────────────────────────────────── */}
+      <main className="wa-messages" aria-live="polite">
 
-        {/* Error banner */}
         {error && (
           <div className="wa-error-banner" role="alert">
             <span>{error}</span>
-            <button onClick={() => setError(null)} aria-label="Dismiss">✕</button>
+            <button onClick={() => setError(null)}>✕</button>
           </div>
         )}
 
-        {/* Message history */}
+        {/* Task list sidebar shown at top of chat when tasks exist */}
+        {tasks.length > 0 && phase !== "summary" && (
+          <TaskListBanner tasks={tasks} currentTask={currentTask} tasksDone={tasksDone} />
+        )}
+
+        {/* Messages */}
         {messages
-          .filter(m => !["welcome", "system", "timer_start", "timer_end", "summary"].includes(m.messageType))
+          .filter(m => !["welcome", "system", "timer_start", "timer_end", "task_list"].includes(m.messageType))
           .map((msg, idx) => (
-            <Message
+            <ChatMessage
               key={msg.id || idx}
               msg={msg}
-              isHidden={phase === "retrieval" && msg.messageType === "teaching"}
+              hidden={phase === "retrieval" && msg.messageType === "teaching"}
+              currentQuestion={phase === "retrieval" || phase === "practice" ? questions[qIndex] : null}
+              answerInput={answerInput}
+              setAnswerInput={setAnswerInput}
+              onSubmit={handleSubmitAnswer}
+              submitting={submitting}
             />
           ))
         }
 
-        {/* Typing indicator */}
         {aiWorking && <TypingIndicator />}
 
-        {/* ── Phase panels injected into the chat flow ────────────────── */}
-
-        {phase === "preparing" && (
-          <div className="wa-system-card">
-            <TutorAvatar size={40} />
-            <div>
-              <p className="wa-system-card-title">Getting your lesson ready…</p>
-              <p className="wa-system-card-body">Your subject, concept, familiarity and goal are being used to prepare your tutor.</p>
-            </div>
-          </div>
+        {/* Phase panels */}
+        {phase === "preparing" && !aiWorking && (
+          <AIBubble>
+            <p style={{ margin: 0, color: "var(--wa-text-muted)" }}>Getting your lesson ready…</p>
+          </AIBubble>
         )}
 
         {phase === "teaching" && !aiWorking && (
-          <TeachingActions onStartStudy={handleStartStudy} onAction={handleTeachingAction} />
-        )}
-
-        {phase === "studying" && (
-          <StudyTimerPanel
-            seconds={timerSeconds}
-            totalSeconds={studyPeriod?.durationSeconds || 300}
-            paused={timerPaused}
-            onTogglePause={toggleTimerPause}
-          />
-        )}
-
-        {(phase === "retrieval" || phase === "practice") && (
-          questions.length > 0 ? (
-            <RetrievalPanel
-              question={questions[qIndex]}
-              questionNumber={qIndex + 1}
-              totalQuestions={questions.length}
-              questions={questions}
-              answer={answerInput}
-              setAnswer={setAnswerInput}
-              onSubmit={handleSubmitAnswer}
-              submitting={submitting}
-              results={checkResults}
-            />
-          ) : (
-            <div className="wa-action-card">
-              <button className="wa-btn-primary" onClick={handleStartRetrieval} disabled={aiWorking}>
-                {aiWorking ? "Generating questions…" : "Start Recall Check"}
-              </button>
-            </div>
-          )
-        )}
-
-        {phase === "reteaching" && !aiWorking && (
-          <ReteachActions
-            onStudyAgain={handleStudyReteach}
-            onPracticeNow={handlePracticeAfterReteach}
-            onAskQuestion={() => inputRef.current?.focus()}
-          />
-        )}
-
-        {phase === "summary" && summary && (
-          <>
-            <SessionCompleteBar
-              summary={summary}
-              onViewSummary={() => setShowSummary(true)}
-            />
-            {showSummary && (
-              <SummaryModal
-                summary={summary}
-                conceptName={conceptName}
-                onClose={() => setShowSummary(false)}
-                onContinue={() => navigate("/app/learn/ai")}
-                onPracticeAgain={handlePracticeAgain}
-                onBackToTopic={() => navigate(-2)}
-              />
+          <div className="wa-action-card wa-teaching-actions">
+            {activeTask && (
+              <div className="wa-task-badge">
+                📋 Task {currentTask + 1} of {tasks.length}: <strong>{activeTask.title}</strong>
+              </div>
             )}
-          </>
-        )}
-
-        {phase === "summary" && !summary && aiWorking && (
-          <div className="wa-system-card">
-            <TypingIndicator label="Generating your session summary…" inline />
+            <button className="wa-btn-primary wa-btn-study" onClick={handleStartStudy} disabled={aiWorking}>
+              📖 Start Study Timer
+            </button>
           </div>
         )}
 
-        {/* Post-session new-session suggestion — shown once after AI flags it */}
-        {postSuggestion && !aiWorking && (
-          <PostSessionSuggestion
-            subject={postSuggestion.subject}
-            topic={postSuggestion.topic}
-            onStart={handleStartSuggestedSession}
-            onDismiss={() => setPostSuggestion(null)}
+        {phase === "studying" && studyPeriod && (
+          <div className="wa-action-card wa-study-panel">
+            <h3 className="wa-study-title">Study this explanation</h3>
+            <p className="wa-study-subtitle">The recall check starts when the timer ends.</p>
+            <ClockTimer
+              seconds={timerSeconds}
+              totalSeconds={studyPeriod.durationSeconds}
+              paused={timerPaused}
+              onTogglePause={togglePause}
+            />
+            {timerSeconds <= 60 && timerSeconds > 0 && (
+              <p className="wa-study-warn">⏰ Almost done — finish reading.</p>
+            )}
+          </div>
+        )}
+
+        {phase === "reteaching" && !aiWorking && (
+          <div className="wa-action-card">
+            <p className="wa-action-hint">A fresh explanation is above. What would you like to do?</p>
+            <div className="wa-action-btns">
+              <button className="wa-btn-primary" onClick={handleStartStudy}>📖 Study this explanation</button>
+              <button className="wa-btn-secondary" onClick={() => {
+                setPhase("retrieval");
+                injectQuestionMessage(questions[qIndex], qIndex + 1, questions.length);
+              }}>✅ Try again</button>
+              <button className="wa-chip" onClick={() => inputRef.current?.focus()}>💬 Ask a question</button>
+            </div>
+          </div>
+        )}
+
+        {phase === "summary" && summary && (
+          <SummaryPanel
+            summary={summary}
+            conceptName={conceptName}
+            tasks={tasks}
+            tasksDone={tasksDone}
+            onContinue={() => navigate("/app/learn/ai")}
           />
         )}
 
         <div ref={bottomRef} style={{ height: 1 }} />
       </main>
 
-      {/* ── Fixed bottom input bar ─────────────────────────────────────── */}
-      <form
-        className="wa-input-bar"
-        onSubmit={e => { e.preventDefault(); handleSendMessage(); }}
-      >
-        {/* Quick action chips when in teaching phase */}
+      {/* ── Input bar ───────────────────────────────────────────────────── */}
+      <form className="wa-input-bar" onSubmit={e => { e.preventDefault(); handleSendMessage(); }}>
         {(phase === "teaching" || phase === "reteaching") && !aiWorking && (
           <div className="wa-quick-chips">
             {[
-              { key: "show_example",        label: "Example" },
+              { key: "show_example", label: "Example" },
               { key: "explain_differently", label: "Different approach" },
-              { key: "make_simpler",        label: "Simpler" },
-              { key: "go_deeper",           label: "More depth" },
-              { key: "why",                 label: "Why?" },
-              { key: "real_world",          label: "Real world" },
+              { key: "make_simpler", label: "Simpler" },
+              { key: "go_deeper", label: "More depth" },
+              { key: "why", label: "Why?" },
+              { key: "real_world", label: "Real world" },
             ].map(a => (
-              <button
-                key={a.key}
-                type="button"
-                className="wa-chip"
-                onClick={() => handleTeachingAction(a.key)}
-              >
+              <button key={a.key} type="button" className="wa-chip" onClick={() => handleTeachingAction(a.key)}>
                 {a.label}
               </button>
             ))}
           </div>
         )}
-
         <div className="wa-input-row">
           <input
             ref={inputRef}
             type="text"
             className="wa-input"
             placeholder={
-              phase === "studying"                                   ? "Focus time — chat resumes after timer…" :
-              phase === "retrieval" || phase === "practice"          ? "Answer the question above…" :
-              phase === "summary"                                    ? "Ask a follow-up question…" :
-              phase === "preparing"                                  ? "Tutor is getting ready…" :
+              phase === "studying"  ? "Study time — focus on reading above…" :
+              phase === "retrieval" || phase === "practice" ? "Type your answer above…" :
+              phase === "summary"   ? "Session complete" :
+              phase === "preparing" ? "Tutor is getting ready…" :
               "Ask your tutor a question…"
             }
             value={msgInput}
             onChange={e => setMsgInput(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && !e.shiftKey && canType && (e.preventDefault(), handleSendMessage())}
             disabled={!canType}
-            aria-label="Message your tutor"
           />
-          <button
-            type="submit"
-            className="wa-send-btn"
-            disabled={!msgInput.trim() || !canType}
-            aria-label="Send"
-          >
+          <button type="submit" className="wa-send-btn" disabled={!msgInput.trim() || !canType} aria-label="Send">
             <SendIcon />
           </button>
         </div>
@@ -818,51 +590,117 @@ export default function AILearningRoom() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SUB-COMPONENTS
+// CHAT MESSAGE — handles all message types inline
 // ─────────────────────────────────────────────────────────────────────────────
-
-function Message({ msg, isHidden }) {
+function ChatMessage({ msg, hidden, currentQuestion, answerInput, setAnswerInput, onSubmit, submitting }) {
   const isAI = msg.role === "ai";
   const time = msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
 
-  if (isHidden) {
+  // Teaching content hidden during recall
+  if (hidden) return (
+    <div className="wa-bubble-wrap wa-bubble-wrap--ai">
+      <div className="wa-avatar-col"><TutorAvatar size={34} /></div>
+      <div className="wa-bubble wa-bubble--ai wa-bubble--hidden">
+        <span className="wa-bubble-sender">UPRAD</span>
+        <span>📖 Teaching content — visible after recall check.</span>
+        <span className="wa-time">{time}</span>
+      </div>
+    </div>
+  );
+
+  // Question prompt — AI asks question, student answers inline
+  if (msg.messageType === "question_prompt") {
+    const qnum  = msg.extra?.num || 1;
+    const qtotal = msg.extra?.total || 1;
+    const qtype  = msg.extra?.questionType;
+    const opts   = msg.extra?.options;
+    const isActive = currentQuestion && currentQuestion.id === msg.extra?.questionId;
+
     return (
       <div className="wa-bubble-wrap wa-bubble-wrap--ai">
         <div className="wa-avatar-col"><TutorAvatar size={34} /></div>
-        <div className="wa-bubble wa-bubble--ai wa-bubble--hidden">
-          <span>📖 Teaching content — available after recall check.</span>
+        <div className="wa-bubble wa-bubble--ai wa-bubble--question">
+          <span className="wa-bubble-sender">UPRAD · QUESTION</span>
+          <div className="wa-q-header">
+            <span className="wa-q-badge">Q{qnum}/{qtotal}</span>
+            <span className="wa-q-type">{formatQType(qtype)}</span>
+          </div>
+          <p className="wa-q-text">{msg.content}</p>
+          {isActive && (
+            opts && opts.length > 0 ? (
+              <div className="wa-mc-options">
+                {opts.map(opt => (
+                  <button key={opt.label}
+                    className={`wa-mc-btn ${answerInput === opt.label ? "selected" : ""}`}
+                    onClick={() => setAnswerInput(opt.label)}
+                    disabled={submitting}
+                  >
+                    <span className="wa-mc-label">{opt.label}</span>
+                    <span className="wa-mc-text">{opt.text}</span>
+                  </button>
+                ))}
+                <button className="wa-btn-primary" onClick={onSubmit} disabled={!answerInput || submitting} style={{ marginTop: 10 }}>
+                  {submitting ? "Checking…" : "Submit"}
+                </button>
+              </div>
+            ) : (
+              <div className="wa-inline-answer">
+                <textarea
+                  className="wa-answer-input"
+                  placeholder="Type your answer…"
+                  value={answerInput}
+                  onChange={e => setAnswerInput(e.target.value)}
+                  rows={2}
+                  disabled={submitting}
+                  onKeyDown={e => {
+                    if (e.key === "Enter" && !e.shiftKey && !submitting && answerInput.trim()) {
+                      e.preventDefault();
+                      onSubmit();
+                    }
+                  }}
+                />
+                <button className="wa-send-btn" onClick={onSubmit} disabled={!answerInput.trim() || submitting} aria-label="Submit answer">
+                  <SendIcon />
+                </button>
+              </div>
+            )
+          )}
           <span className="wa-time">{time}</span>
         </div>
       </div>
     );
   }
 
+  // Task transition
+  if (msg.messageType === "task_transition") return (
+    <div className="wa-bubble-wrap wa-bubble-wrap--ai">
+      <div className="wa-avatar-col"><TutorAvatar size={34} /></div>
+      <div className="wa-bubble wa-bubble--ai wa-bubble--task-transition">
+        <span className="wa-bubble-sender">UPRAD</span>
+        <RichText content={msg.content} />
+        <span className="wa-time">{time}</span>
+      </div>
+    </div>
+  );
+
+  // Standard AI or student bubble
   return (
-    <div className={`wa-bubble-wrap ${isAI ? "wa-bubble-wrap--ai" : "wa-bubble-wrap--user"}`} data-msgtype={msg.messageType}>
+    <div className={`wa-bubble-wrap ${isAI ? "wa-bubble-wrap--ai" : "wa-bubble-wrap--user"}`}>
       {isAI && <div className="wa-avatar-col"><TutorAvatar size={34} /></div>}
       <div className={`wa-bubble ${isAI ? "wa-bubble--ai" : "wa-bubble--user"}`}>
         {isAI && (
           <span className="wa-bubble-sender">
-            {msg.messageType === "reteach"       ? "UPRAD · New Approach" :
-             msg.messageType === "question_ask"  ? "UPRAD · Question" :
-             "UPRAD"}
+            {msg.messageType === "reteach" ? "UPRAD · NEW APPROACH" : "UPRAD"}
           </span>
         )}
-        {msg.messageType === "question_ask" && msg.extra && (
-          <div className="wa-q-meta-inline">
-            <span className="wa-q-badge">Q{msg.extra.questionNumber}/{msg.extra.totalQuestions}</span>
-            <span className="wa-q-type">{formatQType(msg.extra.questionType)}</span>
-          </div>
-        )}
         <RichText content={msg.content} />
-        {msg.messageType === "feedback" && msg.extra?.score !== undefined && msg.extra.score !== null && (
+        {msg.messageType === "feedback" && msg.extra?.score !== undefined && (
           <div className={`wa-eval-badge understanding-${msg.extra.understanding || "partial"}`}>
-            {msg.extra.understanding === "strong"  ? "✓ Strong" :
-             msg.extra.understanding === "partial" ? "◑ Getting there" : "✗ Needs practice"}
+            {msg.extra.understanding === "strong" ? "✓ Strong" : msg.extra.understanding === "partial" ? "◑ Getting there" : "✗ Needs practice"}
             {" "}· {msg.extra.score}/100
           </div>
         )}
-        {msg.extra?.strategy && (
+        {msg.extra?.strategy && msg.messageType !== "feedback" && (
           <span className="wa-strategy">Strategy: {msg.extra.strategy.replace(/_/g, " ")}</span>
         )}
         <span className="wa-time">{time}</span>
@@ -871,389 +709,111 @@ function Message({ msg, isHidden }) {
   );
 }
 
-function TypingIndicator({ label, inline }) {
-  if (inline) return (
-    <div className="wa-typing-inline">
-      <span /><span /><span />
-      {label && <span className="wa-typing-label">{label}</span>}
-    </div>
-  );
+// ─────────────────────────────────────────────────────────────────────────────
+// TASK LIST BANNER
+// ─────────────────────────────────────────────────────────────────────────────
+function TaskListBanner({ tasks, currentTask, tasksDone }) {
+  const [collapsed, setCollapsed] = useState(false);
   return (
-    <div className="wa-bubble-wrap wa-bubble-wrap--ai">
-      <div className="wa-avatar-col"><TutorAvatar size={34} /></div>
-      <div className="wa-bubble wa-bubble--ai wa-bubble--typing">
-        <span className="wa-bubble-sender">UPRAD</span>
-        <div className="wa-typing-dots" aria-label={label || "AI is thinking"}>
-          <span /><span /><span />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SessionProgress({ currentPhase }) {
-  const steps = [
-    { key: "teaching",  label: "Learn" },
-    { key: "studying",  label: "Study" },
-    { key: "retrieval", label: "Recall" },
-    { key: "practice",  label: "Practice" },
-    { key: "summary",   label: "Done" },
-  ];
-  const idx = steps.findIndex(p =>
-    currentPhase === p.key || (currentPhase === "reteaching" && p.key === "practice")
-  );
-  return (
-    <div className="wa-progress" aria-label="Session progress">
-      {steps.map((s, i) => (
-        <div key={s.key} className={`wa-progress-step ${i < idx ? "done" : ""} ${i === idx ? "active" : ""}`} title={s.label}>
-          <span className="wa-progress-dot" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function TeachingActions({ onStartStudy, onAction }) {
-  return (
-    <div className="wa-action-card wa-teaching-actions">
-      <button className="wa-btn-primary wa-btn-study" onClick={onStartStudy}>
-        📖 Start Study Timer
+    <div className="wa-task-banner">
+      <button className="wa-task-banner-toggle" onClick={() => setCollapsed(c => !c)}>
+        <span>📋 Learning Tasks ({tasksDone.length}/{tasks.length} done)</span>
+        <span>{collapsed ? "▾" : "▴"}</span>
       </button>
+      {!collapsed && (
+        <ol className="wa-task-list">
+          {tasks.map((t, i) => (
+            <li key={t.id} className={`wa-task-item ${tasksDone.includes(t.id) ? "done" : ""} ${i === currentTask && !tasksDone.includes(t.id) ? "active" : ""}`}>
+              <span className="wa-task-check">{tasksDone.includes(t.id) ? "✓" : i === currentTask ? "●" : "○"}</span>
+              <div>
+                <strong>{t.title}</strong>
+                <p>{t.description}</p>
+                <span className="wa-task-time">~{t.estimated_minutes} min</span>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
     </div>
   );
 }
 
-function StudyTimerPanel({ seconds, totalSeconds, paused, onTogglePause }) {
-  const pct          = totalSeconds > 0 ? seconds / totalSeconds : 0;
-  const radius       = 54;
-  const circumference = 2 * Math.PI * radius;
-  const dash         = circumference * pct;
-  const isWarning    = seconds > 0 && seconds <= 60;
+// ─────────────────────────────────────────────────────────────────────────────
+// CLOCK SVG TIMER
+// ─────────────────────────────────────────────────────────────────────────────
+function ClockTimer({ seconds, totalSeconds, paused, onTogglePause }) {
+  const pct = totalSeconds > 0 ? (totalSeconds - seconds) / totalSeconds : 0;
+  const isWarning = seconds > 0 && seconds <= 60;
+
+  // Clock hand angles
+  const totalMinutes = totalSeconds / 60;
+  const elapsedMinutes = (totalSeconds - seconds) / 60;
+  const secondAngle = ((totalSeconds - seconds) % 60) / 60 * 360;
+  const minuteAngle = elapsedMinutes / Math.max(totalMinutes, 1) * 360;
+
+  // Progress arc
+  const r = 54;
+  const circ = 2 * Math.PI * r;
+  const filled = circ * pct;
 
   return (
-    <div className="wa-action-card wa-study-panel">
-      <h3 className="wa-study-title">Study this explanation</h3>
-      <p className="wa-study-subtitle">Read carefully — recall check starts when the timer ends.</p>
-      <div className="wa-timer-wrap">
-        <svg className="wa-timer-svg" viewBox="0 0 120 120" aria-label={`${formatTime(seconds)} remaining`}>
-          <circle cx="60" cy="60" r={radius} className="wa-timer-track" />
-          <circle cx="60" cy="60" r={radius}
-            className={`wa-timer-fill ${isWarning ? "warning" : ""}`}
-            strokeDasharray={`${dash} ${circumference}`}
-            transform="rotate(-90 60 60)"
-            strokeLinecap="round"
-          />
-        </svg>
-        <div className="wa-timer-center">
-          <span className={`wa-timer-digits ${isWarning ? "warning" : ""}`}>{formatTime(seconds)}</span>
-          {paused && <span className="wa-timer-paused">Paused</span>}
-        </div>
-      </div>
-      {isWarning && seconds > 0 && <p className="wa-study-warn">⏰ Almost done — finish reading above.</p>}
-      {seconds === 0    && <p className="wa-study-warn">⏱ Time's up! Transitioning…</p>}
-      <button className="wa-btn-secondary" onClick={onTogglePause} style={{ marginTop: 12 }}>
-        {paused ? "Resume" : "Pause"}
-      </button>
-    </div>
-  );
-}
-
-function buildQuizChatMessages(questions = [], answers = []) {
-  const byId = new Map(questions.map(q => [Number(q.id), q]));
-  return answers
-    .map((result, offset) => {
-      const question = byId.get(Number(result.questionId)) || result;
-      if (!question?.question || result?.studentAnswer == null) return null;
-      const index = questions.findIndex(q => Number(q.id) === Number(result.questionId));
-      const number = index >= 0 ? index + 1 : offset + 1;
-      const total = questions.length || 1;
-      const time = result.createdAt || new Date().toISOString();
-      return [
-        {
-          id: `quiz-q-${result.questionId}`,
-          role: "ai",
-          messageType: "question_ask",
-          content: question.question,
-          sequence: 20000 + number * 3,
-          createdAt: time,
-          extra: { questionType: question.questionType, questionNumber: number, totalQuestions: total },
-        },
-        {
-          id: `quiz-a-${result.questionId}-${result.attemptNumber || 1}`,
-          role: "student",
-          messageType: "quiz_answer",
-          content: formatQuizStudentAnswer(question, result.studentAnswer),
-          sequence: 20000 + number * 3 + 1,
-          createdAt: time,
-        },
-        {
-          id: `quiz-f-${result.questionId}-${result.attemptNumber || 1}`,
-          role: "ai",
-          messageType: "feedback",
-          content: result.feedback || "Answer recorded.",
-          sequence: 20000 + number * 3 + 2,
-          createdAt: time,
-          extra: {
-            score: result.score,
-            understanding: result.understanding,
-          },
-        },
-      ];
-    })
-    .filter(Boolean)
-    .flat();
-}
-
-function formatQuizStudentAnswer(question, answer) {
-  if (question?.questionType === "multiple_choice" && Array.isArray(question.options)) {
-    const match = question.options.find((opt, index) => {
-      const label = typeof opt === "string" ? String.fromCharCode(65 + index) : opt.label;
-      const text = typeof opt === "string" ? opt : opt.text;
-      return answer === label || answer === text;
-    });
-    if (match) {
-      const index = question.options.indexOf(match);
-      const label = typeof match === "string" ? String.fromCharCode(65 + index) : match.label;
-      const text = typeof match === "string" ? match : match.text;
-      return `${label} · ${text}`;
-    }
-  }
-  return answer;
-}
-
-function QuickCheckHistory({ questions = [], results = {} }) {
-  const [expandedId, setExpandedId] = useState(null);
-  const answered = questions.map((q, index) => ({ q, index, result: results[q.id] })).filter(x => x.result);
-  if (!answered.length) return null;
-  return (
-    <section className="wa-check-history-only" aria-label="Quick check results">
-      <div className="wa-check-heading">
-        <div className="wa-check-rule" /><span>QUICK CHECK · RESULTS</span><div className="wa-check-rule" />
-      </div>
-      {answered.map(({ q, index, result }) => {
-        const status = statusForResult(result);
-        const expanded = expandedId === q.id;
-        return (
-          <div className="wa-check-result" key={`history-${q.id}`}>
-            <button type="button" className={`wa-check-result-row wa-check-result-row--${status.key}`}
-              onClick={() => setExpandedId(expanded ? null : q.id)} aria-expanded={expanded}>
-              <span className="wa-check-result-icon">{status.icon}</span>
-              <span className="wa-check-result-main">
-                <span className="wa-check-result-label">Q{index + 1} · {status.label}</span>
-                {!expanded && <span className="wa-check-result-preview">{q.question}</span>}
-              </span>
-              {result.score != null && <span className="wa-check-result-score">{result.score}/100</span>}
-              <span className="wa-check-result-review">{expanded ? <ChevronUpIcon /> : <ChevronDownIcon />}</span>
-            </button>
-            {expanded && <ReviewDetails question={q} result={result} />}
-          </div>
-        );
-      })}
-    </section>
-  );
-}
-
-function statusForResult(result) {
-  if (result.isCorrect === true || result.understanding === "strong") return { key: "strong", label: "Correct", icon: "✓" };
-  if (result.understanding === "weak" || result.needsReteach || (result.score != null && result.score < 50)) return { key: "weak", label: "Needs practice", icon: "✕" };
-  return { key: "partial", label: "Getting there", icon: "◐" };
-}
-
-function RetrievalPanel({
-  question, questionNumber, totalQuestions, questions = [], answer, setAnswer, onSubmit, submitting, results = {},
-}) {
-  const [expandedId, setExpandedId] = useState(null);
-  if (!question) return null;
-  const answered = questions.map((q, index) => ({ q, index, result: results[q.id] })).filter(x => x.result);
-  return (
-    <section className="wa-check-flow" aria-label={`Quick check, ${totalQuestions} questions`}>
-      <div className="wa-check-heading"><div className="wa-check-rule" /><span>QUICK CHECK · {totalQuestions} QUESTIONS</span><div className="wa-check-rule" /></div>
-      <div className="wa-check-history">
-        {answered.map(({ q, index, result }) => {
-          const status = statusForResult(result);
-          const expanded = expandedId === q.id;
-          return (
-            <div className="wa-check-result" key={`result-${q.id}`}>
-              <button type="button" className={`wa-check-result-row wa-check-result-row--${status.key}`}
-                onClick={() => setExpandedId(expanded ? null : q.id)} aria-expanded={expanded}>
-                <span className="wa-check-result-icon">{status.icon}</span>
-                <span className="wa-check-result-main">
-                  <span className="wa-check-result-label">Q{index + 1} · {status.label}</span>
-                  {!expanded && <span className="wa-check-result-preview">{q.question}</span>}
-                </span>
-                {result.score != null && <span className="wa-check-result-score">{result.score}/100</span>}
-                <span className="wa-check-result-review">{expanded ? <ChevronUpIcon /> : <ChevronDownIcon />}</span>
-              </button>
-              {expanded && <ReviewDetails question={q} result={result} />}
-            </div>
-          );
+    <div className="wa-clock-wrap">
+      <svg className="wa-clock-svg" viewBox="0 0 140 140" aria-label={`${formatTime(seconds)} remaining`}>
+        {/* Clock face */}
+        <circle cx="70" cy="70" r="65" className="wa-clock-face" />
+        {/* Tick marks */}
+        {Array.from({ length: 12 }, (_, i) => {
+          const a = (i / 12) * 2 * Math.PI - Math.PI / 2;
+          const r1 = 57, r2 = 63;
+          return <line key={i}
+            x1={70 + r1 * Math.cos(a)} y1={70 + r1 * Math.sin(a)}
+            x2={70 + r2 * Math.cos(a)} y2={70 + r2 * Math.sin(a)}
+            className="wa-clock-tick"
+          />;
         })}
-      </div>
-      <div className="wa-check-card">
-        <div className="wa-check-progress" aria-hidden="true">{Array.from({ length: totalQuestions }, (_, i) => <span key={i} className={i < questionNumber - 1 ? "is-complete" : i === questionNumber - 1 ? "is-current" : ""} />)}</div>
-        <div className="wa-check-card-header"><div className="wa-check-kicker">Q{questionNumber} OF {totalQuestions} · {formatQType(question.questionType).toUpperCase()}</div><h3>{question.question}</h3></div>
-        {question.questionType === "multiple_choice" && question.options?.length > 0 ? (
-          <div className="wa-check-options" role="radiogroup" aria-label="Choose your answer">
-            {question.options.map((opt, index) => {
-              const value = typeof opt === "string" ? opt : opt.label; const text = typeof opt === "string" ? opt : opt.text; const label = typeof opt === "string" ? String.fromCharCode(65 + index) : opt.label; const selected = answer === value;
-              return <button type="button" key={`${question.id}-${label}`} role="radio" aria-checked={selected} className={`wa-check-option${selected ? " selected" : ""}`} onClick={() => setAnswer(value)} disabled={submitting}><span className="wa-check-option-letter">{label}</span><span>{text}</span></button>;
-            })}
-          </div>
-        ) : (
-          <div className="wa-check-open-answer"><span className="wa-check-open-label">Explain in your own words</span><textarea className="wa-check-textarea" placeholder="Write your answer in your own words…" value={answer} onChange={e => setAnswer(e.target.value)} rows={4} disabled={submitting} /><span className="wa-check-word-count">{answer.trim() ? `${answer.trim().split(/\s+/).length} words` : "Open answer"}</span></div>
-        )}
-        <div className="wa-check-submit-row"><button type="button" className="wa-check-submit" onClick={onSubmit} disabled={!answer.trim() || submitting}>{submitting ? "Checking…" : "Submit"}</button></div>
-      </div>
-    </section>
-  );
-}
-
-function ReviewDetails({ question, result }) {
-  const options = Array.isArray(question.options) ? question.options : [];
-  const isMC = question.questionType === "multiple_choice" && options.length > 0;
-  const correct = result.correctOptionLabel || result.correctAnswer || null;
-  if (isMC) return <div className="wa-check-review">
-    <div className="wa-check-review-question">{question.question}</div>
-    <div className="wa-check-review-options">
-      {options.map((opt, index) => {
-        const label = typeof opt === "string" ? String.fromCharCode(65 + index) : opt.label; const text = typeof opt === "string" ? opt : opt.text;
-        const selected = result.studentAnswer === label || result.studentAnswer === text; const correctOption = correct && (correct === label || correct === text || correct === `Option ${label}`);
-        const cls = correctOption ? "correct" : selected && result.isCorrect === false ? "wrong" : selected && result.isCorrect !== false ? "correct" : "";
-        return <div className={`wa-check-review-option ${cls}`} key={`${question.id}-review-${label}`}><span className="wa-check-review-letter">{correctOption || (selected && result.isCorrect) ? "✓" : selected ? "✕" : label}</span><span>{text}</span>{selected && <small>Your answer</small>}{correctOption && !selected && <small>Correct answer</small>}</div>;
-      })}
-    </div>
-    {result.feedback && <div className="wa-check-review-feedback"><strong>UPRAD</strong><p>{result.feedback}</p></div>}
-  </div>;
-  return <div className="wa-check-review"><div className="wa-check-review-question">{question.question}</div><div className="wa-check-answer-label">YOUR ANSWER</div><div className="wa-check-student-answer">{result.studentAnswer}</div>{result.feedback && <div className="wa-check-review-feedback"><strong>UPRAD</strong><p>{result.feedback}</p></div>}{result.score != null && <span className={`wa-check-review-score wa-check-review-score--${result.understanding || "partial"}`}>{statusText(result)} · {result.score}/100</span>}</div>;
-}
-
-function statusText(result) {
-  if (result.isCorrect === true || result.understanding === "strong") return "Correct";
-  if (result.understanding === "weak" || result.needsReteach || (result.score != null && result.score < 50)) return "Needs practice";
-  return "Getting there";
-}
-
-function ReteachActions({ onStudyAgain, onPracticeNow, onAskQuestion }) {
-  return (
-    <div className="wa-action-card">
-      <p className="wa-action-hint">A fresh explanation is above. What would you like to do?</p>
-      <div className="wa-action-btns">
-        <button className="wa-btn-primary"   onClick={onStudyAgain}>📖 Study this explanation</button>
-        <button className="wa-btn-secondary" onClick={onPracticeNow}>✅ Try practice questions</button>
-        <button className="wa-chip"          onClick={onAskQuestion}>💬 Ask a question</button>
-      </div>
+        {/* Progress arc (elapsed time fills red/primary) */}
+        <circle cx="70" cy="70" r={r}
+          className={`wa-clock-arc ${isWarning ? "warning" : ""}`}
+          strokeDasharray={`${filled} ${circ}`}
+          transform="rotate(-90 70 70)"
+          strokeLinecap="round"
+          fill="none"
+        />
+        {/* Minute hand */}
+        <line
+          x1="70" y1="70"
+          x2={70 + 38 * Math.sin(minuteAngle * Math.PI / 180)}
+          y2={70 - 38 * Math.cos(minuteAngle * Math.PI / 180)}
+          className="wa-clock-minute-hand"
+          strokeLinecap="round"
+        />
+        {/* Second hand */}
+        <line
+          x1="70" y1="70"
+          x2={70 + 48 * Math.sin(secondAngle * Math.PI / 180)}
+          y2={70 - 48 * Math.cos(secondAngle * Math.PI / 180)}
+          className={`wa-clock-second-hand ${isWarning ? "warning" : ""}`}
+          strokeLinecap="round"
+        />
+        {/* Center dot */}
+        <circle cx="70" cy="70" r="4" className="wa-clock-center" />
+        {/* Time display */}
+        <text x="70" y="103" className={`wa-clock-digits ${isWarning ? "warning" : ""}`} textAnchor="middle">
+          {formatTime(seconds)}
+        </text>
+        {paused && <text x="70" y="116" className="wa-clock-paused" textAnchor="middle">PAUSED</text>}
+      </svg>
+      <button className="wa-btn-secondary" onClick={onTogglePause} style={{ marginTop: 12 }}>
+        {paused ? "▶ Resume" : "⏸ Pause"}
+      </button>
     </div>
   );
 }
 
-function PostSessionSuggestion({ subject, topic, onStart, onDismiss }) {
-  const label = topic && subject
-    ? `${topic} · ${subject}`
-    : topic || subject || "a different topic";
-  return (
-    <div className="wa-post-suggestion">
-      <div className="wa-post-suggestion-body">
-        <span className="wa-post-suggestion-icon">✦</span>
-        <p>This looks like a <strong>{label}</strong> question. Want a focused session on it?</p>
-      </div>
-      <div className="wa-post-suggestion-actions">
-        <button className="wa-btn-primary wa-post-suggestion-start" onClick={onStart}>
-          Start focused session
-        </button>
-        <button className="wa-post-suggestion-dismiss" onClick={onDismiss}>
-          No thanks
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function SessionCompleteBar({ summary, onViewSummary }) {
-  const score = summary?.overallScore;
-  const scoreTone = score >= 70 ? "strong" : score >= 50 ? "partial" : "weak";
-  return (
-    <button type="button" className="wa-session-complete-bar" onClick={onViewSummary}>
-      <span className={`wa-session-complete-icon wa-session-complete-icon--${scoreTone}`}>✓</span>
-      <span className="wa-session-complete-copy">
-        <strong>Session complete</strong>
-        <span>{score != null ? `${score}/100 overall` : "View your session summary"}</span>
-      </span>
-      <span className="wa-session-complete-action">View summary →</span>
-    </button>
-  );
-}
-
-function SummaryModal({ summary, conceptName, onClose, onContinue, onPracticeAgain, onBackToTopic }) {
-  return (
-    <div className="wa-summary-overlay" role="dialog" aria-modal="true" aria-label="Session summary">
-      <button className="wa-summary-backdrop" aria-label="Close summary" onClick={onClose} />
-      <section className="wa-summary-modal">
-        <div className="wa-summary-modal-head">
-          <div>
-            <span className="wa-summary-eyebrow">SESSION SUMMARY</span>
-            <h2>{conceptName}</h2>
-          </div>
-          <button type="button" className="wa-summary-close" onClick={onClose} aria-label="Close">×</button>
-        </div>
-
-        {summary.overallScore != null && (
-          <div className="wa-summary-score-card">
-            <div>
-              <span className="wa-summary-score-label">Overall score</span>
-              <strong>{summary.overallScore}<small>/100</small></strong>
-            </div>
-            <span className="wa-summary-score-meta">
-              {summary.questionsCorrect} of {summary.questionsAnswered} correct
-            </span>
-          </div>
-        )}
-
-        {summary.summaryText && (
-          <div className="wa-summary-section">
-            <h3>What you learned</h3>
-            <p>{summary.summaryText}</p>
-          </div>
-        )}
-
-        {summary.strengths?.length > 0 && (
-          <div className="wa-summary-section">
-            <h3>✓ Understood well</h3>
-            <ul>{summary.strengths.map((s, i) => <li key={i}>{s}</li>)}</ul>
-          </div>
-        )}
-
-        {summary.areasForPractice?.length > 0 && (
-          <div className="wa-summary-section">
-            <h3>Needs more practice</h3>
-            <ul>{summary.areasForPractice.map((a, i) => <li key={i}>{a}</li>)}</ul>
-          </div>
-        )}
-
-        {summary.keyIdeas?.length > 0 && (
-          <div className="wa-summary-section">
-            <h3>Key ideas</h3>
-            <ul>{summary.keyIdeas.map((k, i) => <li key={i}>{k}</li>)}</ul>
-          </div>
-        )}
-
-        {summary.recommendedNext && (
-          <div className="wa-summary-section">
-            <h3>Recommended next step</h3>
-            <p>{summary.recommendedNext}</p>
-          </div>
-        )}
-
-        <div className="wa-summary-modal-actions">
-          <button className="wa-btn-primary" onClick={onContinue}>Continue Learning</button>
-          <button className="wa-btn-secondary" onClick={onPracticeAgain}>Practice Again</button>
-          <button className="wa-chip" onClick={onBackToTopic}>Back to Topic</button>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function SummaryPanel({ summary, conceptName, onContinue, onPracticeAgain, onBackToTopic }) {
+// ─────────────────────────────────────────────────────────────────────────────
+// SUMMARY PANEL
+// ─────────────────────────────────────────────────────────────────────────────
+function SummaryPanel({ summary, conceptName, tasks, tasksDone, onContinue }) {
   return (
     <div className="wa-action-card wa-summary-panel">
       <div className="wa-summary-header">
@@ -1268,52 +828,72 @@ function SummaryPanel({ summary, conceptName, onContinue, onPracticeAgain, onBac
                    summary.overallScore >= 50 ? "var(--wa-warning)" : "var(--wa-error)"
           }}>{summary.overallScore}</span>
           <span className="wa-score-denom">/100</span>
-          <p className="wa-score-sub">{summary.questionsCorrect} of {summary.questionsAnswered} correct
-            {summary.reteachCount > 0 ? ` · ${summary.reteachCount} reteach round${summary.reteachCount > 1 ? "s" : ""}` : ""}
-          </p>
         </div>
       )}
-      {summary.summaryText && (
+      {tasks.length > 0 && (
         <div className="wa-summary-section">
-          <h3>What you learned</h3>
-          <p>{summary.summaryText}</p>
+          <h3>Tasks completed</h3>
+          <ul>{tasks.map(t => <li key={t.id}>{tasksDone.includes(t.id) ? "✅" : "⬜"} {t.title}</li>)}</ul>
         </div>
       )}
-      {summary.strengths?.length > 0 && (
-        <div className="wa-summary-section">
-          <h3>✓ Understood well</h3>
-          <ul>{summary.strengths.map((s, i) => <li key={i}>{s}</li>)}</ul>
-        </div>
-      )}
-      {summary.areasForPractice?.length > 0 && (
-        <div className="wa-summary-section">
-          <h3>📝 Needs more practice</h3>
-          <ul>{summary.areasForPractice.map((a, i) => <li key={i}>{a}</li>)}</ul>
-        </div>
-      )}
-      {summary.keyIdeas?.length > 0 && (
-        <div className="wa-summary-section">
-          <h3>💡 Key ideas</h3>
-          <ul>{summary.keyIdeas.map((k, i) => <li key={i}>{k}</li>)}</ul>
-        </div>
-      )}
-      {summary.recommendedNext && (
-        <div className="wa-summary-section">
-          <h3>→ Recommended next step</h3>
-          <p>{summary.recommendedNext}</p>
-        </div>
-      )}
-      <div className="wa-action-btns" style={{ marginTop: 20 }}>
-        <button className="wa-btn-primary"   onClick={onContinue}>Continue Learning</button>
-        <button className="wa-btn-secondary" onClick={onPracticeAgain}>Practice Again</button>
-        <button className="wa-chip"          onClick={onBackToTopic}>Back to Topic</button>
+      {summary.summaryText && <div className="wa-summary-section"><h3>What you learned</h3><p>{summary.summaryText}</p></div>}
+      {summary.strengths?.length > 0 && <div className="wa-summary-section"><h3>✓ Strengths</h3><ul>{summary.strengths.map((s, i) => <li key={i}>{s}</li>)}</ul></div>}
+      {summary.areasForPractice?.length > 0 && <div className="wa-summary-section"><h3>📝 Practice more</h3><ul>{summary.areasForPractice.map((a, i) => <li key={i}>{a}</li>)}</ul></div>}
+      {summary.recommendedNext && <div className="wa-summary-section"><h3>→ Next step</h3><p>{summary.recommendedNext}</p></div>}
+      <button className="wa-btn-primary" onClick={onContinue} style={{ marginTop: 16 }}>Continue Learning</button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+function AIBubble({ children }) {
+  return (
+    <div className="wa-bubble-wrap wa-bubble-wrap--ai">
+      <div className="wa-avatar-col"><TutorAvatar size={34} /></div>
+      <div className="wa-bubble wa-bubble--ai">
+        <span className="wa-bubble-sender">UPRAD</span>
+        {children}
       </div>
     </div>
   );
 }
 
-// ── Math / rich text ──────────────────────────────────────────────────────────
+function TypingIndicator() {
+  return (
+    <div className="wa-bubble-wrap wa-bubble-wrap--ai">
+      <div className="wa-avatar-col"><TutorAvatar size={34} /></div>
+      <div className="wa-bubble wa-bubble--ai wa-bubble--typing">
+        <span className="wa-bubble-sender">UPRAD</span>
+        <div className="wa-typing-dots" aria-label="AI is thinking">
+          <span /><span /><span />
+        </div>
+      </div>
+    </div>
+  );
+}
 
+function SendIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+    </svg>
+  );
+}
+
+function formatTime(s) {
+  const m = Math.floor(s / 60), sec = s % 60;
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+}
+
+function formatQType(t) {
+  return { short_answer: "Short answer", multiple_choice: "Multiple choice", calculation: "Calculation", explanation: "Explain", true_false: "True / False", application: "Application" }[t] || (t || "");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RICH TEXT (from previous versions)
+// ─────────────────────────────────────────────────────────────────────────────
 function KatexBlock({ src }) {
   let html = src;
   try { if (window.__katex__) html = window.__katex__.renderToString(src, { displayMode: true, throwOnError: false }); } catch {}
@@ -1331,15 +911,13 @@ function KatexInline({ src }) {
 }
 
 function normalizeMarkdown(text) {
-  return text
-    .replace(/\r\n/g, "\n")
+  return text.replace(/\r\n/g, "\n")
     .replace(/([^\n])\n(#{1,3} )/g, "$1\n\n$2")
     .replace(/([^\n])\n(> )/g, "$1\n\n$2")
     .replace(/([^\n])\n([-*] )/g, "$1\n\n$2")
     .replace(/([^\n])\n(\d+\. )/g, "$1\n\n$2")
     .replace(/([^\n])\n(\$\$)/g, "$1\n\n$2")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+    .replace(/\n{3,}/g, "\n\n").trim();
 }
 
 function RichText({ content }) {
@@ -1355,12 +933,11 @@ function RichText({ content }) {
         const mathBlock = block.match(/^\$\$\n?([\s\S]+?)\n?\$\$$/);
         if (mathBlock) return <KatexBlock key={i} src={mathBlock[1].trim()} />;
         const lines = block.split("\n");
-        const headingMatch = lines[0].match(/^(#{1,3})\s+(.+)/);
-        if (headingMatch) {
-          const level = headingMatch[1].length;
-          const Tag = level === 1 ? "h2" : level === 2 ? "h3" : "h4";
+        const hm = lines[0].match(/^(#{1,3})\s+(.+)/);
+        if (hm) {
+          const Tag = hm[1].length === 1 ? "h2" : hm[1].length === 2 ? "h3" : "h4";
           const rest = lines.slice(1).join("\n").trim();
-          return <div key={i}><Tag className={`wa-h${level}`}>{renderInline(headingMatch[2])}</Tag>{rest && <RichText content={rest} />}</div>;
+          return <div key={i}><Tag className={`wa-h${hm[1].length}`}>{renderInline(hm[2])}</Tag>{rest && <RichText content={rest} />}</div>;
         }
         if (lines.every(l => l.trim() === "" || l.trim().startsWith(">"))) {
           return <blockquote key={i} className="wa-blockquote">{lines.filter(l => l.trim().startsWith(">")).map((l, j) => <p key={j}>{renderInline(l.trim().replace(/^>\s?/, ""))}</p>)}</blockquote>;
@@ -1384,44 +961,9 @@ function renderInline(text) {
   const parts = cleaned.split(/(\*\*[^*]+\*\*|\*[^*\n]+\*|`[^`]+`|\$[^$\n]+\$)/g);
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) return <strong key={i}>{part.slice(2, -2)}</strong>;
-    if (part.startsWith("*")  && part.endsWith("*"))  return <em key={i}>{part.slice(1, -1)}</em>;
-    if (part.startsWith("`")  && part.endsWith("`"))  return <code key={i} className="wa-code-inline">{part.slice(1, -1)}</code>;
-    if (part.startsWith("$")  && part.endsWith("$"))  return <KatexInline key={i} src={part.slice(1, -1)} />;
+    if (part.startsWith("*") && part.endsWith("*")) return <em key={i}>{part.slice(1, -1)}</em>;
+    if (part.startsWith("`") && part.endsWith("`")) return <code key={i} className="wa-code-inline">{part.slice(1, -1)}</code>;
+    if (part.startsWith("$") && part.endsWith("$")) return <KatexInline key={i} src={part.slice(1, -1)} />;
     return part;
   });
-}
-
-// ── Icons & utils ─────────────────────────────────────────────────────────────
-
-function SendIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
-    </svg>
-  );
-}
-
-function ChevronDownIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
-  );
-}
-
-function ChevronUpIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <polyline points="18 15 12 9 6 15" />
-    </svg>
-  );
-}
-
-function formatTime(seconds) {
-  const m = Math.floor(seconds / 60), s = seconds % 60;
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-function formatQType(t) {
-  return { short_answer: "Short answer", multiple_choice: "Multiple choice", calculation: "Calculation", explanation: "Explain in your own words", true_false: "True / False", application: "Application" }[t] || t;
 }

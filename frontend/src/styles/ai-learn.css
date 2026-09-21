@@ -2902,3 +2902,164 @@
   }
   .wa-post-suggestion-start { width: 100%; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TASK LIST + CLOCK TIMER + QUESTION-AS-CHAT additions
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Task dots in topbar ────────────────────────────────────────────────── */
+.wa-task-dots {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+.wa-task-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+  transition: all 0.2s;
+}
+.wa-task-dot.active { background: var(--wa-primary); box-shadow: 0 0 0 3px rgba(79,110,247,0.3); }
+.wa-task-dot.done   { background: var(--wa-success); }
+
+/* ── Task list banner ───────────────────────────────────────────────────── */
+.wa-task-banner {
+  background: rgba(79,110,247,0.07);
+  border: 1px solid rgba(79,110,247,0.15);
+  border-radius: 12px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.wa-task-banner-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  color: var(--wa-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.wa-task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.wa-task-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+.wa-task-item.active { opacity: 1; }
+.wa-task-item.done   { opacity: 0.65; }
+.wa-task-item.done strong { text-decoration: line-through; }
+.wa-task-check {
+  font-size: 0.85rem;
+  color: var(--wa-primary);
+  flex-shrink: 0;
+  margin-top: 2px;
+  min-width: 14px;
+}
+.wa-task-item.done .wa-task-check { color: var(--wa-success); }
+.wa-task-item strong { font-size: 0.875rem; color: var(--wa-text); display: block; }
+.wa-task-item p { margin: 2px 0 0; font-size: 0.8rem; color: var(--wa-text-muted); line-height: 1.45; }
+.wa-task-time { font-size: 0.7rem; color: var(--wa-text-muted); }
+
+.wa-task-badge {
+  font-size: 0.8rem;
+  color: var(--wa-text-muted);
+  padding: 6px 10px;
+  background: rgba(79,110,247,0.08);
+  border-radius: 8px;
+  margin-bottom: 4px;
+}
+
+/* ── Task transition bubble ────────────────────────────────────────────── */
+.wa-bubble--task-transition {
+  background: rgba(34,197,94,0.08) !important;
+  border-color: rgba(34,197,94,0.2) !important;
+}
+
+/* ── Clock SVG timer ────────────────────────────────────────────────────── */
+.wa-clock-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+.wa-clock-svg {
+  width: 160px;
+  height: 160px;
+}
+.wa-clock-face {
+  fill: rgba(255,255,255,0.03);
+  stroke: rgba(255,255,255,0.08);
+  stroke-width: 1.5;
+}
+.wa-clock-tick {
+  stroke: rgba(255,255,255,0.2);
+  stroke-width: 2;
+}
+.wa-clock-arc {
+  stroke: var(--wa-primary);
+  stroke-width: 6;
+  transition: stroke-dasharray 1s linear;
+}
+.wa-clock-arc.warning { stroke: var(--wa-warning); }
+.wa-clock-minute-hand {
+  stroke: var(--wa-text);
+  stroke-width: 3;
+}
+.wa-clock-second-hand {
+  stroke: var(--wa-primary);
+  stroke-width: 1.5;
+  transition: transform 1s linear;
+}
+.wa-clock-second-hand.warning { stroke: var(--wa-warning); }
+.wa-clock-center {
+  fill: var(--wa-primary);
+}
+.wa-clock-digits {
+  fill: var(--wa-text);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: "Outfit", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.wa-clock-digits.warning { fill: var(--wa-warning); }
+.wa-clock-paused {
+  fill: var(--wa-text-muted);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  font-family: "Outfit", sans-serif;
+}
+
+/* ── Question-as-chat bubble ────────────────────────────────────────────── */
+.wa-bubble--question {
+  background: rgba(79,110,247,0.08) !important;
+  border-color: rgba(79,110,247,0.2) !important;
+}
+.wa-q-text {
+  font-size: 0.9375rem;
+  color: var(--wa-text);
+  line-height: 1.6;
+  margin: 8px 0 10px;
+}
+.wa-inline-answer {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  margin-top: 8px;
+}
+.wa-inline-answer .wa-answer-input {
+  flex: 1;
+}

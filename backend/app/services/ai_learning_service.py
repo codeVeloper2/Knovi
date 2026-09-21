@@ -98,7 +98,7 @@ _VALID_TRANSITIONS: dict[str, set[str]] = {
     "teaching":   {"studying", "retrieval", "reteaching", "abandoned"},
     "studying":   {"retrieval", "abandoned"},
     "retrieval":  {"reteaching", "practice", "completed", "abandoned"},
-    "reteaching": {"studying", "retrieval", "practice", "completed", "abandoned"},
+    "reteaching": {"studying", "retrieval", "reteaching", "practice", "completed", "abandoned"},
     "practice":   {"retrieval", "completed", "abandoned"},
     "completed":  set(),
     "abandoned":  set(),
@@ -144,6 +144,80 @@ def _safe_int(v: Any, lo: int = 0, hi: int = 100) -> Optional[int]:
     if isinstance(v, (int, float)):
         return max(lo, min(hi, int(v)))
     return None
+
+
+async def generate_task_list(
+    session_id: int, user_id: int, db: AsyncSession
+) -> list[dict]:
+    """
+    Generate a structured task list for the session concept.
+    Called once during session preparation.
+    Returns 3-5 tasks with title, description, estimated_minutes.
+    """
+    session = await _get_session_owned(session_id, user_id, db)
+    subject, topic, concept = await _load_curriculum_chain(
+        session.subject_id, session.topic_id, session.concept_id, db
+    )
+
+    system_prompt = (
+        "You are an expert curriculum designer. Generate a focused task list "
+        "for a single learning concept. Return JSON only."
+    )
+    prompt = f"""CONCEPT TO LEARN: {concept.name}
+SUBJECT: {subject.name} | TOPIC: {topic.name}
+STUDENT FAMILIARITY: {session.student_familiarity}
+CONCEPT EXPLANATION: {(concept.explanation or '')[:600]}
+
+Generate 3-5 learning tasks that together fully cover this concept.
+Each task should be a discrete, testable piece of knowledge or skill.
+Tasks should build on each other progressively.
+Estimated minutes per task: 2-10 (AI decides based on complexity).
+Max total: 30 minutes.
+
+Return JSON:
+{{
+  "tasks": [
+    {{
+      "id": 1,
+      "title": "Short task name (3-6 words)",
+      "description": "What specifically the student needs to understand or do (1-2 sentences)",
+      "estimated_minutes": 5,
+      "key_skill": "The core thing being tested"
+    }}
+  ]
+}}
+"""
+    try:
+        raw, _ = await call_with_fallback(
+            prompt, system=system_prompt, temperature=0.5, json_mode=True
+        )
+        parsed = parse_json(raw)
+    except Exception as exc:
+        logger.error("Task list generation failed: %s", exc)
+        # Fallback: 3 generic tasks
+        return [
+            {"id": 1, "title": "Understand the concept", "description": f"Learn what {concept.name} is and why it matters.", "estimated_minutes": 5, "key_skill": "comprehension"},
+            {"id": 2, "title": "Apply with examples", "description": "Work through concrete examples.", "estimated_minutes": 5, "key_skill": "application"},
+            {"id": 3, "title": "Test your knowledge", "description": "Confirm understanding with a quick quiz.", "estimated_minutes": 5, "key_skill": "recall"},
+        ]
+
+    tasks = _safe_list(parsed.get("tasks"))
+    if not tasks:
+        tasks = [
+            {"id": 1, "title": "Understand the concept", "description": f"Learn what {concept.name} is.", "estimated_minutes": 5, "key_skill": "comprehension"},
+            {"id": 2, "title": "Apply with examples", "description": "Work through examples.", "estimated_minutes": 5, "key_skill": "application"},
+            {"id": 3, "title": "Test your knowledge", "description": "Quick recall quiz.", "estimated_minutes": 5, "key_skill": "recall"},
+        ]
+
+    # Persist as a system message so it's part of session history
+    await _add_message(
+        session_id, "system", "task_list",
+        f"Task list generated: {len(tasks)} tasks",
+        db,
+        extra={"tasks": tasks},
+    )
+    await db.commit()
+    return tasks
 
 
 # ── Session ownership loader ──────────────────────────────────────────────────
