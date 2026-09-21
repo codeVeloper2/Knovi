@@ -36,7 +36,8 @@ const DESKTOP_MAIN_NAV = [
 const MOBILE_MAIN_NAV = MAIN_NAV;
 
 const SETTINGS_NAV = [
-  { to: "/app/settings",                  label: "Profile",          Icon: ProfileIcon,  end: true },
+  { to: "/app/settings",                  label: "Settings",         Icon: SettingsIcon, end: true },
+  { to: "/app/settings/profile",          label: "Profile",          Icon: ProfileIcon },
   { to: "/app/settings/learning-profile", label: "Learning Profile", Icon: LearnIcon },
   { to: "/app/settings/security",         label: "Security",         Icon: SecurityIcon },
   { to: "/app/settings/notifications",    label: "Notifications",    Icon: BellIcon },
@@ -116,8 +117,6 @@ export default function DashboardLayout() {
   ]);
 
   const name    = profile?.displayName || user?.displayName || "peer";
-  const initial = name.trim().slice(0, 1).toUpperCase();
-  const photo   = profile?.photoURL || user?.photoURL || "";
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -273,18 +272,6 @@ export default function DashboardLayout() {
                 )}
               </div>
 
-              {/* Profile Avatar */}
-              <button
-                className="desktop-topbar-avatar"
-                onClick={() => navigate("/app/settings")}
-                title={name}
-              >
-                {photo ? <img src={photo} alt={name} referrerPolicy="no-referrer" /> : <span>{initial}</span>}
-                <span className="desktop-topbar-avatar-name">{name}</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ opacity: 0.6 }}>
-                  <path d="m6 9 6 6 6-6"/>
-                </svg>
-              </button>
             </div>
           </header>
 

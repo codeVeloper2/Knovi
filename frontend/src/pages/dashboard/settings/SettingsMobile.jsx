@@ -73,6 +73,7 @@ export default function SettingsMobile() {
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showAvatar, setShowAvatar] = useState(false);
 
   // Keep the hub visually stable while auth/profile data settles.
   useEffect(() => {
@@ -123,13 +124,19 @@ export default function SettingsMobile() {
 
       <section className="settings-account-card">
         <div className="settings-account-main">
-          <div className="settings-account-avatar">
+          <button
+            type="button"
+            className="settings-account-avatar"
+            onClick={() => setShowAvatar(true)}
+            aria-label={`View ${name}'s full profile picture`}
+          >
             {photo ? (
               <img src={photo} alt={name} referrerPolicy="no-referrer" />
             ) : (
               <span>{initial}</span>
             )}
-          </div>
+            <span className="settings-avatar-view-hint" aria-hidden="true">⌕</span>
+          </button>
 
           <div className="settings-account-copy">
             <div className="settings-account-name-row">
@@ -214,6 +221,33 @@ export default function SettingsMobile() {
       </button>
 
       <p className="settings-hub-footer">PeerUP · Learn. Teach. Grow.</p>
+
+      {showAvatar && (
+        <div
+          className="settings-avatar-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Full profile picture"
+          onClick={() => setShowAvatar(false)}
+        >
+          <button
+            type="button"
+            className="settings-avatar-lightbox-close"
+            onClick={() => setShowAvatar(false)}
+            aria-label="Close profile picture"
+          >
+            ×
+          </button>
+          <div className="settings-avatar-lightbox-content" onClick={(e) => e.stopPropagation()}>
+            {photo ? (
+              <img src={photo} alt={name} referrerPolicy="no-referrer" />
+            ) : (
+              <span>{initial}</span>
+            )}
+            <p>{name}</p>
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={logoutOpen}

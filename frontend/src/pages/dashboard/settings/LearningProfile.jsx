@@ -34,6 +34,35 @@ const CONFIDENCE_LABELS = {
   high: "High confidence"
 };
 
+function LearningProfileSkeleton() {
+  return (
+    <div className="settings-page learning-profile-loading" aria-busy="true" aria-label="Loading learning profile">
+      <SettingsMobileHeader title="Learning Profile" />
+      <span className="lp-skeleton lp-skeleton-eyebrow" />
+      <span className="lp-skeleton lp-skeleton-title" />
+      <span className="lp-skeleton lp-skeleton-subtitle" />
+
+      {[
+        { title: "Your Learning Preferences", lines: 3 },
+        { title: "Learning Behavior", lines: 2 },
+        { title: "AI Learning Observations", lines: 4 },
+      ].map((section) => (
+        <section className="lp-skeleton-card" key={section.title}>
+          <div className="lp-skeleton-card-head">
+            <span className="lp-skeleton lp-skeleton-section-title" />
+            <span className="lp-skeleton lp-skeleton-section-line" />
+          </div>
+          <div className="lp-skeleton-chip-grid">
+            {Array.from({ length: section.lines * 4 }).map((_, i) => (
+              <span className="lp-skeleton lp-skeleton-chip" key={i} />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
 export default function SettingsLearningProfile() {
   const { mapError } = useAuth();
   const toast = useToast();

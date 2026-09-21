@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import * as api from "../../api";
-import NotificationsBell from "../../components/NotificationsPanel";
 
 const STATUS_LABELS = {
   created: "Ready to start",
@@ -16,10 +15,6 @@ const STATUS_LABELS = {
 function greeting() {
   const h = new Date().getHours();
   return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
-}
-
-function initials(name) {
-  return (name || "P").trim().split(/\s+/).slice(0, 2).map(x => x[0]).join("").toUpperCase();
 }
 
 function formatAgo(value) {
@@ -64,10 +59,6 @@ function Section({ title, subtitle, action, children, className = "" }) {
   return <section className={`home2-card home2-section ${className}`}><div className="home2-section-head"><div><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div>{action}</div>{children}</section>;
 }
 
-function Avatar({ name, photo, size = 40 }) {
-  return photo ? <img className="home2-avatar" style={{ width:size, height:size }} src={photo} alt="" referrerPolicy="no-referrer" /> : <span className="home2-avatar home2-avatar-fallback" style={{ width:size, height:size }}>{initials(name)}</span>;
-}
-
 export default function Home() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
@@ -99,7 +90,6 @@ export default function Home() {
 
   const name = profile?.displayName || user?.displayName || "there";
   const firstName = name.split(/\s+/)[0] || "there";
-  const photo = profile?.photoURL || user?.photoURL || "";
   const progress = data.progress || {};
   const learning = data.learning || {};
   const ai = data.ai || {};
@@ -111,13 +101,26 @@ export default function Home() {
   const observations = (ai.aiObservations || []).slice().sort((a,b) => Number(b.confidence || 0) - Number(a.confidence || 0)).slice(0, 3);
 
   return <div className="home2">
-    <header className="home2-topbar">
-      <div className="home2-search"><span>⌕</span><input placeholder="Search subjects, topics, or ask AI..." aria-label="Search" onKeyDown={e => { if (e.key === "Enter" && e.currentTarget.value.trim()) navigate(`/app/learn?search=${encodeURIComponent(e.currentTarget.value.trim())}`); }} /></div>
-      <div className="home2-top-actions"><NotificationsBell className="home2-bell notif-bell-btn" /><button className="home2-profile-btn" onClick={() => navigate("/app/settings")}><Avatar name={name} photo={photo} size={38}/><span>{name}</span></button></div>
-    </header>
-
     <section className="home2-hero">
-      <div><span className="home2-eyebrow">PEERUP LEARNING SPACE</span><h1>{greeting()}, <b>{firstName}</b> 👋</h1><p>Keep learning, keep growing. Pick up where you left off or explore your next concept.</p></div>
+      <div className="home2-hero-content">
+        <div className="home2-search">
+          <span aria-hidden="true">⌕</span>
+          <input
+            placeholder="Search subjects, topics, or ask AI..."
+            aria-label="Search subjects, topics, or ask AI"
+            onKeyDown={e => {
+              if (e.key === "Enter" && e.currentTarget.value.trim()) {
+                navigate(`/app/learn?search=${encodeURIComponent(e.currentTarget.value.trim())}`);
+              }
+            }}
+          />
+        </div>
+        <div className="home2-hero-copy">
+          <span className="home2-eyebrow">PEERUP LEARNING SPACE</span>
+          <h1>{greeting()}, <b>{firstName}</b> 👋</h1>
+          <p>Keep learning, keep growing. Pick up where you left off or explore your next concept.</p>
+        </div>
+      </div>
       <div className="home2-hero-art" aria-hidden="true"><span>AI</span><i/><i/><i/></div>
     </section>
 

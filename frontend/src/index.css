@@ -19721,3 +19721,216 @@ kbd {
   .prog-mob-avatar { width:34px; height:34px; padding:0; overflow:hidden; display:grid; place-items:center; border:1px solid rgba(255,255,255,.1); border-radius:50%; background:var(--navy-input); color:#fff; font-size:.78rem; font-weight:800; cursor:pointer; }
   .prog-mob-avatar img { width:100%; height:100%; object-fit:cover; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   2026 UI POLISH — HOME + SETTINGS
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Home: search belongs inside the greeting/AI hero, not in a separate bar. */
+.home2-topbar { display: none !important; }
+.home2-hero {
+  min-height: 250px;
+  padding: 26px 34px 32px;
+  align-items: stretch;
+}
+.home2-hero-content {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 28px;
+}
+.home2-search {
+  width: min(620px, 100%);
+  height: 48px;
+  box-sizing: border-box;
+  background: rgba(5, 15, 32, 0.48);
+  border-color: rgba(148, 163, 184, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.025);
+}
+.home2-search input { font-size: .92rem; }
+.home2-hero-copy { min-width: 0; }
+
+/* Settings: use the desktop canvas instead of leaving a narrow centered column. */
+.settings-hub {
+  width: min(1380px, 100%);
+  padding: 42px 34px 64px;
+}
+.settings-hub-header { margin-bottom: 28px; }
+.settings-hub-header h1 { font-size: clamp(2.2rem, 3vw, 3rem); }
+.settings-hub-subtitle { font-size: 1rem; max-width: 760px; }
+.settings-account-card {
+  padding: 30px 32px;
+  border-radius: 22px;
+}
+.settings-account-avatar {
+  position: relative;
+  border: 0;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  outline: none;
+}
+.settings-account-avatar:focus-visible {
+  box-shadow: 0 0 0 3px rgba(129,140,248,.5);
+}
+.settings-account-avatar .settings-avatar-view-hint {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 25px;
+  height: 25px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--navy-panel);
+  border-radius: 50%;
+  background: rgba(15,23,42,.92);
+  color: #fff;
+  font-size: .75rem;
+  opacity: 0;
+  transform: scale(.9);
+  transition: opacity .16s ease, transform .16s ease;
+}
+.settings-account-avatar:hover .settings-avatar-view-hint,
+.settings-account-avatar:focus-visible .settings-avatar-view-hint {
+  opacity: 1;
+  transform: scale(1);
+}
+.settings-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.settings-option {
+  min-height: 94px;
+  padding: 20px;
+  border-radius: 17px;
+}
+.settings-option-copy strong { font-size: .98rem; }
+.settings-option-copy span { font-size: .82rem; }
+
+/* Full-size profile picture viewer. */
+.settings-avatar-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: rgba(2, 6, 23, .84);
+  backdrop-filter: blur(12px);
+  animation: settingsLightboxIn .18s ease-out both;
+}
+.settings-avatar-lightbox-close {
+  position: fixed;
+  top: 24px;
+  right: 28px;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 50%;
+  background: rgba(15,23,42,.78);
+  color: #fff;
+  font-size: 1.8rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.settings-avatar-lightbox-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.settings-avatar-lightbox-content img,
+.settings-avatar-lightbox-content > span {
+  width: min(72vw, 520px);
+  height: min(72vw, 520px);
+  max-width: 80vh;
+  max-height: 80vh;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 5px solid rgba(255,255,255,.12);
+  box-shadow: 0 30px 100px rgba(0,0,0,.5);
+}
+.settings-avatar-lightbox-content > span {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #1e3a8a, #0f766e);
+  color: #fff;
+  font-size: clamp(4rem, 10vw, 7rem);
+  font-weight: 800;
+}
+.settings-avatar-lightbox-content p {
+  margin: 0;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+}
+@keyframes settingsLightboxIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Learning Profile: real skeleton rather than a text-only loading state. */
+.learning-profile-loading {
+  width: min(1100px, 100%);
+}
+.lp-skeleton {
+  display: block;
+  border-radius: 9px;
+  background: linear-gradient(105deg, rgba(255,255,255,.045) 20%, rgba(255,255,255,.12) 42%, rgba(255,255,255,.045) 64%);
+  background-size: 240% 100%;
+  animation: lpShimmer 1.35s linear infinite;
+}
+.lp-skeleton-eyebrow { width: 90px; height: 10px; margin-bottom: 11px; }
+.lp-skeleton-title { width: 250px; height: 38px; margin-bottom: 12px; }
+.lp-skeleton-subtitle { width: min(760px, 85%); height: 13px; margin-bottom: 28px; }
+.lp-skeleton-card {
+  padding: 22px;
+  margin-bottom: 16px;
+  border: 1px solid var(--navy-line);
+  border-radius: 16px;
+  background: var(--navy-panel);
+}
+.lp-skeleton-card-head { display: grid; gap: 9px; margin-bottom: 20px; }
+.lp-skeleton-section-title { width: 220px; height: 17px; }
+.lp-skeleton-section-line { width: 320px; max-width: 75%; height: 10px; }
+.lp-skeleton-chip-grid { display: flex; flex-wrap: wrap; gap: 9px; }
+.lp-skeleton-chip { width: 125px; height: 36px; border-radius: 999px; }
+@keyframes lpShimmer {
+  from { background-position: 180% 0; }
+  to { background-position: -40% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-skeleton { animation: none; }
+}
+
+@media (max-width: 900px) {
+  .settings-hub { width: 100%; padding: 30px 24px 54px; }
+  .settings-account-card { padding: 24px; }
+}
+
+@media (max-width: 768px) {
+  .home2-hero {
+    min-height: 0;
+    padding: 18px 18px 24px;
+    gap: 20px;
+  }
+  .home2-hero-content { gap: 22px; }
+  .home2-search { width: 100%; height: 46px; }
+  .home2-hero-art { width: 82px; height: 82px; flex-basis: 82px; }
+  .settings-hub { padding: 18px 16px 96px; }
+  .settings-hub-header h1 { font-size: 1.72rem; }
+  .settings-account-card { padding: 18px; }
+  .settings-options { grid-template-columns: 1fr; }
+  .settings-option { min-height: 0; padding: 15px; }
+  .settings-avatar-lightbox { padding: 20px; }
+  .settings-avatar-lightbox-close { top: 16px; right: 16px; }
+}
+
+/* Give the large settings hub the same wide desktop canvas as the reference. */
+.dash-main--desktop:has(.settings-hub) {
+  max-width: 1480px;
+  padding-left: 34px;
+  padding-right: 34px;
+}
