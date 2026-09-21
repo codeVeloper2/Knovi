@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_session
 from app.core.security import current_user
 from app.models.chat import Conversation, Message
+from app.models.challenge import ChallengeSession
 from app.models.user import User
 
 router = APIRouter()
@@ -77,6 +78,37 @@ async def get_notifications(
                 "linkTo": "/app/chat",
                 "createdAt": latest_msg.created_at.isoformat() if latest_msg else datetime.now(timezone.utc).isoformat(),
                 "meta": {"conversationId": conv_id, "unread": unread_count},
+            })
+
+    # ── Pending AI Quiz Battle invitations ───────────────────────────────
+    pending_challenges = (await session.execute(
+        select(ChallengeSession).where(
+            ChallengeSession.opponent_id == user.id,
+            ChallengeSession.status == "pending",
+            ChallengeSession.expires_at.is_not(None),
+            ChallengeSession.expires_at > datetime.now(timezone.utc),
+        ).order_by(ChallengeSession.created_at.desc()).limit(20)
+    )).scalars().all()
+
+    if pending_challenges:
+        challenger_ids = {c.challenger_id for c in pending_challenges}
+        challengers = {
+            u.id: u
+            for u in (await session.execute(select(User).where(User.id.in_(challenger_ids)))).scalars().all()
+        }
+        for challenge in pending_challenges:
+            challenger = challengers.get(challenge.challenger_id)
+            if not challenger:
+                continue
+            notifications.append({
+                "id": f"challenge_{challenge.id}",
+                "type": "challenge",
+                "title": "AI Quiz Battle challenge",
+                "body": f"{challenger.full_name or 'A PeerUP student'} challenged you on a shared learning concept.",
+                "photoURL": challenger.photo_url or "",
+                "linkTo": f"/app/learn/challenge/{challenge.id}",
+                "createdAt": challenge.created_at.isoformat(),
+                "meta": {"challengeId": challenge.id, "conceptId": challenge.concept_id},
             })
 
     # Sort by most recent first

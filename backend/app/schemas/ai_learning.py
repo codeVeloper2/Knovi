@@ -108,6 +108,7 @@ class TeachingOut(BaseModel):
     analogies:     list
     workedExamples:list
     misconceptions:list
+    objectiveIds:  list[int] = []
     summary:       Optional[str]
     rawContent:    Optional[str]
     learningPlan:  list = []

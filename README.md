@@ -309,3 +309,9 @@ AI tools accelerated development — they did not replace understanding or decis
 ---
 
 *Built for the FirstCommit 2026 Hackathon — Beginner's Paradise track*
+
+### AI Quiz Battle
+
+PeerUP also includes a backend-only 1-v-1 **AI Quiz Battle** capability. Two already-connected students challenge each other on a shared curriculum concept. The backend intersects the curriculum objectives actually covered in each student's AI-learning teaching snapshots, builds a deterministic challenge blueprint, asks Gemini to generate the approved question set, validates it with Pydantic/deterministic checks plus independent AI validation, then freezes the resulting questions in PostgreSQL.
+
+Battle state, timing, correctness, scores, answer privacy, reconnect behavior, and completion are server-authoritative. Gemini is never used to reconstruct historical questions. The implementation and migration are documented in `docs/AI_QUIZ_BATTLE.md` and `backend/migrations/002_ai_quiz_battle.sql`.

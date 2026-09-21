@@ -104,6 +104,20 @@ class Settings:
     AI_REQUEST_TIMEOUT:          int = int(os.getenv("AI_REQUEST_TIMEOUT", "45"))
     AI_MAX_EXPLANATION_ATTEMPTS: int = int(os.getenv("AI_MAX_EXPLANATION_ATTEMPTS", "3"))
 
+    # ── AI Quiz Battle ──
+    CHALLENGE_QUESTION_COUNT: int = int(os.getenv("CHALLENGE_QUESTION_COUNT", "5"))
+    CHALLENGE_MIN_QUESTIONS: int = int(os.getenv("CHALLENGE_MIN_QUESTIONS", "3"))
+    CHALLENGE_MAX_QUESTIONS: int = int(os.getenv("CHALLENGE_MAX_QUESTIONS", "10"))
+    CHALLENGE_COUNTDOWN_SECONDS: int = int(os.getenv("CHALLENGE_COUNTDOWN_SECONDS", "3"))
+    CHALLENGE_QUESTION_SECONDS: int = int(os.getenv("CHALLENGE_QUESTION_SECONDS", "30"))
+    CHALLENGE_REVEAL_SECONDS: int = int(os.getenv("CHALLENGE_REVEAL_SECONDS", "4"))
+    CHALLENGE_PENDING_HOURS: int = int(os.getenv("CHALLENGE_PENDING_HOURS", "24"))
+    CHALLENGE_ACCEPTED_MINUTES: int = int(os.getenv("CHALLENGE_ACCEPTED_MINUTES", "30"))
+    CHALLENGE_BATTLE_HOURS: int = int(os.getenv("CHALLENGE_BATTLE_HOURS", "2"))
+    CHALLENGE_PREPARATION_MINUTES: int = int(os.getenv("CHALLENGE_PREPARATION_MINUTES", "5"))
+    CHALLENGE_DISCONNECT_GRACE_SECONDS: int = int(os.getenv("CHALLENGE_DISCONNECT_GRACE_SECONDS", "90"))
+    CHALLENGE_AI_RETRIES: int = int(os.getenv("CHALLENGE_AI_RETRIES", "3"))
+
     # ── CORS ──
     CORS_ORIGINS: list[str] = [
         origin.strip()

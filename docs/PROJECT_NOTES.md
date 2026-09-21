@@ -300,3 +300,24 @@ npm run build    # must exit 0 with no errors
 ---
 
 *Update this file as the project evolves.*
+
+---
+
+## 9. AI Quiz Battle (backend)
+
+AI Quiz Battle is implemented as a server-authoritative 1-v-1 challenge between students who already have a PeerUP conversation. The challenge is limited to a shared curriculum concept and is grounded in persisted AI-learning evidence from both students.
+
+Key files:
+- `backend/app/api/v1/challenge.py` — HTTP + WebSocket API
+- `backend/app/services/challenge_service.py` — lifecycle, timing, scoring, privacy, progress integration
+- `backend/app/services/challenge_ai_service.py` — shared context, blueprint, generation, validation
+- `backend/app/services/challenge_ws_manager.py` — in-process event delivery
+- `backend/app/services/challenge_runtime.py` — server timer wakeups
+- `backend/app/models/challenge.py` — challenge/session/question/answer/result models
+- `backend/app/schemas/challenge.py` — API/AI/WS contracts
+- `backend/migrations/002_ai_quiz_battle.sql` — PostgreSQL migration
+- `docs/AI_QUIZ_BATTLE.md` — technical architecture reference
+
+The current repository has no friendship/match table; an existing 1:1 `Conversation` is therefore the eligibility primitive. This can be replaced by a dedicated connection model later without changing the battle state machine or scoring logic.
+
+Questions are generated once, validated, and frozen. The client cannot determine correctness, score, timers, reveal state, current question, or final results. Challenge outcomes feed existing topic practice progress and append separate AI learning observations without overwriting user-entered profile data.

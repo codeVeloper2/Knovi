@@ -13,13 +13,25 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.api.v1 import ai, auth, chat, learn, notifications, profile, progress, users
 from app.api.v1 import admin_curriculum, curriculum
-from app.api.v1 import ai_learning
+from app.api.v1 import ai_learning, challenge
 from app.api.v1 import learning_profile
 from app.api.v1.auth import limiter
 from app.core.config import settings
+from app.services import challenge_runtime
 
 
-app = FastAPI(title=settings.APP_TITLE)
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    try:
+        yield
+    finally:
+        await challenge_runtime.shutdown()
+
+
+app = FastAPI(title=settings.APP_TITLE, lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
@@ -53,3 +65,6 @@ app.include_router(ai_learning.router, prefix="/api", tags=["ai-learning"])
 
 # ── AI Learning Profile ──
 app.include_router(learning_profile.router, prefix="/api", tags=["learning-profile"])
+
+# ── AI Quiz Battle ──
+app.include_router(challenge.router, prefix="/api", tags=["challenges"])

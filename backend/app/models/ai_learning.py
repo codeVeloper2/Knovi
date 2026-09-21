@@ -241,6 +241,10 @@ class AISessionTeaching(Base):
     analogies:       Mapped[Optional[list]]= mapped_column(JSONB, nullable=True)
     worked_examples: Mapped[Optional[list]]= mapped_column(JSONB, nullable=True)
     misconceptions:  Mapped[Optional[list]]= mapped_column(JSONB, nullable=True)
+    # Curriculum objective IDs actually addressed by this teaching snapshot.
+    # Kept separate from the AI learning plan so challenge generation can
+    # distinguish planned topics from material that was actually taught.
+    objective_ids:   Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     summary:         Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     raw_content:     Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # full AI response text
 
@@ -269,6 +273,7 @@ class AISessionTeaching(Base):
             "analogies": self.analogies or [],
             "workedExamples": self.worked_examples or [],
             "misconceptions": self.misconceptions or [],
+            "objectiveIds": [int(x) for x in (self.objective_ids or []) if str(x).isdigit()],
             "summary": self.summary,
             "learningPlan": learning_plan,
             "rawContent": self.raw_content,

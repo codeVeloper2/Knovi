@@ -11,6 +11,7 @@ from app.models.curriculum import (
     LearningActivity, Question, Resource,
     TopicProgress, ResourceDownload,
 )
+from app.models.challenge import ChallengeSession, ChallengeQuestion, ChallengeAnswer, ChallengeResult
 from app.models.ai_learning import (
     AILearningSession,
     AISessionMessage,
@@ -39,4 +40,6 @@ __all__ = [
     "AILearningSession", "AISessionMessage", "AISessionTeaching",
     "AISessionStudyPeriod", "AISessionQuestion", "AISessionAnswer",
     "AISessionTeachingAttempt", "AISessionIntegrityEvent", "AISessionSummary",
+    # AI Quiz Battle
+    "ChallengeSession", "ChallengeQuestion", "ChallengeAnswer", "ChallengeResult",
 ]

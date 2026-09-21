@@ -284,7 +284,7 @@ def _build_curriculum_context(
     learner_profile: Optional["AILearningProfile"] = None,
 ) -> str:
     objectives = "\n".join(
-        f"  {i+1}. {lo.title}: {lo.description}"
+        f"  {i+1}. [{lo.id}] {lo.title}: {lo.description}"
         for i, lo in enumerate(topic.learning_objectives or [])
     ) or "  (none)"
 
@@ -714,12 +714,14 @@ async def teach_concept(session_id: int, user_id: int, db: AsyncSession, task_in
         if task_index < 0 or task_index >= len(current_plan):
             raise HTTPException(400, "Invalid learning task.")
         selected_task = current_plan[task_index]
+        selected_objectives = selected_task.get("objectiveIds") or selected_task.get("objective_ids") or []
         task_context = f"""
 FOCUSED LEARNING TASK
 Task number: {task_index + 1}
 Task title: {selected_task.get("title", "Learning task")}
 Task focus: {selected_task.get("focus", "")}
 Task description: {selected_task.get("description", "")}
+Curriculum objective IDs this task is mapped to: {selected_objectives or "(not mapped in a legacy plan)"}
 Teach ONLY this task deeply enough for the student to study it and later retrieve it.
 Do not teach the whole concept again. Connect briefly to prerequisite ideas when needed.
 """
@@ -738,7 +740,7 @@ Each task must be concrete and independently assessable.
 Choose 3–7 tasks. Choose a study duration of 2–10 minutes for each task based on complexity.
 Return learning_tasks as:
 [
-  {"title":"...", "description":"...", "focus":"...", "recommended_minutes":5}
+  {"title":"...", "description":"...", "focus":"...", "recommended_minutes":5, "objective_ids":[101]}
 ]
 """ if not current_plan else ""
 
@@ -767,7 +769,8 @@ Return JSON (all fields required; arrays may be empty []):
   "misconceptions": ["common mistake to avoid"],
   "summary": "One-paragraph summary.",
   "study_prompt": "Short instruction telling the student what to focus on while studying.",
-  "learning_tasks": [{{"title":"...","description":"...","focus":"...","recommended_minutes":5}}]
+  "covered_objective_ids": [101],
+  "learning_tasks": [{{"title":"...","description":"...","focus":"...","recommended_minutes":5,"objective_ids":[101]}}]
 }}
 """
     try:
@@ -784,23 +787,49 @@ Return JSON (all fields required; arrays may be empty []):
     explanation  = _safe_str(parsed.get("explanation"), "Teaching content temporarily unavailable.")
     raw_plan = current_plan if current_plan else _safe_list(parsed.get("learning_tasks"))
     learning_tasks = []
+    valid_objective_ids = {int(lo.id) for lo in (topic.learning_objectives or [])}
     for idx, task in enumerate(raw_plan, 1):
         if not isinstance(task, dict):
             continue
         try:
-            mins = max(2, min(10, int(task.get("recommended_minutes", 5))))
+            mins = max(2, min(10, int(task.get("recommended_minutes", task.get("recommendedMinutes", 5)))))
         except Exception:
             mins = 5
+        raw_obj_ids = task.get("objective_ids", task.get("objectiveIds", [])) or []
+        mapped_objective_ids: list[int] = []
+        for raw_id in raw_obj_ids:
+            try:
+                oid = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            if oid in valid_objective_ids and oid not in mapped_objective_ids:
+                mapped_objective_ids.append(oid)
         learning_tasks.append({
             "id": str(task.get("id") or f"task-{idx}"),
             "title": _safe_str(task.get("title"), f"Learning task {idx}"),
             "description": _safe_str(task.get("description"), ""),
             "focus": _safe_str(task.get("focus"), ""),
             "recommendedMinutes": mins,
+            "objectiveIds": mapped_objective_ids,
             "order": idx,
         })
     summary_text = _safe_str(parsed.get("summary"), "")
     study_prompt = _safe_str(parsed.get("study_prompt"), "Take time to read through the material above carefully.")
+
+    # Only focused teaching counts as objective coverage. The orientation may list
+    # planned tasks, but it does not itself establish that those objectives were taught.
+    if selected_task is not None:
+        raw_covered = selected_task.get("objectiveIds") or selected_task.get("objective_ids") or parsed.get("covered_objective_ids") or []
+    else:
+        raw_covered = []
+    covered_objective_ids: list[int] = []
+    for raw_id in raw_covered:
+        try:
+            oid = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if oid in valid_objective_ids and oid not in covered_objective_ids:
+            covered_objective_ids.append(oid)
 
     stored_raw_content = raw
     if current_plan:
@@ -824,6 +853,7 @@ Return JSON (all fields required; arrays may be empty []):
         analogies=_safe_list(parsed.get("analogies")),
         worked_examples=_safe_list(parsed.get("worked_examples")),
         misconceptions=_safe_list(parsed.get("misconceptions")),
+        objective_ids=covered_objective_ids,
         summary=summary_text,
         raw_content=stored_raw_content,
         is_current=True,
@@ -1690,7 +1720,8 @@ Return JSON (all array fields required; may be empty):
   "worked_examples": [],
   "misconceptions": [],
   "summary": "Brief summary of this new explanation.",
-  "encouragement": "Short encouraging message for the student."
+  "encouragement": "Short encouraging message for the student.",
+  "covered_objective_ids": [101]
 }}
 """
     try:
@@ -1705,6 +1736,17 @@ Return JSON (all array fields required; may be empty):
     explanation   = _safe_str(parsed.get("explanation"), "Reteaching content temporarily unavailable.")
     encouragement = _safe_str(parsed.get("encouragement"), "A different perspective can make all the difference!")
 
+    valid_objective_ids = {int(lo.id) for lo in (topic.learning_objectives or [])}
+    covered_objective_ids: list[int] = []
+    raw_covered = parsed.get("covered_objective_ids") or []
+    for raw_id in raw_covered:
+        try:
+            oid = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if oid in valid_objective_ids and oid not in covered_objective_ids:
+            covered_objective_ids.append(oid)
+
     await _retire_current_teaching(session_id, db)
 
     teaching = AISessionTeaching(
@@ -1718,6 +1760,7 @@ Return JSON (all array fields required; may be empty):
         analogies=_safe_list(parsed.get("analogies")),
         worked_examples=_safe_list(parsed.get("worked_examples")),
         misconceptions=_safe_list(parsed.get("misconceptions")),
+        objective_ids=covered_objective_ids,
         summary=_safe_str(parsed.get("summary")),
         raw_content=raw,
         is_current=True,
