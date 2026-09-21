@@ -695,7 +695,7 @@ export default function AILearningRoom() {
     if (!window.confirm("End this session?\n\nYour progress so far will be saved but the session won't be marked as completed.")) return;
     try {
       await api.abandonAISession(sessionId);
-      navigate("/app/learn/ai");
+      navigate("/app/learn");
     } catch (err) {
       setError(err.message || "Failed to end session.");
     }

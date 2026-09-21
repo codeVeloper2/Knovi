@@ -47,7 +47,6 @@ import StudySessionsPage from "./pages/learn/StudySessionsPage";
 import LearningPathPage from "./pages/learn/LearningPathPage";
 
 // ── AI Learning pages ──
-import AILearnHome from "./pages/learn/AILearnHome";
 import AISubjectPage from "./pages/learn/AISubjectPage";
 import AITopicPage from "./pages/learn/AITopicPage";
 import AISessionSetup from "./pages/learn/AISessionSetup";
@@ -93,7 +92,7 @@ function AppRoutes() {
           <Route path="path"                  element={<LearningPathPage />} />
 
           {/* AI Learning — share the same Learn sidebar */}
-          <Route path="ai"                                                         element={<AILearnHome />} />
+          <Route path="ai"                                                         element={<Navigate to="/app/learn" replace />} />
           <Route path="ai/subject/:subjectId"                                      element={<AISubjectPage />} />
           <Route path="ai/subject/:subjectId/topic/:topicId"                       element={<AITopicPage />} />
           <Route path="ai/subject/:subjectId/topic/:topicId/concept/:conceptId"    element={<AIConceptPage />} />

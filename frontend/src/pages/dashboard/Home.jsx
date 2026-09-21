@@ -136,7 +136,7 @@ export default function Home() {
         <Section title="Continue Learning" subtitle="Pick up where you left off" action={<Link to="/app/learn" className="home2-link">View all →</Link>}>
           {activeSession ? <button className="home2-continue" onClick={() => navigate(`/app/learn/ai/session/${activeSession.id}`)}>
             <div className="home2-session-icon">AI</div><div className="home2-session-copy"><span className="home2-kicker">{activeSession.subjectName || "AI learning"}</span><h3>{activeSession.conceptName || "Current learning session"}</h3><p>{activeSession.topicName || "Continue your learning session"}</p><div className="home2-session-progress"><span style={{ width: activeSession.status === "created" ? "4%" : "50%" }}/></div><small>{STATUS_LABELS[activeSession.status] || "In progress"}</small></div><span className="home2-continue-arrow">→</span>
-          </button> : <div className="home2-empty"><span>◎</span><div><strong>No active learning session</strong><p>Choose a concept and start learning with AI.</p></div><Link to="/app/learn/ai">Start learning</Link></div>}
+          </button> : <div className="home2-empty"><span>◎</span><div><strong>No active learning session</strong><p>Choose a concept and start learning with AI.</p></div><Link to="/app/learn">Start learning</Link></div>}
         </Section>
 
         <Section title="Recent Activity" subtitle="Your latest learning activity" action={<Link to="/app/progress" className="home2-link">View all →</Link>}>
@@ -144,16 +144,16 @@ export default function Home() {
         </Section>
 
         <Section title="Your Learning Path" subtitle="Next up in your learning journey">
-          {learningPath.length ? <div className="home2-path">{learningPath.map((s, i) => <button key={s.id} className="home2-path-row" onClick={() => navigate(`/app/learn/ai/session/${s.id}`)}><span className={`home2-path-dot ${i === 0 ? "current" : ""}`}>{i === 0 ? "●" : "○"}</span><span><strong>{s.conceptName || "Learning concept"}</strong><small>{s.subjectName || "Subject"}{s.topicName ? ` · ${s.topicName}` : ""}</small></span><em>{i === 0 ? "In progress" : "Next"}</em></button>)}</div> : <div className="home2-empty"><span>◇</span><div><strong>Your path will build as you learn</strong><p>Start an AI learning session to create your next steps.</p></div><Link to="/app/learn/ai">Explore AI learning</Link></div>}
+          {learningPath.length ? <div className="home2-path">{learningPath.map((s, i) => <button key={s.id} className="home2-path-row" onClick={() => navigate(`/app/learn/ai/session/${s.id}`)}><span className={`home2-path-dot ${i === 0 ? "current" : ""}`}>{i === 0 ? "●" : "○"}</span><span><strong>{s.conceptName || "Learning concept"}</strong><small>{s.subjectName || "Subject"}{s.topicName ? ` · ${s.topicName}` : ""}</small></span><em>{i === 0 ? "In progress" : "Next"}</em></button>)}</div> : <div className="home2-empty"><span>◇</span><div><strong>Your path will build as you learn</strong><p>Start an AI learning session to create your next steps.</p></div><Link to="/app/learn">Explore AI learning</Link></div>}
         </Section>
       </main>
 
       <aside className="home2-side">
         <Section title="Quick Actions" subtitle="Start something useful">
           <div className="home2-actions">
-            <button onClick={() => navigate("/app/learn/ai")}><span>✦</span><div><strong>Start Learning</strong><small>Choose a concept and learn with AI</small></div><b>→</b></button>
-            <button onClick={() => navigate("/app/learn/ai")}><span>⚡</span><div><strong>Join a Challenge</strong><small>Challenge flow from your learning area</small></div><b>→</b></button>
-            <button onClick={() => navigate("/app/learn/ai")}><span>◉</span><div><strong>Open AI Study Room</strong><small>Get personalized help</small></div><b>→</b></button>
+            <button onClick={() => navigate("/app/learn")}><span>✦</span><div><strong>Start Learning</strong><small>Choose a concept and learn with AI</small></div><b>→</b></button>
+            <button onClick={() => navigate("/app/learn")}><span>⚡</span><div><strong>Join a Challenge</strong><small>Challenge flow from your learning area</small></div><b>→</b></button>
+            <button onClick={() => navigate("/app/learn")}><span>◉</span><div><strong>Open AI Study Room</strong><small>Get personalized help</small></div><b>→</b></button>
             <button onClick={() => navigate("/app/progress")}><span>◔</span><div><strong>View Progress</strong><small>Track your growth</small></div><b>→</b></button>
           </div>
         </Section>
