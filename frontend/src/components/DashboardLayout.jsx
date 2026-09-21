@@ -138,7 +138,6 @@ export default function DashboardLayout() {
       >
         <span className="dash-link-icon-wrap">
           <Icon />
-          {badge != null && <span className="dash-icon-badge">{badge > 9 ? "9+" : badge}</span>}
         </span>
         <span className="dash-link-label">{label}</span>
         {sc && (
@@ -222,7 +221,6 @@ export default function DashboardLayout() {
                     >
                       <div className="desktop-nav-icon-wrap">
                         <Icon />
-                        {badge != null && <span className="desktop-nav-badge">{badge > 9 ? "9+" : badge}</span>}
                       </div>
                       <span>{label}</span>
                     </NavLink>
