@@ -19934,3 +19934,127 @@ kbd {
   padding-left: 34px;
   padding-right: 34px;
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MOBILE LAYOUT REPAIR — single global top bar
+   ═══════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  /* Every page starts below the single MobileTopBar. */
+  .dash-main--mobile {
+    padding-top: 56px !important;
+    padding-bottom: 90px !important;
+    min-height: 100dvh;
+  }
+
+  /* Settings hub was being pulled underneath the fixed global header. */
+  .dash-main--mobile > .settings-hub {
+    padding-top: 20px !important;
+  }
+
+  /* Progress owns no header anymore; the global MobileTopBar is the only one. */
+  .progress-page {
+    padding-top: 18px !important;
+  }
+
+  /* Discover: JSX uses .disc-mobile-search / .student-card, while the older
+     mobile stylesheet targeted different class names. */
+  .disc-mobile-wrap {
+    padding-top: 14px !important;
+    padding-bottom: 24px !important;
+    background: transparent !important;
+  }
+
+  .disc-mobile-search {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 4px 16px 10px;
+    min-height: 44px;
+    padding: 0 13px;
+    background: var(--navy-input);
+    border: 1px solid var(--navy-line);
+    border-radius: 12px;
+    color: var(--text-soft);
+    box-sizing: border-box;
+  }
+  .disc-mobile-search:focus-within {
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(91,110,245,.14);
+  }
+  .disc-mobile-search svg { flex: 0 0 auto; color: var(--text-soft); }
+  .disc-mobile-search input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #fff;
+    font-size: .9rem;
+  }
+  .disc-mobile-search input::placeholder { color: var(--text-dim); }
+  .disc-mobile-search button {
+    flex: 0 0 auto;
+    border: 0;
+    background: transparent;
+    color: var(--text-soft);
+    font-size: 1.15rem;
+    cursor: pointer;
+    padding: 3px 5px;
+  }
+
+  .disc-mobile-controls {
+    padding: 4px 16px 12px !important;
+  }
+  .disc-mobile-filter-btn--full {
+    flex: 0 0 auto;
+    width: auto !important;
+    min-height: 40px;
+  }
+  .disc-mobile-result-note {
+    color: var(--text-soft);
+    font-size: .78rem;
+  }
+
+  .disc-mobile-list .student-card {
+    gap: 12px;
+    padding: 16px;
+    border-radius: 16px;
+    background: var(--navy-panel);
+    border: 1px solid var(--navy-line);
+  }
+  .disc-mobile-list .student-card-header {
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .disc-mobile-list .student-card-info {
+    min-width: 0;
+  }
+  .disc-mobile-list .student-card-name {
+    color: #fff;
+    font-size: .96rem;
+  }
+  .disc-mobile-list .student-card-meta,
+  .disc-mobile-list .student-card-bio {
+    color: var(--text-soft);
+  }
+  .disc-mobile-list .student-card-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 9px;
+  }
+  .disc-mobile-list .student-card-actions .btn {
+    min-width: 0;
+    justify-content: center;
+  }
+
+  /* Don't render the old unused discover header styles at all. */
+  .disc-mobile-header { display: none !important; }
+}
+
+@media (min-width: 821px) {
+  /* No mobile spacing leaks into desktop settings sub-pages. */
+  .dash-main--desktop > .settings-page {
+    padding-top: 0;
+  }
+}

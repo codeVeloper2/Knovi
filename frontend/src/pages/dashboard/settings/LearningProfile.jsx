@@ -178,15 +178,7 @@ export default function SettingsLearningProfile() {
   // Get unique categories from observations
   const categories = [...new Set(aiObservations.map(obs => obs.category))].filter(Boolean);
 
-  if (loading) {
-    return (
-      <div className="settings-page">
-        <SettingsMobileHeader title="Learning Profile" />
-        <h1>Learning Profile</h1>
-        <p className="settings-sub">Loading your profile...</p>
-      </div>
-    );
-  }
+  if (loading) return <LearningProfileSkeleton />;
 
   return (
     <div className="settings-page">
