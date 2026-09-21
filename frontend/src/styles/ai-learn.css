@@ -2737,3 +2737,97 @@
     padding:18px 15px calc(18px + env(safe-area-inset-bottom));
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   QUICK CHECK HISTORY — standalone results list (reteach / summary phases)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.wa-check-history-only {
+  width: min(760px, 100%);
+  margin: 10px auto 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Result row label + question preview stack */
+.wa-check-result-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.wa-check-result-label {
+  font-size: .84rem;
+  font-weight: 650;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wa-check-result-preview {
+  font-size: .72rem;
+  color: rgba(148,163,184,.65);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 400;
+}
+
+/* Colour the label text to match the row status */
+.wa-check-result-row--strong .wa-check-result-label { color: #86efac; }
+.wa-check-result-row--partial .wa-check-result-label { color: #fcd34d; }
+.wa-check-result-row--weak    .wa-check-result-label { color: #fca5a5; }
+
+/* Make the chevron arrow a bit crisper */
+.wa-check-result-review {
+  color: var(--wa-text-muted);
+  font-size: .68rem;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Thin separator between result rows */
+.wa-check-history-only .wa-check-result,
+.wa-check-history    .wa-check-result {
+  border-bottom: 1px solid rgba(255,255,255,.045);
+}
+.wa-check-history-only .wa-check-result:last-child,
+.wa-check-history      .wa-check-result:last-child {
+  border-bottom: none;
+}
+
+/* Smooth slide-in for review details */
+.wa-check-review {
+  animation: wa-review-slide .18s ease-out;
+}
+@keyframes wa-review-slide {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Active question card — stronger glow to distinguish from history */
+.wa-check-card {
+  box-shadow: 0 0 0 1px rgba(59,130,246,.30), 0 14px 36px rgba(0,0,0,.24);
+}
+
+/* Submitted card — muted glow so it reads as "done" */
+.wa-check-card--submitted {
+  border-color: rgba(255,255,255,.08);
+  box-shadow: none;
+  opacity: .82;
+}
+
+@media (max-width: 560px) {
+  .wa-check-history-only {
+    width: 100%;
+    margin: 8px auto 14px;
+  }
+  .wa-check-result-preview {
+    font-size: .68rem;
+  }
+}

@@ -878,17 +878,27 @@ function QuickCheckHistory({ questions = [], results = {} }) {
   if (!answered.length) return null;
   return (
     <section className="wa-check-history-only" aria-label="Quick check results">
-      <div className="wa-check-heading"><div className="wa-check-rule" /><span>QUICK CHECK · RESULTS</span><div className="wa-check-rule" /></div>
+      <div className="wa-check-heading">
+        <div className="wa-check-rule" /><span>QUICK CHECK · RESULTS</span><div className="wa-check-rule" />
+      </div>
       {answered.map(({ q, index, result }) => {
-        const status = statusForResult(result); const expanded = expandedId === q.id;
-        return <div className="wa-check-result" key={`history-${q.id}`}>
-          <button type="button" className={`wa-check-result-row wa-check-result-row--${status.key}`} onClick={() => setExpandedId(expanded ? null : q.id)} aria-expanded={expanded}>
-            <span className="wa-check-result-icon">{status.icon}</span><span className="wa-check-result-main">Q{index + 1} · {status.label}</span>
-            {result.score != null && <span className="wa-check-result-score">{result.score}/100</span>}
-            <span className="wa-check-result-review">{expanded ? "Review ↑" : "Review ↓"}</span>
-          </button>
-          {expanded && <ReviewDetails question={q} result={result} />}
-        </div>;
+        const status = statusForResult(result);
+        const expanded = expandedId === q.id;
+        return (
+          <div className="wa-check-result" key={`history-${q.id}`}>
+            <button type="button" className={`wa-check-result-row wa-check-result-row--${status.key}`}
+              onClick={() => setExpandedId(expanded ? null : q.id)} aria-expanded={expanded}>
+              <span className="wa-check-result-icon">{status.icon}</span>
+              <span className="wa-check-result-main">
+                <span className="wa-check-result-label">Q{index + 1} · {status.label}</span>
+                {!expanded && <span className="wa-check-result-preview">{q.question}</span>}
+              </span>
+              {result.score != null && <span className="wa-check-result-score">{result.score}/100</span>}
+              <span className="wa-check-result-review">{expanded ? <ChevronUpIcon /> : <ChevronDownIcon />}</span>
+            </button>
+            {expanded && <ReviewDetails question={q} result={result} />}
+          </div>
+        );
       })}
     </section>
   );
@@ -911,15 +921,23 @@ function RetrievalPanel({
       <div className="wa-check-heading"><div className="wa-check-rule" /><span>QUICK CHECK · {totalQuestions} QUESTIONS</span><div className="wa-check-rule" /></div>
       <div className="wa-check-history">
         {answered.map(({ q, index, result }) => {
-          const status = statusForResult(result); const expanded = expandedId === q.id;
-          return <div className="wa-check-result" key={`result-${q.id}`}>
-            <button type="button" className={`wa-check-result-row wa-check-result-row--${status.key}`} onClick={() => setExpandedId(expanded ? null : q.id)} aria-expanded={expanded}>
-              <span className="wa-check-result-icon">{status.icon}</span><span className="wa-check-result-main">Q{index + 1} · {status.label}</span>
-              {result.score != null && <span className="wa-check-result-score">{result.score}/100</span>}
-              <span className="wa-check-result-review">{expanded ? "Review ↑" : "Review ↓"}</span>
-            </button>
-            {expanded && <ReviewDetails question={q} result={result} />}
-          </div>;
+          const status = statusForResult(result);
+          const expanded = expandedId === q.id;
+          return (
+            <div className="wa-check-result" key={`result-${q.id}`}>
+              <button type="button" className={`wa-check-result-row wa-check-result-row--${status.key}`}
+                onClick={() => setExpandedId(expanded ? null : q.id)} aria-expanded={expanded}>
+                <span className="wa-check-result-icon">{status.icon}</span>
+                <span className="wa-check-result-main">
+                  <span className="wa-check-result-label">Q{index + 1} · {status.label}</span>
+                  {!expanded && <span className="wa-check-result-preview">{q.question}</span>}
+                </span>
+                {result.score != null && <span className="wa-check-result-score">{result.score}/100</span>}
+                <span className="wa-check-result-review">{expanded ? <ChevronUpIcon /> : <ChevronDownIcon />}</span>
+              </button>
+              {expanded && <ReviewDetails question={q} result={result} />}
+            </div>
+          );
         })}
       </div>
       <div className="wa-check-card">
@@ -1208,6 +1226,22 @@ function SendIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
       <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+    </svg>
+  );
+}
+
+function ChevronDownIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
+function ChevronUpIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="18 15 12 9 6 15" />
     </svg>
   );
 }
