@@ -169,11 +169,23 @@ export default function DiscoverPage() {
           </div>
         </div>
 
+        <div className="disc-mobile-search">
+          <SearchIcon />
+          <input
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search peers..."
+            aria-label="Search peers"
+          />
+          {searchQuery && <button type="button" onClick={() => setSearchQuery("")} aria-label="Clear search">×</button>}
+        </div>
+
         <div className="disc-mobile-controls">
           <button className="disc-mobile-filter-btn disc-mobile-filter-btn--full" onClick={() => setShowFilters(true)}>
             <FilterIcon />
-            <span>Filter</span>
+            <span>Filters</span>
           </button>
+          <span className="disc-mobile-result-note">{loading ? "Finding peers…" : `${filteredStudents.length} available`}</span>
         </div>
 
         {sort !== "recommended" && (
@@ -199,12 +211,6 @@ export default function DiscoverPage() {
             </button>
           ))}
         </div>
-
-        {!loading && (
-          <div className="disc-mobile-count">
-            {filteredStudents.length} peer{filteredStudents.length !== 1 ? "s" : ""} found
-          </div>
-        )}
 
         <div className="disc-mobile-list">
           {loading ? (

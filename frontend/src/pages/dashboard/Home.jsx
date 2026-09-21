@@ -1,754 +1,168 @@
-import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import * as api from "../../api";
-import { ChevronRight } from "../../components/DashIcons";
 import NotificationsBell from "../../components/NotificationsPanel";
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
+const STATUS_LABELS = {
+  created: "Ready to start",
+  teaching: "In progress",
+  studying: "In progress",
+  retrieval: "In progress",
+  reteaching: "Reviewing",
+  practice: "Practicing",
+};
 
 function greeting() {
   const h = new Date().getHours();
-  if (h < 12) return "Good Morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
+  return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
 }
 
-function useIsMobile() {
-  const [mobile, setMobile] = useState(() => window.innerWidth <= 768);
-  useEffect(() => {
-    const handler = () => setMobile(window.innerWidth <= 768);
-    window.addEventListener("resize", handler);
-    return () => window.removeEventListener("resize", handler);
-  }, []);
-  return mobile;
+function initials(name) {
+  return (name || "P").trim().split(/\s+/).slice(0, 2).map(x => x[0]).join("").toUpperCase();
 }
 
-function levelLabel(xp) {
-  if (xp >= 1000) return "Master";
-  if (xp >= 600) return "Expert";
-  if (xp >= 300) return "Scholar";
-  if (xp >= 100) return "Explorer";
-  return "Beginner";
+function formatAgo(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const diff = Math.max(0, Date.now() - d.getTime());
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return days < 7 ? `${days}d ago` : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function nextLevelXp(xp) {
-  if (xp >= 1000) return null;
-  if (xp >= 600) return 1000;
-  if (xp >= 300) return 600;
-  if (xp >= 100) return 300;
-  return 100;
+function pctFromLearning(learning) {
+  const active = learning?.inProgress || [];
+  const completed = learning?.completed || [];
+  const total = active.length + completed.length;
+  if (!total) return null;
+  const weighted = [...active, ...completed].reduce((sum, c) => sum + (Number(c.progressPct ?? c.progress ?? 0) || 0), 0);
+  return Math.round(weighted / total);
 }
 
-function levelNumber(xp) {
-  if (xp >= 1000) return 6;
-  if (xp >= 600) return 5;
-  if (xp >= 300) return 4;
-  if (xp >= 100) return 3;
-  if (xp >= 50) return 2;
-  return 1;
+function Skeleton({ className = "" }) { return <div className={`home2-skeleton ${className}`} />; }
+
+function DashboardSkeleton() {
+  return <div className="home2 page-loading" aria-busy="true">
+    <div className="home2-top"><Skeleton className="sk-search" /><Skeleton className="sk-avatar" /></div>
+    <div className="home2-hero"><div><Skeleton className="sk-title" /><Skeleton className="sk-line" /></div><Skeleton className="sk-visual" /></div>
+    <div className="home2-stats">{[1,2,3,4].map(i => <div className="home2-card sk-stat" key={i}><Skeleton className="sk-icon"/><Skeleton className="sk-copy"/></div>)}</div>
+    <div className="home2-grid"><div>{[1,2,3].map(i => <div className="home2-card sk-block" key={i}><Skeleton className="sk-heading"/><Skeleton className="sk-row"/><Skeleton className="sk-row"/></div>)}</div><div>{[1,2].map(i => <div className="home2-card sk-block" key={i}><Skeleton className="sk-heading"/><Skeleton className="sk-row"/><Skeleton className="sk-row"/></div>)}</div></div>
+  </div>;
 }
 
-function avatarColor(str) {
-  const colors = ["#f59e0b", "#34d399", "#a78bfa", "#60a5fa", "#f472b6", "#fb923c"];
-  let h = 0;
-  for (let i = 0; i < (str || "").length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
-  return colors[h % colors.length];
+function Stat({ icon, label, value, detail, tone }) {
+  return <div className={`home2-card home2-stat home2-stat--${tone}`}><div className="home2-stat-icon">{icon}</div><div><span>{label}</span><strong>{value}</strong><small>{detail}</small></div></div>;
 }
 
-function Avatar({ name, photo, size = 36 }) {
-  const initials = (name || "?")[0].toUpperCase();
-  if (photo) {
-    return (
-      <img
-        src={photo} alt={name} referrerPolicy="no-referrer"
-        style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
-      />
-    );
-  }
-  return (
-    <span style={{
-      width: size, height: size, borderRadius: "50%",
-      background: avatarColor(name), display: "flex",
-      alignItems: "center", justifyContent: "center",
-      fontWeight: 700, fontSize: size * 0.4, color: "#fff", flexShrink: 0,
-    }}>{initials}</span>
-  );
+function Section({ title, subtitle, action, children, className = "" }) {
+  return <section className={`home2-card home2-section ${className}`}><div className="home2-section-head"><div><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div>{action}</div>{children}</section>;
 }
 
-function ProgressBar({ pct, className = "mdash-progress-bar" }) {
-  return (
-    <div className={className}>
-      <div className="mdash-progress-fill" style={{ width: `${Math.min(100, pct || 0)}%` }} />
-    </div>
-  );
+function Avatar({ name, photo, size = 40 }) {
+  return photo ? <img className="home2-avatar" style={{ width:size, height:size }} src={photo} alt="" referrerPolicy="no-referrer" /> : <span className="home2-avatar home2-avatar-fallback" style={{ width:size, height:size }}>{initials(name)}</span>;
 }
-
-
-// ── Dashboard loading skeleton ───────────────────────────────────────────────
-// Mirrors the real dashboard structure so loading never causes a layout jump.
-function DashboardSkeleton({ mobile = false }) {
-  if (mobile) {
-    return (
-      <div className="mdash-wrap mdash-skeleton-page" aria-label="Loading dashboard" aria-busy="true">
-        <div className="mdash-header">
-          <div className="mdash-skeleton mdash-sk-menu" />
-          <div className="mdash-skeleton mdash-sk-logo" />
-          <div className="mdash-sk-header-right">
-            <div className="mdash-skeleton mdash-sk-bell" />
-            <div className="mdash-skeleton mdash-sk-avatar" />
-          </div>
-        </div>
-
-        <div className="mdash-greeting">
-          <div className="mdash-skeleton mdash-sk-title" />
-          <div className="mdash-skeleton mdash-sk-subtitle" />
-        </div>
-
-        <div className="mdash-skeleton mdash-sk-profile" />
-
-        <div className="mdash-sk-actions">
-          {[1, 2, 3, 4].map(i => <div className="mdash-skeleton mdash-sk-action" key={i} />)}
-        </div>
-
-        {["Continue Learning", "Recommended for You", "Your Matches"].map((title, section) => (
-          <section className="mdash-section" key={title}>
-            <div className="mdash-section-head">
-              <div className="mdash-skeleton mdash-sk-section-title" />
-              <div className="mdash-skeleton mdash-sk-see-all" />
-            </div>
-            <div className="mdash-skeleton-list">
-              {[1, 2, 3].map(i => (
-                <div className="mdash-skeleton mdash-sk-list-card" key={`${section}-${i}`} />
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <div className="home home-skeleton-page" aria-label="Loading dashboard" aria-busy="true">
-      <div className="home-skeleton-hero">
-        <div>
-          <div className="skeleton sk-hero-title" />
-          <div className="skeleton sk-hero-subtitle" />
-        </div>
-        <div className="skeleton sk-hero-orb" />
-      </div>
-
-      <div className="stat-cards">
-        {[1, 2, 3].map(i => (
-          <div className="stat-card dashboard-skeleton-card" key={i}>
-            <div className="skeleton sk-stat-icon" />
-            <div className="sk-stat-copy">
-              <div className="skeleton sk-stat-title" />
-              <div className="skeleton sk-stat-subtitle" />
-            </div>
-            <div className="skeleton sk-stat-arrow" />
-          </div>
-        ))}
-      </div>
-
-      <div className="dashboard-skeleton-grid">
-        {[1, 2, 3, 4].map(i => (
-          <section className="home-block dashboard-skeleton-block" key={i}>
-            <div className="home-block-head">
-              <div className="skeleton sk-block-title" />
-              <div className="skeleton sk-block-link" />
-            </div>
-            <div className="skeleton sk-content-row" />
-            <div className="skeleton sk-content-row" />
-            <div className="skeleton sk-content-row short" />
-          </section>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ── Mobile Home ──────────────────────────────────────────────────────────────
-
-function MobileHome({ profile, user, learning, learnHome, loading, navigate, onOpenMenu }) {
-  const name = profile?.displayName || user?.displayName || "";
-  const firstName = name.split(" ")[0] || "there";
-  const photo = profile?.photoURL || user?.photoURL || "";
-  const xp = profile?.xp || 0;
-  const level = profile?.level?.name || levelLabel(xp);
-  const lvNum = levelNumber(xp);
-  const nextXp = nextLevelXp(xp);
-  const xpPct = nextXp ? Math.min(100, Math.round((xp / nextXp) * 100)) : 100;
-  const rating = profile?.rating ? profile.rating.toFixed(1) : "—";
-  const sessionCount = profile?.sessionCount || 0;
-  const streak = profile?.streak || 0;
-
-  const inProgress = learning?.inProgress || [];
-  const history = learning?.history || [];
-  const recommended = learnHome?.recommended || learnHome?.popularCourses || [];
-  const continueWatching = learnHome?.continueWatching || [];
-  const continueLearning = continueWatching.length > 0 ? continueWatching : inProgress;
-
-  return (
-    <div className="mdash-wrap">
-
-      {/* ── Header ── */}
-      <div className="mdash-header">
-        <div className="mdash-header-left">
-          <button className="mdash-menu-btn" aria-label="Open menu" onClick={onOpenMenu}>
-            <HamburgerSvg />
-          </button>
-          <span className="mdash-logo-text">Peer<span className="mdash-logo-accent">Up</span></span>
-        </div>
-        <div className="mdash-header-right">
-          <NotificationsBell className="mdash-bell-btn notif-bell-btn" />
-          <button className="mdash-avatar-btn" onClick={() => navigate("/app/settings")} aria-label="Profile">
-            <Avatar name={name} photo={photo} size={36} />
-          </button>
-        </div>
-      </div>
-
-      {/* ── Greeting ── */}
-      <div className="mdash-greeting">
-        <h1 className="mdash-greeting-title">
-          {greeting()}, <span className="mdash-greeting-name">{firstName}!</span> 👋
-        </h1>
-        <p className="mdash-greeting-sub">Rise, shine and Keep going — your goals are within reach.</p>
-      </div>
-
-      {/* ── Profile / Level card ── */}
-      <div className="mdash-profile-card">
-        <div className="mdash-profile-left">
-          <Avatar name={name} photo={photo} size={60} />
-          <div className="mdash-profile-meta">
-            <div className="mdash-profile-level-row">
-              <span className="mdash-profile-level-ic">⚙</span>
-              <span className="mdash-profile-level">Level {lvNum}</span>
-            </div>
-            <span className="mdash-profile-label">{level}</span>
-            <ProgressBar pct={xpPct} />
-            <span className="mdash-profile-xp-text">
-              {xp} / {nextXp ?? xp} XP <span className="mdash-profile-xp-pct">{xpPct}%</span>
-            </span>
-          </div>
-        </div>
-        <div className="mdash-profile-stats">
-          <div className="mdash-profile-stat">
-            <span className="mdash-profile-stat-ic">🔥</span>
-            <span className="mdash-profile-stat-val">{streak}</span>
-            <span className="mdash-profile-stat-lbl">Day streak</span>
-          </div>
-          <div className="mdash-profile-stat">
-            <span className="mdash-profile-stat-ic">📚</span>
-            <span className="mdash-profile-stat-val">{sessionCount || "—"}</span>
-            <span className="mdash-profile-stat-lbl">Sessions</span>
-          </div>
-          <div className="mdash-profile-stat">
-            <span className="mdash-profile-stat-ic">⭐</span>
-            <span className="mdash-profile-stat-val">{rating}</span>
-            <span className="mdash-profile-stat-lbl">Avg. rating</span>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Quick Actions ── */}
-      <div className="mdash-quick-actions">
-        <button className="mdash-qa-btn" onClick={() => navigate("/app/discover")}>
-          <span className="mdash-qa-icon mdash-qa-icon--blue"><DiscoverSvg /></span>
-          <span>Find Peers</span>
-        </button>
-        <button className="mdash-qa-btn" onClick={() => navigate("/app/learn")}>
-          <span className="mdash-qa-icon mdash-qa-icon--purple"><LearnSvg /></span>
-          <span>Browse Courses</span>
-        </button>
-        <button className="mdash-qa-btn" onClick={() => navigate("/app/learn")}>
-          <span className="mdash-qa-icon mdash-qa-icon--red"><TutorialSvg /></span>
-          <span>Watch Tutorials</span>
-        </button>
-        <button className="mdash-qa-btn" onClick={() => navigate("/app/learn")}>
-          <span className="mdash-qa-icon mdash-qa-icon--teal"><UploadSvg /></span>
-          <span>Upload Tutorial</span>
-        </button>
-      </div>
-
-      {/* ── Continue Learning ── */}
-      <section className="mdash-section">
-        <div className="mdash-section-head">
-          <h2 className="mdash-section-title">Continue Learning</h2>
-          <Link to="/app/learn" className="mdash-see-all">See all →</Link>
-        </div>
-        {loading ? (
-          <div className="mdash-shimmer-list">
-            <div className="mdash-shimmer-card" /><div className="mdash-shimmer-card" />
-          </div>
-        ) : continueLearning.length === 0 ? (
-          <div className="mdash-empty">
-            <p>No courses in progress yet.</p>
-            <button className="mdash-empty-btn" onClick={() => navigate("/app/learn")}>Browse courses</button>
-          </div>
-        ) : (
-          <div className="mdash-learn-list">
-            {continueLearning.slice(0, 3).map((item, i) => {
-              const pct = Math.round(item.percentage ?? item.progressPct ?? 0);
-              return (
-                <button key={item.id ?? i} className="mdash-learn-card"
-                  onClick={() => navigate(item.type === "tutorial"
-                    ? `/app/learn/tutorials/${item.id}`
-                    : `/app/learn/courses/${item.courseId ?? item.id}`)}>
-                  <div className="mdash-learn-thumb">
-                    {item.thumbnailUrl
-                      ? <img src={item.thumbnailUrl} alt={item.title} />
-                      : <span className="mdash-learn-thumb-fallback">📘</span>}
-                    {item.duration && <span className="mdash-learn-duration">{item.duration}</span>}
-                  </div>
-                  <div className="mdash-learn-info">
-                    <strong className="mdash-learn-title">{item.title}</strong>
-                    {item.subject && (
-                      <span className="mdash-learn-subject-row">
-                        <span className="mdash-learn-subject-dot" />
-                        <span className="mdash-learn-subject">{item.subject}</span>
-                      </span>
-                    )}
-                    {item.rating != null && (
-                      <span className="mdash-learn-rating">⭐ {item.rating} {item.ratingCount != null && `(${item.ratingCount})`}</span>
-                    )}
-                    <div className="mdash-learn-bar-row">
-                      <ProgressBar pct={pct} />
-                      <span className="mdash-learn-pct">{pct}%</span>
-                    </div>
-                  </div>
-                  <ChevronRight width={16} height={16} className="mdash-learn-arrow" />
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      {/* ── Recommended for You ── */}
-      {(loading || recommended.length > 0) && (
-        <section className="mdash-section">
-          <div className="mdash-section-head">
-            <h2 className="mdash-section-title">Recommended for You</h2>
-            <Link to="/app/learn" className="mdash-see-all">See all →</Link>
-          </div>
-          {loading ? (
-            <div className="mdash-shimmer-list">
-              <div className="mdash-shimmer-card" /><div className="mdash-shimmer-card" />
-            </div>
-          ) : (
-            <div className="mdash-learn-list">
-              {recommended.slice(0, 3).map((course, i) => (
-                <button key={course.id ?? i} className="mdash-learn-card"
-                  onClick={() => navigate(`/app/learn/courses/${course.id}`)}>
-                  <div className="mdash-learn-thumb">
-                    {course.thumbnailUrl
-                      ? <img src={course.thumbnailUrl} alt={course.title} />
-                      : <span className="mdash-learn-thumb-fallback">🎓</span>}
-                  </div>
-                  <div className="mdash-learn-info">
-                    <strong className="mdash-learn-title">{course.title}</strong>
-                    {course.subject && (
-                      <span className="mdash-learn-subject-row">
-                        <span className="mdash-learn-subject-dot" />
-                        <span className="mdash-learn-subject">{course.subject}</span>
-                      </span>
-                    )}
-                    {course.trending && <span className="mdash-learn-badge mdash-learn-badge--trend">Trending</span>}
-                    {course.isNew && <span className="mdash-learn-badge mdash-learn-badge--new">New</span>}
-                  </div>
-                  <ChevronRight width={16} height={16} className="mdash-learn-arrow" />
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* ── Learning Journey Banner ── */}
-      <div className="mdash-journey-banner" onClick={() => navigate("/app/progress")}>
-        <div className="mdash-journey-text">
-          <strong>Continue your learning journey</strong>
-          <span>Learn with AI, practise concepts, and grow with every session.</span>
-          <button className="mdash-journey-btn"
-            onClick={(e) => { e.stopPropagation(); navigate("/app/learn"); }}>
-            Explore Now →
-          </button>
-        </div>
-        <div className="mdash-journey-pills">
-          <span>Learn</span>
-          <span>Practice</span>
-          <span>Discuss</span>
-          <span>Grow</span>
-        </div>
-      </div>
-
-      {/* ── Recent Activity ── */}
-      {(loading || history.length > 0) && (
-        <section className="mdash-section">
-          <div className="mdash-section-head">
-            <h2 className="mdash-section-title">Recent Activity</h2>
-            <Link to="/app/progress" className="mdash-see-all">See all →</Link>
-          </div>
-          {loading ? (
-            <div className="mdash-shimmer-list">
-              <div className="mdash-shimmer-row" /><div className="mdash-shimmer-row" /><div className="mdash-shimmer-row" />
-            </div>
-          ) : (
-            <div className="mdash-activity-list">
-              {history.slice(0, 4).map((item, i) => {
-                const type = item.type === "tutorial" ? "play"
-                  : item.type === "message" ? "msg"
-                  : item.type === "room" ? "room"
-                  : "star";
-                return (
-                  <div key={item.id ?? i} className="mdash-activity-item">
-                    <span className={`mdash-act-ic mdash-act-ic--${type}`}>
-                      {type === "play" ? <PlaySvg />
-                        : type === "msg" ? <ChatSvg />
-                        : type === "room" ? <RoomSvg />
-                        : <StarSvg />}
-                    </span>
-                    <div className="mdash-activity-info">
-                      <strong>{item.activityText || `You studied ${item.title}`}</strong>
-                      {item.timeAgo && <span className="mdash-activity-time">{item.timeAgo}</span>}
-                    </div>
-                    <ChevronRight width={14} height={14} className="mdash-activity-arrow" />
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* ── Become a Creator CTA ── */}
-      <div className="mdash-creator-cta" onClick={() => navigate("/app/learn")}>
-        <div className="mdash-creator-icon">⚡</div>
-        <div className="mdash-creator-text">
-          <strong>Become a Creator</strong>
-          <span>Share your knowledge. Help other students. Earn XP.</span>
-        </div>
-        <button className="mdash-creator-btn"
-          onClick={(e) => { e.stopPropagation(); navigate("/app/learn"); }}>
-          Upload Tutorial →
-        </button>
-      </div>
-
-      <div style={{ height: 32 }} />
-    </div>
-  );
-}
-
-// ── Desktop Home ─────────────────────────────────────────────────────────────
-
-function DesktopHome({ profile, user, learning, learnHome, loading }) {
-  const navigate = useNavigate();
-  const name = profile?.displayName || user?.displayName || "there";
-  const firstName = name.split(" ")[0];
-  const xp = profile?.xp || 0;
-  const level = profile?.level?.name || levelLabel(xp);
-  const lvNum = levelNumber(xp);
-  const nextXp = nextLevelXp(xp);
-  const xpPct = nextXp ? Math.min(100, Math.round((xp / nextXp) * 100)) : 100;
-  const rating = profile?.rating ? profile.rating.toFixed(1) : "—";
-  const sessionCount = profile?.sessionCount || 0;
-  const streak = profile?.streak || 0;
-
-  const inProgress = learning?.inProgress || [];
-  const history = learning?.history || [];
-  const recommended = learnHome?.recommended || learnHome?.popularCourses || [];
-  const continueWatching = learnHome?.continueWatching || [];
-  const continueLearning = continueWatching.length > 0 ? continueWatching : inProgress;
-
-  return (
-    <div className="home">
-
-      {/* Greeting */}
-      <div className="home-head">
-        <h1>{greeting()}, {firstName}! 👋</h1>
-        <p>Rise, Shine and Keep going — your goals are within reach.</p>
-      </div>
-
-      {/* Stat cards */}
-      <div className="home-quick-actions">
-        <button type="button" onClick={() => navigate("/app/learn")}><span>📚</span> Continue learning</button>
-        <button type="button" onClick={() => navigate("/app/discover")}><span>🤝</span> Find a peer</button>
-        <button type="button" onClick={() => navigate("/app/learn")}><span>▶</span> Watch tutorials</button>
-        <button type="button" onClick={() => navigate("/app/progress")}><span>📈</span> View progress</button>
-      </div>
-
-      <div className="stat-cards">
-        <div className="stat-card stat-card--teal">
-          <div className="stat-ic">🎯</div>
-          <div className="stat-info">
-            <strong>Level {lvNum} — {level}</strong>
-            <span>{xp} / {nextXp ?? xp} XP ({xpPct}%)</span>
-          </div>
-          <ChevronRight width={16} height={16} className="stat-arrow" />
-        </div>
-        <div className="stat-card stat-card--gold">
-          <div className="stat-ic">🔥</div>
-          <div className="stat-info">
-            <strong>{streak} Day Streak</strong>
-            <span>{sessionCount} session{sessionCount !== 1 ? "s" : ""} · {rating} avg rating</span>
-          </div>
-          <ChevronRight width={16} height={16} className="stat-arrow" />
-        </div>
-        <div className="stat-card stat-card--blue">
-          <div className="stat-ic">⚡</div>
-          <div className="stat-info">
-            <strong>{sessionCount} Session{sessionCount !== 1 ? "s" : ""}</strong>
-            <span>Study sessions completed</span>
-          </div>
-          <ChevronRight width={16} height={16} className="stat-arrow" />
-        </div>
-      </div>
-
-      <div className="home-grid">
-        <section className="home-block">
-          <div className="home-block-head">
-            <h2>Continue Learning</h2>
-            <Link to="/app/learn" className="link-btn">View all</Link>
-          </div>
-          {loading ? (
-            <div className="learn-empty">Loading…</div>
-          ) : continueLearning.length === 0 ? (
-            <>
-              <div className="learn-card">
-                <div className="learn-icon">📘</div>
-                <div className="learn-info">
-                  <strong>Get started</strong>
-                  <span>Browse courses and track your progress here</span>
-                </div>
-              </div>
-              <div className="learn-empty">Your courses will appear here once you start learning.</div>
-            </>
-          ) : (
-            continueLearning.slice(0, 3).map((item, i) => {
-              const pct = Math.round(item.percentage ?? item.progressPct ?? 0);
-              return (
-                <button key={item.id ?? i} className="learn-card"
-                  style={{ textAlign: "left", cursor: "pointer", border: "none", background: "none", width: "100%", padding: 0 }}
-                  onClick={() => navigate(item.type === "tutorial"
-                    ? `/app/learn/tutorials/${item.id}`
-                    : `/app/learn/courses/${item.courseId ?? item.id}`)}>
-                  <div className="learn-icon">
-                    {item.thumbnailUrl
-                      ? <img src={item.thumbnailUrl} alt={item.title}
-                          style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 8 }} />
-                      : "📘"}
-                  </div>
-                  <div className="learn-info">
-                    <strong>{item.title}</strong>
-                    <span>{item.subject}{item.subject && " · "}{pct}% complete</span>
-                  </div>
-                </button>
-              );
-            })
-          )}
-        </section>
-
-        {/* ── Recommended for You ── */}
-        {(loading || recommended.length > 0) && (
-          <section className="home-block">
-            <div className="home-block-head">
-              <h2>Recommended for You</h2>
-              <Link to="/app/learn" className="link-btn">View all</Link>
-            </div>
-            {loading ? (
-              <div className="learn-empty">Loading…</div>
-            ) : (
-              recommended.slice(0, 3).map((course, i) => (
-                <button key={course.id ?? i} className="learn-card"
-                  style={{ textAlign: "left", cursor: "pointer", border: "none", background: "none", width: "100%", padding: 0 }}
-                  onClick={() => navigate(`/app/learn/courses/${course.id}`)}>
-                  <div className="learn-icon">
-                    {course.thumbnailUrl
-                      ? <img src={course.thumbnailUrl} alt={course.title}
-                          style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: 8 }} />
-                      : "🎓"}
-                  </div>
-                  <div className="learn-info">
-                    <strong>{course.title}</strong>
-                    <span>
-                      {course.subject}
-                      {course.trending ? " · 🔥 Trending" : ""}
-                      {course.isNew ? " · ✨ New" : ""}
-                    </span>
-                  </div>
-                </button>
-              ))
-            )}
-          </section>
-        )}
-
-        {/* ── Recent Activity ── */}
-        {(loading || history.length > 0) && (
-          <section className="home-block">
-            <div className="home-block-head">
-              <h2>Recent Activity</h2>
-              <Link to="/app/progress" className="link-btn">View all</Link>
-            </div>
-            {loading ? (
-              <div className="learn-empty">Loading…</div>
-            ) : (
-              <ul className="match-list">
-                {history.slice(0, 4).map((item, i) => (
-                  <li key={item.id ?? i} className="match-row">
-                    <span className="match-av" style={{ background: "#1e3a5f", fontSize: "1.1rem" }}>
-                      {item.type === "tutorial" ? "🎬" : "📖"}
-                    </span>
-                    <div className="match-info">
-                      <strong>{item.activityText || item.title}</strong>
-                      <span>
-                        {item.subject}
-                        {item.timeAgo ? ` · ${item.timeAgo}` : ""}
-                      </span>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        )}
-
-      </div>
-    </div>
-  );
-}
-
-// ── Main export ──────────────────────────────────────────────────────────────
 
 export default function Home() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
-  const isMobile = useIsMobile();
-
-  const [learning, setLearning] = useState(null);
-  const [learnHome, setLearnHome] = useState(null);
-  const [dataLoading, setDataLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState({ learning: null, progress: null, ai: null, sessions: [] });
 
   useEffect(() => {
-    let active = true;
-    async function load() {
-      const [learningRes, homeRes] = await Promise.allSettled([
-        api.getMyLearning(),
-        api.getLearnHome(),
-      ]);
-      if (!active) return;
-      if (learningRes.status === "fulfilled") setLearning(learningRes.value);
-      if (homeRes.status     === "fulfilled") setLearnHome(homeRes.value);
-      setDataLoading(false);
-    }
-    load();
-    return () => { active = false; };
+    let alive = true;
+    Promise.allSettled([
+      api.getMyLearning(),
+      api.getProgress(),
+      api.getLearningProfile(),
+      api.getAISessions({ limit: 12 }),
+    ]).then(results => {
+      if (!alive) return;
+      const [learning, progress, ai, sessions] = results;
+      setData({
+        learning: learning.status === "fulfilled" ? learning.value : null,
+        progress: progress.status === "fulfilled" ? progress.value : null,
+        ai: ai.status === "fulfilled" ? ai.value : null,
+        sessions: sessions.status === "fulfilled" ? sessions.value : [],
+      });
+      setLoading(false);
+    });
+    return () => { alive = false; };
   }, []);
 
-  const sharedProps = {
-    profile, user,
-    learning,
-    learnHome,
-    loading: dataLoading,
-  };
+  if (loading) return <DashboardSkeleton />;
 
-  if (dataLoading) {
-    return <DashboardSkeleton mobile={isMobile} />;
-  }
+  const name = profile?.displayName || user?.displayName || "there";
+  const firstName = name.split(/\s+/)[0] || "there";
+  const photo = profile?.photoURL || user?.photoURL || "";
+  const progress = data.progress || {};
+  const learning = data.learning || {};
+  const ai = data.ai || {};
+  const activeSessions = (data.sessions || []).filter(s => !["completed", "abandoned"].includes(s.status));
+  const activeSession = activeSessions[0];
+  const recentActivity = (learning.history || []).slice(0, 5);
+  const learningPath = activeSessions.slice(0, 4);
+  const overall = pctFromLearning(learning);
+  const observations = (ai.aiObservations || []).slice().sort((a,b) => Number(b.confidence || 0) - Number(a.confidence || 0)).slice(0, 3);
 
-  if (isMobile) {
-    return (
-      <MobileHome
-        {...sharedProps}
-        navigate={navigate}
-        onOpenMenu={() => window.dispatchEvent(new CustomEvent("peerup:open-nav"))}
-      />
-    );
-  }
+  return <div className="home2">
+    <header className="home2-topbar">
+      <div className="home2-search"><span>⌕</span><input placeholder="Search subjects, topics, or ask AI..." aria-label="Search" onKeyDown={e => { if (e.key === "Enter" && e.currentTarget.value.trim()) navigate(`/app/learn?search=${encodeURIComponent(e.currentTarget.value.trim())}`); }} /></div>
+      <div className="home2-top-actions"><NotificationsBell className="home2-bell notif-bell-btn" /><button className="home2-profile-btn" onClick={() => navigate("/app/settings")}><Avatar name={name} photo={photo} size={38}/><span>{name}</span></button></div>
+    </header>
 
-  return <DesktopHome {...sharedProps} />;
-}
+    <section className="home2-hero">
+      <div><span className="home2-eyebrow">PEERUP LEARNING SPACE</span><h1>{greeting()}, <b>{firstName}</b> 👋</h1><p>Keep learning, keep growing. Pick up where you left off or explore your next concept.</p></div>
+      <div className="home2-hero-art" aria-hidden="true"><span>AI</span><i/><i/><i/></div>
+    </section>
 
-// ── SVG Icons ────────────────────────────────────────────────────────────────
+    <div className="home2-stats">
+      <Stat icon="🔥" label="Learning streak" value={`${progress.dayStreak ?? 0} days`} detail={progress.dayStreak ? "Keep it going" : "Start a learning activity"} tone="orange" />
+      <Stat icon="◈" label="Concepts mastered" value="--" detail="Not available yet" tone="blue" />
+      <Stat icon="🏆" label="Challenges won" value="--" detail="Not available yet" tone="green" />
+      <Stat icon="◔" label="Overall progress" value={overall == null ? "--" : `${overall}%`} detail={overall == null ? "Start learning to track progress" : "Across your active courses"} tone="purple" />
+    </div>
 
-function HamburgerSvg() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="3" y1="6" x2="21" y2="6" />
-      <line x1="3" y1="12" x2="21" y2="12" />
-      <line x1="3" y1="18" x2="21" y2="18" />
-    </svg>
-  );
-}
-function BellSvg() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-    </svg>
-  );
-}
-function DiscoverSvg() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  );
-}
-function ChatSvg() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    </svg>
-  );
-}
-function RoomSvg() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  );
-}
-function LearnSvg() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-      <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-    </svg>
-  );
-}
-function TutorialSvg() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-function UploadSvg() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="16 16 12 12 8 16" />
-      <line x1="12" y1="12" x2="12" y2="21" />
-      <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
-    </svg>
-  );
-}
-function PlaySvg() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-      <polygon points="5 3 19 12 5 21 5 3" />
-    </svg>
-  );
-}
-function StarSvg() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-    </svg>
-  );
+    <div className="home2-grid">
+      <main className="home2-main">
+        <Section title="Continue Learning" subtitle="Pick up where you left off" action={<Link to="/app/learn" className="home2-link">View all →</Link>}>
+          {activeSession ? <button className="home2-continue" onClick={() => navigate(`/app/learn/ai/session/${activeSession.id}`)}>
+            <div className="home2-session-icon">AI</div><div className="home2-session-copy"><span className="home2-kicker">{activeSession.subjectName || "AI learning"}</span><h3>{activeSession.conceptName || "Current learning session"}</h3><p>{activeSession.topicName || "Continue your learning session"}</p><div className="home2-session-progress"><span style={{ width: activeSession.status === "created" ? "4%" : "50%" }}/></div><small>{STATUS_LABELS[activeSession.status] || "In progress"}</small></div><span className="home2-continue-arrow">→</span>
+          </button> : <div className="home2-empty"><span>◎</span><div><strong>No active learning session</strong><p>Choose a concept and start learning with AI.</p></div><Link to="/app/learn/ai">Start learning</Link></div>}
+        </Section>
+
+        <Section title="Recent Activity" subtitle="Your latest learning activity" action={<Link to="/app/progress" className="home2-link">View all →</Link>}>
+          {recentActivity.length ? <div className="home2-activity">{recentActivity.map((item, i) => <button key={`${item.type}-${item.id}-${i}`} className="home2-activity-row" onClick={() => navigate(item.type === "tutorial" ? `/app/learn/tutorials/${item.id}` : `/app/learn/courses/${item.courseId}`)}><span className="home2-activity-icon">{item.completed ? "✓" : "▶"}</span><span><strong>{item.title}</strong><small>{item.type === "tutorial" ? item.subject || "Tutorial" : "Learning session"} · {formatAgo(item.lastWatchedAt)}</small></span><b>›</b></button>)}</div> : <div className="home2-empty"><span>◌</span><div><strong>No recent activity</strong><p>Your learning activity will appear here.</p></div></div>}
+        </Section>
+
+        <Section title="Your Learning Path" subtitle="Next up in your learning journey">
+          {learningPath.length ? <div className="home2-path">{learningPath.map((s, i) => <button key={s.id} className="home2-path-row" onClick={() => navigate(`/app/learn/ai/session/${s.id}`)}><span className={`home2-path-dot ${i === 0 ? "current" : ""}`}>{i === 0 ? "●" : "○"}</span><span><strong>{s.conceptName || "Learning concept"}</strong><small>{s.subjectName || "Subject"}{s.topicName ? ` · ${s.topicName}` : ""}</small></span><em>{i === 0 ? "In progress" : "Next"}</em></button>)}</div> : <div className="home2-empty"><span>◇</span><div><strong>Your path will build as you learn</strong><p>Start an AI learning session to create your next steps.</p></div><Link to="/app/learn/ai">Explore AI learning</Link></div>}
+        </Section>
+      </main>
+
+      <aside className="home2-side">
+        <Section title="Quick Actions" subtitle="Start something useful">
+          <div className="home2-actions">
+            <button onClick={() => navigate("/app/learn/ai")}><span>✦</span><div><strong>Start Learning</strong><small>Choose a concept and learn with AI</small></div><b>→</b></button>
+            <button onClick={() => navigate("/app/learn/ai")}><span>⚡</span><div><strong>Join a Challenge</strong><small>Challenge flow from your learning area</small></div><b>→</b></button>
+            <button onClick={() => navigate("/app/learn/ai")}><span>◉</span><div><strong>Open AI Study Room</strong><small>Get personalized help</small></div><b>→</b></button>
+            <button onClick={() => navigate("/app/progress")}><span>◔</span><div><strong>View Progress</strong><small>Track your growth</small></div><b>→</b></button>
+          </div>
+        </Section>
+
+        <Section title="AI Learning Insights" subtitle="Based on your recent activity">
+          {observations.length ? <div className="home2-insights">{observations.map((o, i) => <div className="home2-insight" key={`${o.session_id || i}-${o.created_at || i}`}><span>✦</span><div><p>{o.observation}</p><small>{o.confidence >= .8 ? "High confidence" : o.confidence >= .65 ? "Medium confidence" : "Developing signal"}</small></div></div>)}</div> : <div className="home2-empty home2-empty--compact"><span>✦</span><p>Your AI learning insights will appear as you complete more sessions.</p></div>}
+        </Section>
+
+        <Section title="Your Learning Snapshot">
+          <div className="home2-snapshot"><div><span>XP</span><strong>{progress.xp ?? 0}</strong></div><div><span>Level</span><strong>{progress.levelName || "Beginner"}</strong></div><div><span>Sessions</span><strong>{progress.sessionCount ?? 0}</strong></div></div>
+        </Section>
+      </aside>
+    </div>
+  </div>;
 }
