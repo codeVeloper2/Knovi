@@ -1031,6 +1031,8 @@ function SessionProgress({ currentPhase }) {
 }
 
 function LearningPlanPanel({ tasks, completedTaskIndexes, currentTaskIndex, onStartTask }) {
+  const [collapsed, setCollapsed] = useState(false);
+
   if (!Array.isArray(tasks) || !tasks.length) {
     return (
       <div className="wa-action-card wa-plan-empty">
@@ -1043,47 +1045,55 @@ function LearningPlanPanel({ tasks, completedTaskIndexes, currentTaskIndex, onSt
 
   return (
     <section className="wa-learning-plan" aria-label="Learning plan">
-      <div className="wa-plan-header">
+      <div
+        className="wa-plan-header"
+        onClick={() => setCollapsed(c => !c)}
+        style={{ cursor: "pointer", userSelect: "none" }}
+      >
         <div>
           <span className="wa-plan-kicker">YOUR LEARNING PLAN</span>
-          <h3>Master this concept step by step</h3>
-          <p>Each task has its own focused study period and recall check.</p>
+          {!collapsed && <h3>Master this concept step by step</h3>}
         </div>
-        <span className="wa-plan-count">{completedTaskIndexes.length}/{tasks.length}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span className="wa-plan-count">{completedTaskIndexes.length}/{tasks.length}</span>
+          <span style={{ fontSize: "0.85rem", opacity: 0.6 }}>{collapsed ? "▲" : "▼"}</span>
+        </div>
       </div>
 
-      <div className="wa-plan-list">
-        {tasks.map((task, index) => {
-          const done = completedTaskIndexes.includes(index);
-          const active = index === currentTaskIndex && !done;
-          const locked = index > 0 && !completedTaskIndexes.includes(index - 1);
-          return (
-            <div
-              key={task.id || index}
-              className={`wa-plan-task${done ? " is-done" : ""}${active ? " is-active" : ""}${locked ? " is-locked" : ""}`}
-            >
-              <div className="wa-plan-task-marker">
-                {done ? "✓" : locked ? "🔒" : index + 1}
+      {!collapsed && (
+        <div className="wa-plan-list">
+          {tasks.map((task, index) => {
+            const done = completedTaskIndexes.includes(index);
+            const active = index === currentTaskIndex && !done;
+            const locked = index > 0 && !completedTaskIndexes.includes(index - 1);
+            return (
+              <div
+                key={task.id || index}
+                className={`wa-plan-task${done ? " is-done" : ""}${active ? " is-active" : ""}${locked ? " is-locked" : ""}`}
+              >
+                <div className="wa-plan-task-marker">
+                  {done ? "✓" : locked ? "🔒" : index + 1}
+                </div>
+                <div className="wa-plan-task-copy">
+                  <strong>{task.title}</strong>
+                  <span>{task.description || task.focus}</span>
+                  <small>⏱ {task.recommendedMinutes || 5} min · Recall check</small>
+                </div>
+                {!done && !locked && (
+                  <button
+                    type="button"
+                    className="wa-plan-task-btn"
+                    onClick={e => { e.stopPropagation(); onStartTask(task, index); }}
+                  >
+                    {active ? "Study" : "Start"}
+                  </button>
+                )}
+                {done && <span className="wa-plan-done">Done</span>}
               </div>
-              <div className="wa-plan-task-copy">
-                <strong>{task.title}</strong>
-                <span>{task.description || task.focus}</span>
-                <small>⏱ {task.recommendedMinutes || 5} min · Recall check</small>
-              </div>
-              {!done && !locked && (
-                <button
-                  type="button"
-                  className="wa-plan-task-btn"
-                  onClick={() => onStartTask(task, index)}
-                >
-                  {active ? "Study" : "Start"}
-                </button>
-              )}
-              {done && <span className="wa-plan-done">Done</span>}
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }
