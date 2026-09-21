@@ -640,175 +640,95 @@ function MessageBubble({ msg, myId, partnerName, partnerUrl, onDelete, onReport,
 // ─────────────────────────────────────────────────────────────────
 function ConversationList({ convs, activeId, onSelect, onNew, myId }) {
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all"); // "all" | "unread"
-
-  const unreadTotal = convs.filter(c => c.unread > 0).length;
+  const [filter, setFilter] = useState("all");
+  const [pinnedOnly, setPinnedOnly] = useState(false);
+  const unreadTotal = convs.reduce((n, c) => n + (c.unread || 0), 0);
 
   const filtered = convs.filter(c => {
-    const matchesSearch =
-      !search.trim() ||
-      c.partner.displayName.toLowerCase().includes(search.toLowerCase()) ||
-      c.subject.toLowerCase().includes(search.toLowerCase());
+    const q = search.trim().toLowerCase();
+    const matchesSearch = !q ||
+      c.partner.displayName.toLowerCase().includes(q) ||
+      (c.subject || "").toLowerCase().includes(q) ||
+      (c.lastMessage?.body || "").toLowerCase().includes(q);
     const matchesFilter = filter === "unread" ? c.unread > 0 : true;
-    return matchesSearch && matchesFilter;
+    return matchesSearch && matchesFilter && (!pinnedOnly || c.sessionGoal);
   });
 
   return (
-    <div className="cl">
-      {/* WhatsApp Header */}
-      <div className="cl-head">
-        <div className="cl-head-left">
-          <h2 className="cl-title">Chats</h2>
-          {unreadTotal > 0 && <span className="cl-head-badge">{unreadTotal}</span>}
-        </div>
-        <div className="cl-head-actions">
-          <button
-            type="button"
-            className="cl-new-btn"
-            onClick={onNew}
-            title="New chat"
-            aria-label="New chat"
-          >
+    <aside className="chatx-sidebar">
+      <div className="chatx-sidebar-top">
+        <div className="chatx-brand-row">
+          <div>
+            <div className="chatx-eyebrow">PEERUP MESSENGER</div>
+            <h1>Messages</h1>
+          </div>
+          <button type="button" className="chatx-compose" onClick={onNew} title="New conversation" aria-label="New conversation">
             <PlusIcon />
           </button>
         </div>
+
+        <div className="chatx-search">
+          <SearchIcon />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search conversations" />
+          {search && <button type="button" onClick={() => setSearch("")} aria-label="Clear search"><CloseIcon /></button>}
+        </div>
+
+        <div className="chatx-tabs" role="tablist" aria-label="Conversation filters">
+          <button type="button" className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>All <span>{convs.length}</span></button>
+          <button type="button" className={filter === "unread" ? "active" : ""} onClick={() => setFilter("unread")}>Unread {unreadTotal > 0 && <span>{unreadTotal}</span>}</button>
+          <button type="button" className={pinnedOnly ? "active" : ""} onClick={() => setPinnedOnly(v => !v)}>Goals</button>
+        </div>
       </div>
 
-      {/* WhatsApp Search */}
-      <div className="cl-search">
-        <SearchIcon />
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search or start new chat"
-        />
-        {search && (
-          <button
-            type="button"
-            className="cl-search-clear"
-            onClick={() => setSearch("")}
-            aria-label="Clear search"
-          >
-            <CloseIcon />
-          </button>
-        )}
+      <div className="chatx-list-label">
+        <span>{filter === "unread" ? "Unread messages" : pinnedOnly ? "Study goals" : "Recent conversations"}</span>
+        <span>{filtered.length}</span>
       </div>
 
-      {/* WhatsApp Filter Pills */}
-      <div className="cl-filter-tabs">
-        <button
-          type="button"
-          className={`cl-filter-tab ${filter === "all" ? "active" : ""}`}
-          onClick={() => setFilter("all")}
-        >
-          All
-        </button>
-        <button
-          type="button"
-          className={`cl-filter-tab ${filter === "unread" ? "active" : ""}`}
-          onClick={() => setFilter("unread")}
-        >
-          Unread {unreadTotal > 0 && <span className="cl-tab-pill">{unreadTotal}</span>}
-        </button>
-      </div>
-
-      {/* Conversation Items List */}
-      <div className="cl-list">
-        {filtered.length === 0 && (
-          <div className="cl-empty">
-            <div className="cl-empty-icon">💬</div>
-            {convs.length === 0 ? (
-              <>
-                <p style={{ fontWeight: 600, color: "var(--text)" }}>No conversations yet</p>
-                <p style={{ fontSize: "0.82rem", marginTop: 4 }}>Tap the + button to start a study chat.</p>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  style={{ marginTop: 14 }}
-                  onClick={onNew}
-                >
-                  Start new chat
-                </button>
-              </>
-            ) : (
-              <p>No results found for "{search}"</p>
-            )}
+      <div className="chatx-list">
+        {filtered.length === 0 ? (
+          <div className="chatx-empty-list">
+            <div className="chatx-empty-orb">💬</div>
+            <strong>{convs.length ? "No matches" : "Your inbox is empty"}</strong>
+            <p>{convs.length ? "Try a different name, subject, or filter." : "Start a conversation with a study partner."}</p>
+            <button type="button" onClick={onNew}>Start a chat</button>
           </div>
-        )}
-
-        {filtered.map(c => {
-          const isMine = c.lastMessage?.senderId === myId;
-          const preview = c.lastMessage
-            ? c.lastMessage.deleted
-              ? "🗑️ Message deleted"
-              : c.lastMessage.body || (c.lastMessage.attachmentUrl ? "📎 Attachment" : "No messages yet")
-            : "No messages yet";
-
+        ) : filtered.map(c => {
+          const last = c.lastMessage;
+          const isMine = last?.senderId === myId;
+          const preview = last
+            ? last.deleted ? "Message deleted"
+              : last.body || (last.attachmentUrl ? "Sent an attachment" : "No messages yet")
+            : "Start your study conversation";
           return (
-            <button
-              key={c.id}
-              type="button"
-              className={`cl-item ${c.id === activeId ? "cl-item--active" : ""}`}
-              onClick={() => onSelect(c)}
-            >
-              <div className="cl-item-av">
-                <Avatar
-                  url={c.partner.photoURL}
-                  name={c.partner.displayName}
-                  size={50}
-                  online={c.partner.isOnline}
-                />
+            <button key={c.id} type="button" className={`chatx-conversation ${c.id === activeId ? "active" : ""}`} onClick={() => onSelect(c)}>
+              <div className="chatx-avatar-wrap">
+                <Avatar url={c.partner.photoURL} name={c.partner.displayName} size={52} online={c.partner.isOnline} />
+                {c.unread > 0 && <span className="chatx-unread-dot">{c.unread > 9 ? "9+" : c.unread}</span>}
               </div>
-              <div className="cl-item-body">
-                <div className="cl-item-top">
-                  <span className="cl-item-name">{c.partner.displayName}</span>
-                  <span className={`cl-item-time ${c.unread > 0 ? "cl-item-time--unread" : ""}`}>
-                    {fmtConvTime(c.lastMessageAt)}
+              <div className="chatx-conversation-body">
+                <div className="chatx-conversation-top">
+                  <strong>{c.partner.displayName}</strong>
+                  <time className={c.unread ? "unread" : ""}>{fmtConvTime(last?.createdAt)}</time>
+                </div>
+                <div className="chatx-conversation-bottom">
+                  <span className="chatx-preview">
+                    {isMine && last && <span className="chatx-you">You: </span>}
+                    {preview}
                   </span>
+                  {c.subject && <span className="chatx-subject">{c.subject}</span>}
                 </div>
-                <div className="cl-item-bottom">
-                  <div className="cl-item-preview-wrap">
-                    {isMine && c.lastMessage && (
-                      <span className="cl-msg-tick">
-                        {c.lastMessage.isRead ? (
-                          <DoubleTickIcon read={true} />
-                        ) : c.lastMessage.isDelivered ? (
-                          <DoubleTickIcon read={false} />
-                        ) : (
-                          <TickIcon />
-                        )}
-                      </span>
-                    )}
-                    <span className="cl-item-preview">{preview}</span>
-                  </div>
-                  <div className="cl-item-badges">
-                    {c.subject && <span className="cl-subject-pill">{c.subject}</span>}
-                    {c.unread > 0 && (
-                      <span className="cl-badge">{c.unread > 99 ? "99+" : c.unread}</span>
-                    )}
-                  </div>
-                </div>
+                {c.sessionGoal && <div className="chatx-goal"><GoalIcon /> {c.sessionGoal}</div>}
               </div>
             </button>
           );
         })}
       </div>
 
-      {/* WhatsApp Floating Action Button */}
-      <button
-        type="button"
-        className="cl-fab"
-        onClick={onNew}
-        aria-label="Start new chat"
-        title="Start new chat"
-      >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          <line x1="12" y1="8" x2="12" y2="14"/>
-          <line x1="9" y1="11" x2="15" y2="11"/>
-        </svg>
+      <button type="button" className="chatx-new-fab" onClick={onNew} aria-label="New chat">
+        <PlusIcon /><span>New chat</span>
       </button>
-    </div>
+    </aside>
   );
 }
 
@@ -1279,6 +1199,36 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
   );
 }
 
+function ChatPageSkeleton() {
+  return (
+    <div className="chatx-shell chatx-loading-shell" aria-label="Loading chats" aria-busy="true">
+      <aside className="chatx-sidebar chatx-skeleton-sidebar">
+        <div className="chatx-sidebar-top">
+          <div className="chatx-skel-title shimmer" />
+          <div className="chatx-skel-search shimmer" />
+          <div className="chatx-skel-tabs"><i className="shimmer"/><i className="shimmer"/><i className="shimmer"/></div>
+        </div>
+        <div className="chatx-list-label"><span className="shimmer chatx-skel-label"/><span className="shimmer chatx-skel-count"/></div>
+        <div className="chatx-skel-list">
+          {[1,2,3,4,5,6].map(i => <div className="chatx-skel-conv" key={i}><i className="shimmer"/><div><b className="shimmer"/><span className="shimmer"/><small className="shimmer"/></div></div>)}
+        </div>
+      </aside>
+      <section className="chatx-skeleton-room">
+        <div className="chatx-skel-header"><i className="shimmer"/><div><b className="shimmer"/><span className="shimmer"/></div><aside><i className="shimmer"/><i className="shimmer"/><i className="shimmer"/></aside></div>
+        <div className="chatx-skel-messages">
+          <div className="shimmer chatx-skel-date"/>
+          <div className="chatx-skel-bubble left shimmer"/>
+          <div className="chatx-skel-bubble right short shimmer"/>
+          <div className="chatx-skel-bubble right shimmer"/>
+          <div className="chatx-skel-bubble left wide shimmer"/>
+          <div className="chatx-skel-bubble right shimmer"/>
+        </div>
+        <div className="chatx-skel-composer"><i className="shimmer"/><span className="shimmer"/><i className="shimmer"/></div>
+      </section>
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Empty state
 // ─────────────────────────────────────────────────────────────────
@@ -1374,16 +1324,10 @@ export default function ChatPage() {
     setActiveConv(conv);
   }
 
-  if (loading) {
-    return (
-      <div className="chat-shell">
-        <div className="chat-loading"><span className="discover-spinner" /> Loading chats…</div>
-      </div>
-    );
-  }
+  if (loading) return <ChatPageSkeleton />;
 
   return (
-    <div className={`chat-shell${activeConv ? " chat-shell--active" : ""}`}>
+    <div className={`chatx-shell${activeConv ? " chatx-shell--active" : ""}`}>
       <ConversationList
         convs={convs}
         activeId={activeConv?.id}
