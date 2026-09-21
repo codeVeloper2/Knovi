@@ -140,13 +140,13 @@ export default function AISessionSetup() {
 
             <div className="ai-welcome-divider" />
 
-            <h2 className="ai-welcome-subtitle">Your AI tutor is ready.</h2>
+            <h2 className="ai-welcome-subtitle">UPRAD is ready to teach you.</h2>
             <p className="ai-welcome-text">
               I'll explain this concept in a way that matches what you already know,
               then check your understanding as we go.
             </p>
             <p className="ai-welcome-text ai-welcome-note">
-              Be honest with your answers — your tutor uses them to adapt how it teaches you.
+              Be honest with your answers — UPRAD uses them to adapt how it teaches you.
             </p>
 
             <button
@@ -218,7 +218,7 @@ export default function AISessionSetup() {
               rows={3}
               maxLength={1000}
             />
-            <p className="ai-setup-hint">Helps your tutor personalise the explanation</p>
+            <p className="ai-setup-hint">Helps UPRAD personalise the explanation</p>
           </div>
 
           {error && (
@@ -249,7 +249,7 @@ export function TutorAvatar({ size = 40 }) {
       viewBox="0 0 512 512"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      aria-label="PeerUp AI Tutor"
+      aria-label="UPRAD"
       role="img"
     >
       <defs>

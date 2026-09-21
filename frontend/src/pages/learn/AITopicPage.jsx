@@ -105,7 +105,7 @@ export default function AITopicPage(){
     </section>}
 
     {tab==="resources"&&<section className="cp-resource-list">
-      {resources.length?resources.map(r=><a key={r.id} href={r.url||r.fileUrl||"#"} target="_blank" rel="noreferrer" className="cp-resource-card"><span className="cp-resource-icon">↗</span><span><strong>{r.title}</strong><small>{r.description||r.type||"Study resource"}</small></span><Arrow/></a>):<div className="cp-empty"><h3>No resources yet.</h3><p>The AI tutor can still teach every concept without extra resources.</p></div>}
+      {resources.length?resources.map(r=><a key={r.id} href={r.url||r.fileUrl||"#"} target="_blank" rel="noreferrer" className="cp-resource-card"><span className="cp-resource-icon">↗</span><span><strong>{r.title}</strong><small>{r.description||r.type||"Study resource"}</small></span><Arrow/></a>):<div className="cp-empty"><h3>No resources yet.</h3><p>The UPRAD can still teach every concept without extra resources.</p></div>}
     </section>}
   </div>;
 }

@@ -75,10 +75,17 @@ export default function AILearningRoom() {
     setLoading(true);
     setError(null);
     try {
-      const [sess, msgs] = await Promise.all([
-        api.getAISession(sessionId),
-        api.getSessionMessages(sessionId),
-      ]);
+      const sess = await api.getAISession(sessionId);
+      // The session payload already contains the safe message history.
+      // Message hydration is best-effort so a completed/review session never
+      // becomes a blank screen just because the secondary messages request fails.
+      let msgs = Array.isArray(sess?.messages) ? sess.messages : [];
+      try {
+        const freshMsgs = await api.getSessionMessages(sessionId);
+        if (Array.isArray(freshMsgs)) msgs = freshMsgs;
+      } catch (messageErr) {
+        console.warn("Session message hydration failed; using session payload:", messageErr);
+      }
       applyServerState(sess, msgs);
       if (sess.status === "created") {
         await prepareSessionIfNeeded(sess);
@@ -103,7 +110,7 @@ export default function AILearningRoom() {
       ]);
       applyServerState(freshSession, freshMessages);
     } catch (err) {
-      setError(err.message || "The AI tutor could not prepare this session.");
+      setError(err.message || "The UPRAD could not prepare this session.");
     } finally {
       setAiWorking(false);
     }
@@ -111,7 +118,7 @@ export default function AILearningRoom() {
 
   function applyServerState(sess, msgs) {
     setSession(sess);
-    setMessages(msgs || []);
+    setMessages(Array.isArray(msgs) && msgs.length ? msgs : (Array.isArray(sess?.messages) ? sess.messages : []));
     const derivedPhase = serverStatusToPhase(
       sess.status,
       (msgs || []).filter(m => m.messageType === "teaching" || m.messageType === "reteach").length > 0,
@@ -604,7 +611,7 @@ export default function AILearningRoom() {
         </div>
 
         <div className="wa-topbar-info">
-          <span className="wa-topbar-name">PeerUp AI Tutor</span>
+          <span className="wa-topbar-name">UPRAD</span>
           <span className="wa-topbar-status">
             {phase === "preparing" ? "Preparing your lesson…" :
              phase === "studying"  ? "Study time — focus!" :
@@ -831,9 +838,9 @@ function Message({ msg, isHidden }) {
       <div className={`wa-bubble ${isAI ? "wa-bubble--ai" : "wa-bubble--user"}`}>
         {isAI && (
           <span className="wa-bubble-sender">
-            {msg.messageType === "reteach"       ? "PeerUp AI · New Approach" :
-             msg.messageType === "question_ask"  ? "PeerUp AI · Question" :
-             "PeerUp AI"}
+            {msg.messageType === "reteach"       ? "UPRAD · New Approach" :
+             msg.messageType === "question_ask"  ? "UPRAD · Question" :
+             "UPRAD"}
           </span>
         )}
         {msg.messageType === "question_ask" && msg.extra && (
@@ -870,7 +877,7 @@ function TypingIndicator({ label, inline }) {
     <div className="wa-bubble-wrap wa-bubble-wrap--ai">
       <div className="wa-avatar-col"><TutorAvatar size={34} /></div>
       <div className="wa-bubble wa-bubble--ai wa-bubble--typing">
-        <span className="wa-bubble-sender">PeerUp AI</span>
+        <span className="wa-bubble-sender">UPRAD</span>
         <div className="wa-typing-dots" aria-label={label || "AI is thinking"}>
           <span /><span /><span />
         </div>
@@ -1047,9 +1054,9 @@ function ReviewDetails({ question, result }) {
         return <div className={`wa-check-review-option ${cls}`} key={`${question.id}-review-${label}`}><span className="wa-check-review-letter">{correctOption || (selected && result.isCorrect) ? "✓" : selected ? "✕" : label}</span><span>{text}</span>{selected && <small>Your answer</small>}{correctOption && !selected && <small>Correct answer</small>}</div>;
       })}
     </div>
-    {result.feedback && <div className="wa-check-review-feedback"><strong>PeerUp AI</strong><p>{result.feedback}</p></div>}
+    {result.feedback && <div className="wa-check-review-feedback"><strong>UPRAD</strong><p>{result.feedback}</p></div>}
   </div>;
-  return <div className="wa-check-review"><div className="wa-check-review-question">{question.question}</div><div className="wa-check-answer-label">YOUR ANSWER</div><div className="wa-check-student-answer">{result.studentAnswer}</div>{result.feedback && <div className="wa-check-review-feedback"><strong>PeerUp AI</strong><p>{result.feedback}</p></div>}{result.score != null && <span className={`wa-check-review-score wa-check-review-score--${result.understanding || "partial"}`}>{statusText(result)} · {result.score}/100</span>}</div>;
+  return <div className="wa-check-review"><div className="wa-check-review-question">{question.question}</div><div className="wa-check-answer-label">YOUR ANSWER</div><div className="wa-check-student-answer">{result.studentAnswer}</div>{result.feedback && <div className="wa-check-review-feedback"><strong>UPRAD</strong><p>{result.feedback}</p></div>}{result.score != null && <span className={`wa-check-review-score wa-check-review-score--${result.understanding || "partial"}`}>{statusText(result)} · {result.score}/100</span>}</div>;
 }
 
 function statusText(result) {
