@@ -643,7 +643,8 @@ async def complete_session(session_id: int, user_id: int, db: AsyncSession) -> d
     if session.status in ("completed", "abandoned"):
         return session.serialize()
 
-    ELIGIBLE_FOR_COMPLETION = {"retrieval", "practice", "reteaching", "paused"}
+    # teaching is included because the agentic flow may complete without a study timer
+    ELIGIBLE_FOR_COMPLETION = {"teaching", "retrieval", "practice", "reteaching", "paused"}
     if session.status not in ELIGIBLE_FOR_COMPLETION:
         # Force abandon rather than falsely mark as completed
         raise HTTPException(
@@ -900,15 +901,55 @@ POST-SESSION FOLLOW-UP RULES:
 - Be warm and encouraging. This is a learning platform for students.
 """
 
+    # Count substantive exchanges so the AI can judge readiness
+    teaching_exchange_count = sum(
+        1 for m in session.messages
+        if m.role == "student" and m.message_type not in ("welcome", "system")
+    )
+
     system_prompt = (
         "You are an AI tutor on PeerUP, a peer learning platform for students. "
         "You always answer educational questions helpfully and warmly. "
         "Return JSON only — no markdown outside the response field."
     )
 
+    # Agentic action rules — only applies during active (non-completed) sessions
+    agentic_directive = ""
+    if not is_post_session:
+        agentic_directive = f"""
+AGENTIC PROGRESSION RULES (critical — follow exactly):
+You are the teacher driving this session. You must decide when the student is ready for the quiz.
+Current exchange count: {teaching_exchange_count}
+
+action field rules:
+- null         → continue teaching/conversing normally
+- "start_quiz" → trigger the quiz now (no button, you decide)
+- "mark_task_done" → only AFTER a quiz was passed (score ≥ 70); mark current task complete
+- "next_task"  → immediately after mark_task_done to proceed to the next task
+- "complete_session" → all tasks done and passed
+
+When to signal "start_quiz":
+- Student has had at least 2 substantive exchanges on this task/concept
+- Student has demonstrated understanding (correct answers, good questions, applied the idea)
+- Student is NOT still confused, asking basic definitions, or showing misconceptions
+- Student asks to be quizzed ("quiz me", "test me", "I'm ready")
+- If the student shows strong understanding even on exchange 1, you may signal earlier
+
+When NOT to signal "start_quiz":
+- Student is still asking basic questions or confused
+- Student has had fewer than 2 exchanges and shows no strong understanding signal
+- Session is completed (post-session follow-up)
+
+action_data field:
+- For start_quiz: {{"task_index": current_task_index, "reason": "one sentence why the student is ready"}}
+- For other actions: {{"reason": "brief explanation"}}
+- null when action is null
+"""
+
     prompt = f"""{curriculum_ctx}
 {teaching_context}
 {post_session_directive}
+{agentic_directive}
 
 RECENT CONVERSATION:
 {history_text}
@@ -918,6 +959,8 @@ Student just asked: {content}
 Return JSON:
 {{
   "response": "Your full tutor response here (markdown supported, be thorough)",
+  "action": null,
+  "action_data": null,
   "suggest_new_session": false,
   "detected_subject": null,
   "detected_topic": null,
@@ -926,9 +969,11 @@ Return JSON:
 
 Rules:
 - response: always required, always educational
-- suggest_new_session: true only if question is from a clearly different topic/subject
+- action: null | "start_quiz" | "mark_task_done" | "next_task" | "complete_session"
+- action_data: object with task_index and reason, or null
+- suggest_new_session: true only if question is from a clearly different topic/subject (post-session only)
 - detected_subject: name of the subject if suggest_new_session is true, else null
-- detected_topic: name of the topic if suggest_new_session is true, else null  
+- detected_topic: name of the topic if suggest_new_session is true, else null
 - session_note: 1-2 sentence note for the new session tutor about what the student needs, else null
 """
     try:
@@ -946,6 +991,14 @@ Rules:
     detected_topic     = parsed.get("detected_topic") or None
     session_note       = parsed.get("session_note") or None
 
+    # Agentic action signal — only valid during active sessions
+    action      = parsed.get("action") or None
+    action_data = parsed.get("action_data") or None
+    valid_actions = {"start_quiz", "mark_task_done", "next_task", "complete_session"}
+    if is_post_session or action not in valid_actions:
+        action      = None
+        action_data = None
+
     msg = await _add_message(
         session_id, "ai", "teaching", response_text, db,
         extra={
@@ -955,6 +1008,9 @@ Rules:
             "detectedSubject": detected_subject,
             "detectedTopic": detected_topic,
             "sessionNote": session_note,
+            # Agentic fields — read by frontend to drive autonomous progression
+            "action": action,
+            "actionData": action_data,
         },
     )
     await db.commit()
@@ -1080,11 +1136,16 @@ async def generate_retrieval_questions(
     session = await _get_session_owned(
         session_id, user_id, db, load_teaching=True
     )
-    if session.status not in ("retrieval", "practice", "reteaching"):
+    # Allow question generation from teaching/reteaching — the AI may signal
+    # start_quiz before the study timer has been started (agentic flow).
+    if session.status not in ("teaching", "retrieval", "practice", "reteaching"):
         raise HTTPException(
             409,
             f"Cannot generate questions: session is '{session.status}'."
         )
+    # Transition to retrieval state if still in teaching/reteaching
+    if session.status in ("teaching", "reteaching"):
+        session.status = "retrieval"
 
     current_teaching = await _get_current_teaching(session_id, db)
     if not current_teaching:

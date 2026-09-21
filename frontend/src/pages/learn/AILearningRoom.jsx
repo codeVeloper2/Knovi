@@ -295,24 +295,24 @@ export default function AILearningRoom() {
       setQuestions([]);
       setLastEval(null);
 
-      // Focus UPRAD on this specific learning task first.
-      await api.teachConcept(sessionId, taskIndex);
+      // AI teaches the task content conversationally.
+      // The AI will signal "start_quiz" when it judges the student ready —
+      // no study timer is started here. The student interacts via chat.
+      const t = await api.teachConcept(sessionId, taskIndex);
+      if (t?.explanation) {
+        setMessages(prev => [...prev, {
+          id: `local-task-${Date.now()}`, role: "ai", messageType: "teaching",
+          content: t.explanation, sequence: prev.length + 1,
+          createdAt: new Date().toISOString(), extra: { strategy: t.strategy },
+        }]);
+      }
+      setTeaching(t);
 
-      // The AI already decided the task duration. Start it immediately.
-      const durationSeconds = Math.max(
-        120,
-        Math.min(600, Number(task.recommendedMinutes || 5) * 60)
-      );
-      const period = await api.startStudyPeriod(sessionId, durationSeconds, taskIndex);
-
-      setStudyPeriod(period);
-      setSession(prev => ({ ...prev, status: "studying" }));
-      setPhase("studying");
-      startClientTimer(period.durationSeconds, period.id);
+      const fresh = await api.getAISession(sessionId);
+      setSession(fresh);
+      setPhase("teaching");
 
       try {
-        const fresh = await api.getAISession(sessionId);
-        setSession(fresh);
         const freshMessages = await api.getSessionMessages(sessionId);
         if (Array.isArray(freshMessages)) setMessages(freshMessages);
       } catch (_) {}
@@ -373,8 +373,54 @@ export default function AILearningRoom() {
         });
         setSuggestionShown(true);
       }
+
+      // ── Agentic action handling ───────────────────────────────────────────
+      // The AI decides when the student is ready for the quiz. No button needed.
+      const action     = extra.action     || null;
+      const actionData = extra.actionData || {};
+      if (action === "start_quiz") {
+        // AI judged the student ready — trigger quiz silently
+        const taskIdx = actionData.task_index != null ? Number(actionData.task_index) : currentTaskIndex;
+        await _agenticStartQuiz(taskIdx);
+        return; // _agenticStartQuiz sets aiWorking false
+      }
+      // mark_task_done / next_task / complete_session arrive after quiz result,
+      // so they are handled in handleSubmitAnswer. No further action here.
     } catch (err) {
       setError(err.message || "Failed to send message.");
+    } finally {
+      setAiWorking(false);
+    }
+  }
+
+  /**
+   * Called when the AI signals action:"start_quiz" in a message response.
+   * Bypasses the study-timer flow entirely — AI conversational understanding
+   * is sufficient; the quiz fires immediately.
+   */
+  async function _agenticStartQuiz(taskIdx) {
+    try {
+      // Move session to retrieval state so generate_retrieval_questions accepts it.
+      // We reuse the existing triggerRetrieval path which calls the questions endpoint.
+      // But first we need the session in retrieval state — finishStudyPeriod does that.
+      // If there is no active study period (agentic flow skips the timer), we call
+      // the questions endpoint directly after forcing a state check.
+      const sess = await api.getAISession(sessionId);
+      if (sess.status === "studying" && sess.activeStudyPeriod?.id) {
+        // Finish the active timer early so the server transitions to retrieval
+        await api.finishStudyPeriod(sessionId, sess.activeStudyPeriod.id);
+      }
+      // Generate questions for the current task index
+      const qs = await api.generateRetrievalQuestions(sessionId, 3, taskIdx);
+      const arr = Array.isArray(qs) ? qs : (qs.questions || []);
+      setQuestions(arr);
+      setQIndex(0);
+      setAnswerInput("");
+      setLastEval(null);
+      setSession(prev => ({ ...prev, status: "retrieval" }));
+      setPhase("retrieval");
+    } catch (err) {
+      setError(err.message || "Could not start the quiz. Please try again.");
     } finally {
       setAiWorking(false);
     }
@@ -497,21 +543,10 @@ export default function AILearningRoom() {
           createdAt: new Date().toISOString(), extra: { strategy: t.strategy },
         }]);
       }
+      // Return to teaching phase — the AI will signal start_quiz again
+      // when it judges the student has understood the reteach content.
       setPhase("reteaching");
       setLastEval(null);
-
-      // A weak result never completes the task. Give the student a fresh
-      // explanation, then automatically start another bounded study period.
-      const task = learningPlan[taskIndex];
-      const durationSeconds = Math.max(
-        120,
-        Math.min(600, Number(task?.recommendedMinutes || 5) * 60)
-      );
-      const period = await api.startStudyPeriod(sessionId, durationSeconds, taskIndex);
-      setStudyPeriod(period);
-      setSession(prev => ({ ...prev, status: "studying" }));
-      setPhase("studying");
-      startClientTimer(period.durationSeconds, period.id);
     } catch (err) {
       setError(err.message || "Failed to generate new explanation.");
     } finally {
@@ -685,6 +720,8 @@ export default function AILearningRoom() {
     );
   }
 
+  // Chat is available during teaching, reteaching, and summary.
+  // The AI reads these messages to judge when to trigger the quiz.
   const canType = (phase === "teaching" || phase === "reteaching" || phase === "summary") && !aiWorking;
 
   return (
@@ -1051,14 +1088,10 @@ function LearningPlanPanel({ tasks, completedTaskIndexes, currentTaskIndex, onSt
   );
 }
 
+// TeachingActions is no longer rendered — the AI drives quiz timing autonomously.
+// Kept as a no-op to avoid breaking any residual references.
 function TeachingActions({ onStartStudy, onAction }) {
-  return (
-    <div className="wa-action-card wa-teaching-actions">
-      <button className="wa-btn-primary wa-btn-study" onClick={onStartStudy}>
-        📖 Start Study Timer
-      </button>
-    </div>
-  );
+  return null;
 }
 
 function StudyTimerPanel({ seconds, totalSeconds, paused, onTogglePause, task }) {
