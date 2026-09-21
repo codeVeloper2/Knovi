@@ -70,7 +70,7 @@ export default function AIConceptPage(){
       <main>
         <div className="cp-content-card">
           <div className="cp-content-heading"><span className="cp-section-icon"><Spark/></span><div><h2>What you'll learn</h2><p>These key ideas will guide your AI learning session.</p></div></div>
-          {concept.keyPoints?.length ? <div className="cp-keypoint-list">{concept.keyPoints.map((point,i)=><div key={i}><span>{i+1}</span><p>{point}</p></div>)}</div> : <div className="cp-muted-block">UPRAD will build the key ideas with you during the session.</div>}
+          {concept.keyPoints?.length ? <div className="cp-keypoint-list">{concept.keyPoints.map((point,i)=><div key={i}><span>{i+1}</span><p>{point}</p></div>)}</div> : <div className="cp-muted-block">Your AI tutor will build the key ideas with you during the session.</div>}
         </div>
         <div className="cp-content-card">
           <div className="cp-content-heading"><span className="cp-section-icon"><Book/></span><div><h2>How the AI session works</h2><p>A continuous learning room adapts to your understanding.</p></div></div>

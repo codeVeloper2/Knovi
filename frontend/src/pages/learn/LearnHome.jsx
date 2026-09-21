@@ -30,7 +30,7 @@ const FALLBACK_META = [
 function iconMeta(name, index = 0) {
   const meta = SUBJECT_META[name];
   if (meta) return meta;
-  return { ...FALLBACK_META[index % FALLBACK_META.length], description: "Explore this subject with UPRAD." };
+  return { ...FALLBACK_META[index % FALLBACK_META.length], description: "Explore this subject with your AI tutor." };
 }
 
 function normalizeSubjects(value) {
@@ -266,7 +266,7 @@ export default function LearnHome() {
           </div>
           <div>
             <h1>What would you like to learn today?</h1>
-            <p>Choose a subject and explore topics. UPRAD will guide you from basics to mastery.</p>
+            <p>Choose a subject and explore topics. Your AI tutor will guide you from basics to mastery.</p>
           </div>
         </div>
         <RobotArt />

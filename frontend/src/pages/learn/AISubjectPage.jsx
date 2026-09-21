@@ -168,7 +168,7 @@ function TopicCard({topic,index,onClick,list=false}) {
       <span className="cp-topic-number">{String(index+1).padStart(2,"0")}</span>
       <span className="cp-topic-main">
         <strong>{topic.name}</strong>
-        <small>{topic.description || "Explore this topic with UPRAD."}</small>
+        <small>{topic.description || "Explore this topic with your AI tutor."}</small>
         <span className="cp-topic-meta"><Layers/> {topic.conceptCount || 0} concepts {topic.completed ? `· ${topic.completed} session${topic.completed > 1 ? "s" : ""}` : ""}</span>
       </span>
       <span className="cp-topic-arrow"><Arrow/></span>

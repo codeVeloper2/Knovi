@@ -58,6 +58,11 @@ export default function AILearningRoom() {
   const [showSummary,  setShowSummary]  = useState(false);
   const [msgInput,     setMsgInput]     = useState("");
 
+  // Optional post-session suggestion state. These must always be defined because
+  // the room can be opened directly for a new, resumed, or completed session.
+  const [postSuggestion, setPostSuggestion] = useState(null);
+  const [suggestionShown, setSuggestionShown] = useState(false);
+
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
 
@@ -75,17 +80,21 @@ export default function AILearningRoom() {
     setLoading(true);
     setError(null);
     try {
+      // The session endpoint is the source of truth. Messages are a secondary
+      // request; if that endpoint fails, the session response already contains
+      // a safe message snapshot, so the room must still render.
       const sess = await api.getAISession(sessionId);
-      // The session payload already contains the safe message history.
-      // Message hydration is best-effort so a completed/review session never
-      // becomes a blank screen just because the secondary messages request fails.
       let msgs = Array.isArray(sess?.messages) ? sess.messages : [];
+
       try {
-        const freshMsgs = await api.getSessionMessages(sessionId);
-        if (Array.isArray(freshMsgs)) msgs = freshMsgs;
+        const fetched = await api.getSessionMessages(sessionId);
+        if (Array.isArray(fetched)) msgs = fetched;
       } catch (messageErr) {
-        console.warn("Session message hydration failed; using session payload:", messageErr);
+        // Keep the room usable. The backend session payload already contains
+        // state-appropriate messages, including the restored completed history.
+        console.warn("Could not load separate session messages; using session snapshot.", messageErr);
       }
+
       applyServerState(sess, msgs);
       if (sess.status === "created") {
         await prepareSessionIfNeeded(sess);
@@ -104,13 +113,17 @@ export default function AILearningRoom() {
     setError(null);
     try {
       await api.prepareAISession(sessionId);
-      const [freshSession, freshMessages] = await Promise.all([
-        api.getAISession(sessionId),
-        api.getSessionMessages(sessionId),
-      ]);
+      const freshSession = await api.getAISession(sessionId);
+      let freshMessages = Array.isArray(freshSession?.messages) ? freshSession.messages : [];
+      try {
+        const fetched = await api.getSessionMessages(sessionId);
+        if (Array.isArray(fetched)) freshMessages = fetched;
+      } catch (messageErr) {
+        console.warn("Could not refresh separate session messages; using session snapshot.", messageErr);
+      }
       applyServerState(freshSession, freshMessages);
     } catch (err) {
-      setError(err.message || "The UPRAD could not prepare this session.");
+      setError(err.message || "The AI tutor could not prepare this session.");
     } finally {
       setAiWorking(false);
     }
@@ -118,10 +131,11 @@ export default function AILearningRoom() {
 
   function applyServerState(sess, msgs) {
     setSession(sess);
-    setMessages(Array.isArray(msgs) && msgs.length ? msgs : (Array.isArray(sess?.messages) ? sess.messages : []));
+    const safeMessages = Array.isArray(msgs) ? msgs : (Array.isArray(sess?.messages) ? sess.messages : []);
+    setMessages(safeMessages);
     const derivedPhase = serverStatusToPhase(
       sess.status,
-      (msgs || []).filter(m => m.messageType === "teaching" || m.messageType === "reteach").length > 0,
+      safeMessages.filter(m => m.messageType === "teaching" || m.messageType === "reteach").length > 0,
     );
     setPhase(derivedPhase);
     if (sess.teaching)  setTeaching(sess.teaching);
@@ -149,7 +163,7 @@ export default function AILearningRoom() {
 
       // Rebuild question_ask bubbles from server data so they show on reload.
       // They are injected optimistically at runtime but never stored server-side.
-      const currentMsgs = msgs || [];
+      const currentMsgs = safeMessages;
       const existingQIds = new Set(currentMsgs.filter(m => m.messageType === "question_ask").map(m => m.id));
       const rebuiltBubbles = nextQuestions
         .map((q, idx) => {
@@ -207,7 +221,14 @@ export default function AILearningRoom() {
     clearTimer();
     try {
       await api.finishStudyPeriod(sessionId, periodId);
-      const [sess, msgs] = await Promise.all([api.getAISession(sessionId), api.getSessionMessages(sessionId)]);
+      const sess = await api.getAISession(sessionId);
+      let msgs = Array.isArray(sess?.messages) ? sess.messages : [];
+      try {
+        const fetched = await api.getSessionMessages(sessionId);
+        if (Array.isArray(fetched)) msgs = fetched;
+      } catch (messageErr) {
+        console.warn("Could not refresh messages after study period; using session snapshot.", messageErr);
+      }
       applyServerState(sess, msgs);
     } catch (err) {
       setError(err.message || "Could not transition to retrieval. Please try again.");
@@ -484,17 +505,20 @@ export default function AILearningRoom() {
       const s = await api.generateSessionSummary(sessionId);
 
       // The server marks the session completed when the summary is generated.
-      // Reload both session + messages so the teaching conversation that was
-      // hidden during retrieval becomes visible again. The summary itself is
-      // deliberately kept out of the chat transcript and shown on demand.
-      const [freshSession, freshMessages] = await Promise.all([
-        api.getAISession(sessionId),
-        api.getSessionMessages(sessionId),
-      ]);
+      // Reload the completed session so the previously hidden teaching history
+      // becomes visible again. The summary stays out of the chat transcript.
+      const freshSession = await api.getAISession(sessionId);
+      let freshMessages = Array.isArray(freshSession?.messages) ? freshSession.messages : [];
+      try {
+        const fetched = await api.getSessionMessages(sessionId);
+        if (Array.isArray(fetched)) freshMessages = fetched;
+      } catch (messageErr) {
+        console.warn("Could not reload completed messages; using session snapshot.", messageErr);
+      }
 
-      setSummary(s);
+      setSummary(s || freshSession?.summary || null);
       setSession(freshSession);
-      setMessages(freshMessages || []);
+      setMessages(freshMessages);
       setPhase("summary");
       setLastEval(null);
       setAnswerInput("");
