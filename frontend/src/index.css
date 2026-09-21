@@ -20058,3 +20058,70 @@ kbd {
     padding-top: 0;
   }
 }
+
+
+/* Profile viewer from the global mobile avatar */
+.global-avatar-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(1,7,18,.88);
+  backdrop-filter: blur(16px);
+  animation: globalAvatarIn .16s ease-out both;
+}
+
+.global-avatar-lightbox-close {
+  position: fixed;
+  top: max(18px, env(safe-area-inset-top));
+  right: 18px;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 50%;
+  background: rgba(10,22,42,.9);
+  color: #fff;
+  font-size: 1.8rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.global-avatar-lightbox-content {
+  display: grid;
+  justify-items: center;
+  gap: 13px;
+}
+
+.global-avatar-lightbox-content img,
+.global-avatar-lightbox-content > span {
+  width: min(82vw, 560px);
+  height: min(82vw, 560px);
+  max-width: 82vh;
+  max-height: 82vh;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 5px solid rgba(255,255,255,.13);
+  box-shadow: 0 30px 90px rgba(0,0,0,.55);
+}
+
+.global-avatar-lightbox-content > span {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg,#244d9b,#116e78);
+  color: #fff;
+  font-size: clamp(4rem,10vw,7rem);
+  font-weight: 850;
+}
+
+.global-avatar-lightbox-content strong {
+  color: #fff;
+  font-size: 1rem;
+}
+
+@keyframes globalAvatarIn {
+  from { opacity: 0; transform: scale(.985); }
+  to { opacity: 1; transform: scale(1); }
+}
+

@@ -194,7 +194,7 @@ export default function StudySessionsPage() {
   };
 
   return (
-    <div className="study-page">
+    <div className="study-page learn-rebuild-page">
       <div className="study-main">
         <header className="study-header">
           <div className="study-title-icon"><Icon name="clock" size={28}/></div>

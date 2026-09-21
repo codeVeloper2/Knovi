@@ -222,7 +222,7 @@ export default function LearningPathPage() {
 
   if (loading) {
     return (
-      <div className="lp-page">
+      <div className="lp-page learn-rebuild-page">
         <div className="lp-skeleton-head" />
         <div className="lp-skeleton-bar" />
         <div className="lp-skeleton-content">

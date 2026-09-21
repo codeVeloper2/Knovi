@@ -153,22 +153,26 @@ export default function LearnLayout() {
       <div className="learn-main">
         <Outlet context={{ lastSession }} />
 
-        {/* Mobile bottom tab bar — replaces the sidebar on small screens */}
-        {!isAISessionRoom && <nav className="learn-mobile-tabs" aria-label="Learn navigation">
-          {LEARN_NAV.map(item => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.exact}
-              className={({ isActive }) =>
-                `learn-mobile-tab${isActive ? " active" : ""}`
-              }
-            >
-              <span className="learn-mobile-tab-icon">{item.icon}</span>
-              <span className="learn-mobile-tab-label">{item.label}</span>
-            </NavLink>
-          ))}
-        </nav>}
+        {/* Learn tools dock — sits above the global app navigation on small screens */}
+        {!isAISessionRoom && (
+          <nav className="learn-mobile-dock" aria-label="Learn tools">
+            {LEARN_NAV.map(item => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.exact}
+                className={({ isActive }) => `learn-mobile-dock-item${isActive ? " active" : ""}`}
+              >
+                <span className="learn-mobile-dock-icon">{item.icon}</span>
+                <span className="learn-mobile-dock-label">
+                  {item.label === "Study Sessions" ? "Sessions" :
+                   item.label === "Saved Resources" ? "Saved" :
+                   item.label === "Learning Path" ? "Path" : "Subjects"}
+                </span>
+              </NavLink>
+            ))}
+          </nav>
+        )}
       </div>
     </div>
   );

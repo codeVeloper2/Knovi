@@ -376,7 +376,7 @@ export default function SavedPage() {
   }
 
   return (
-    <div className="ln-page">
+    <div className="ln-page learn-rebuild-page">
       <header className="ln-page-head">
         <div className="ln-heading-icon">
           <Icon name="bookmark" size={30} />
