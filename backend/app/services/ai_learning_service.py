@@ -151,10 +151,18 @@ async def generate_task_list(
 ) -> list[dict]:
     """
     Generate a structured task list for the session concept.
-    Called once during session preparation.
-    Returns 3-5 tasks with title, description, estimated_minutes.
+    Idempotent: returns existing tasks if already generated.
     """
-    session = await _get_session_owned(session_id, user_id, db)
+    session = await _get_session_owned(session_id, user_id, db, load_messages=True)
+
+    # Return existing task list if already generated
+    existing = next(
+        (m for m in session.messages if m.message_type == "task_list"),
+        None
+    )
+    if existing and existing.extra and existing.extra.get("tasks"):
+        return existing.extra["tasks"]
+
     subject, topic, concept = await _load_curriculum_chain(
         session.subject_id, session.topic_id, session.concept_id, db
     )
@@ -560,6 +568,12 @@ async def get_session(session_id: int, user_id: int, db: AsyncSession) -> dict:
     else:
         safe_messages = [m.serialize() for m in all_messages]
     data["messages"] = safe_messages
+
+    # Expose task list so frontend gets it on initial load
+    task_list_msg = next(
+        (m for m in all_messages if m.message_type == "task_list"), None
+    )
+    data["taskList"] = task_list_msg.extra.get("tasks", []) if task_list_msg and task_list_msg.extra else []
 
     data["questions"]        = [q.serialize() for q in session.questions]
 

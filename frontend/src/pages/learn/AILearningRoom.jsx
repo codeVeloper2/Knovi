@@ -86,16 +86,18 @@ export default function AILearningRoom() {
         api.getAISession(sessionId),
         api.getSessionMessages(sessionId),
       ]);
+
+      // Tasks come from the session object directly (backend now embeds them)
+      if (sess.taskList?.length) {
+        setTasks(sess.taskList);
+      }
+
       applyServerState(sess, msgs);
 
-      // Generate task list if not already loaded from session messages
-      const taskMsg = msgs.find(m => m.messageType === "task_list");
-      if (taskMsg?.extra?.tasks) {
-        setTasks(taskMsg.extra.tasks);
-      } else if (sess.status === "created") {
+      if (sess.status === "created") {
         await prepareSession(sess);
-      } else {
-        // Try to load from server
+      } else if (!sess.taskList?.length) {
+        // Fallback: fetch tasks separately if not yet embedded
         try {
           const t = await api.generateTaskList(sessionId);
           if (Array.isArray(t) && t.length) setTasks(t);
@@ -397,15 +399,19 @@ export default function AILearningRoom() {
   // ─────────────────────────────────────────────────────────────────────────
   if (loading) return (
     <div className="wa-shell">
-      <div className="wa-topbar">
+      <header className="wa-topbar">
         <div className="wa-topbar-avatar-wrap"><TutorAvatar size={38} /></div>
         <div className="wa-topbar-info">
           <span className="wa-topbar-name">PeerUp AI Tutor</span>
           <span className="wa-topbar-status">Loading session…</span>
         </div>
-      </div>
-      <div className="wa-messages" style={{ justifyContent: "center", alignItems: "center" }}>
-        <TypingIndicator />
+      </header>
+      <div className="wa-loading-screen">
+        <TutorAvatar size={72} />
+        <div className="wa-loading-dots">
+          <span /><span /><span />
+        </div>
+        <p className="wa-loading-text">Preparing your session…</p>
       </div>
     </div>
   );
