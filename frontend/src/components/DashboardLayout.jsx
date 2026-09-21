@@ -12,7 +12,7 @@ import MobileBottomNav from "./MobileBottomNav";
 import MobileFabMenu from "./MobileFabMenu";
 import {
   HomeIcon, DiscoverIcon, ChatIcon, LearnIcon,
-  ProgressIcon, SettingsIcon, SearchIcon, LogoutIcon,
+  ProgressIcon, SettingsIcon, LogoutIcon,
   ChevronRight, ProfileIcon, SecurityIcon, BellIcon,
 } from "./DashIcons";
 
@@ -76,7 +76,6 @@ export default function DashboardLayout() {
 
   function openSettings()  { clearTimeout(settingsLeaveTimer.current); setDesktopSettingsHover(true);  }
   function closeSettings() { settingsLeaveTimer.current = setTimeout(() => setDesktopSettingsHover(false), 120); }
-  const searchRef = useRef(null);
 
   const inSettings = location.pathname.startsWith("/app/settings");
   const isLearn = location.pathname.startsWith("/app/learn");
@@ -113,7 +112,6 @@ export default function DashboardLayout() {
     ...Object.entries(SETTINGS_SHORTCUTS).map(([to, s]) => ({ combo: s.combo, run: () => navigate(to) })),
     { combo: BACK_SHORTCUT.combo, run: () => navigate("/app") },
     { combo: "mod+b", run: () => toggle() },
-    { combo: "/",     run: () => searchRef.current?.focus() },
     { combo: "?",     run: () => setScOpen(true), allowInInputs: false },
   ]);
 
@@ -290,24 +288,6 @@ export default function DashboardLayout() {
             </div>
           </header>
 
-          {!isLearn && !isChat && (
-            <>
-              {/* ── Sub-bar: greeting + search ── */}
-              <div className="desktop-subbar">
-                <span className="desktop-subbar-greeting">
-                  Hi, <strong>{name}</strong> 👋
-                </span>
-                <div className="desktop-subbar-search">
-                  <SearchIcon width={16} height={16} />
-                  <input
-                    ref={searchRef}
-                    type="search"
-                    placeholder="Search students, subjects, or topics…"
-                  />
-                </div>
-              </div>
-            </>
-          )}
         </>
       )}
 
