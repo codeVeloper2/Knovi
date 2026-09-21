@@ -22,7 +22,7 @@ from app.models.challenge import (
     ChallengeResult,
     ChallengeSession,
 )
-from app.models.curriculum import Concept, LearningObjective, Subject, Topic, TopicProgress
+from app.models.curriculum import Concept, LearningObjective, Subject, Topic
 from app.models.user import User
 from app.services import learning_profile_service as lp_svc
 from app.services import progress_service
@@ -975,7 +975,14 @@ async def _persist_results_locked(
     *,
     incomplete: bool,
 ) -> list[ChallengeResult]:
-    existing = list(
+    """Idempotently persist one result per participant.
+
+    The challenge row is normally held with ``FOR UPDATE`` by callers, so two
+    concurrent completion paths serialize here. We nevertheless treat the
+    result table as the source of truth: zero, one, or two existing results are
+    all valid inputs, and only missing participant rows are inserted.
+    """
+    existing_rows = list(
         (
             await db.execute(
                 select(ChallengeResult).where(
@@ -984,8 +991,11 @@ async def _persist_results_locked(
             )
         ).scalars().all()
     )
-    if len(existing) == 2:
-        return existing
+    existing_by_user = {row.user_id: row for row in existing_rows}
+
+    participant_ids = _participant_ids(challenge)
+    if all(user_id in existing_by_user for user_id in participant_ids):
+        return [existing_by_user[user_id] for user_id in participant_ids]
 
     questions = await _question_rows(challenge.id, db)
     answers = await _answers_for_challenge(challenge.id, db)
@@ -1008,8 +1018,10 @@ async def _persist_results_locked(
     ).scalars().all()
     objective_map = {obj.id: obj for obj in objective_rows}
 
-    results: list[ChallengeResult] = []
-    for user_id in _participant_ids(challenge):
+    newly_created: list[ChallengeResult] = []
+    for user_id in participant_ids:
+        if user_id in existing_by_user:
+            continue
         snapshot = build_player_result_snapshot(
             user_id=user_id,
             revealed_questions=revealed_questions,
@@ -1027,42 +1039,26 @@ async def _persist_results_locked(
             performance=snapshot["performance"],
         )
         db.add(result)
-        results.append(result)
+        newly_created.append(result)
+        existing_by_user[user_id] = result
 
     await db.flush()
 
-    # A completed battle is practice evidence. Do not write concept mastery.
-    if not incomplete:
+    # A completed battle is practice evidence. Route it through the existing
+    # progress service so Challenge does not create a competing progress model.
+    # Only newly-created results increment sessions_completed.
+    if not incomplete and newly_created:
         completion_time = challenge.completed_at or now_utc()
-        for user_id, result in zip(_participant_ids(challenge), results):
-            topic_progress = (
-                await db.execute(
-                    select(TopicProgress)
-                    .where(
-                        TopicProgress.user_id == user_id,
-                        TopicProgress.topic_id == challenge.topic_id,
-                    )
-                    .with_for_update()
-                )
-            ).scalar_one_or_none()
-            if topic_progress is None:
-                topic_progress = TopicProgress(
-                    user_id=user_id,
-                    topic_id=challenge.topic_id,
-                    practice_score=result.accuracy,
-                    needs_review=result.accuracy < 70,
-                    last_studied_at=completion_time,
-                )
-                db.add(topic_progress)
-            else:
-                previous = topic_progress.practice_score
-                topic_progress.practice_score = max(previous or 0, result.accuracy)
-                topic_progress.needs_review = bool(
-                    topic_progress.needs_review or result.accuracy < 70
-                )
-                topic_progress.last_studied_at = completion_time
+        for result in newly_created:
+            await progress_service.record_challenge_practice(
+                db,
+                user_id=result.user_id,
+                topic_id=challenge.topic_id,
+                accuracy=result.accuracy,
+                completed_at=completion_time,
+            )
 
-    return results
+    return [existing_by_user[user_id] for user_id in participant_ids]
 
 
 async def _post_completion_learning_effects(
@@ -1090,6 +1086,19 @@ async def _post_completion_learning_effects(
         )
     ).scalars().all()
     objective_map = {row.id: row for row in objective_rows}
+
+    # A completed battle is also a normal learning activity for the existing
+    # streak/badge system. ``record_activity`` is idempotent for same-day
+    # repeats, and badge evaluation itself is duplicate-safe.
+    for result in result_rows:
+        try:
+            await progress_service.record_activity(db, result.user_id)
+            await progress_service.evaluate_badges(db, result.user_id)
+        except Exception as exc:
+            logger.warning(
+                "challenge_progress_activity_failed challenge_id=%s user_id=%s error=%s",
+                challenge_id, result.user_id, exc,
+            )
 
     for result in result_rows:
         observations: list[dict] = []
@@ -1616,6 +1625,14 @@ async def get_challenge_state(
     user_id: int,
     db: AsyncSession,
 ) -> dict[str, Any]:
+    # Authorization must happen before any state-changing timer reconciliation.
+    challenge = (
+        await db.execute(select(ChallengeSession).where(ChallengeSession.id == challenge_id))
+    ).scalar_one_or_none()
+    if not challenge:
+        raise HTTPException(404, "Challenge not found.")
+    _role(challenge, user_id)
+
     events, _changed = await advance_challenge_timers(challenge_id, db)
     # Any state transitions above are authoritative; now load a clean snapshot.
     challenge = (

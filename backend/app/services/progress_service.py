@@ -9,6 +9,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.learn import Course, CourseEnrollment, Lesson, Tutorial, VideoProgress
+from app.models.curriculum import TopicProgress
 from app.models.progress import BADGE_CATALOGUE, BADGE_MAP, Certificate, EarnedBadge
 from app.models.user import User, _xp_level
 
@@ -102,6 +103,59 @@ async def record_activity(session: AsyncSession, user_id: int) -> int:
     )
     await session.commit()
     return new_streak
+
+
+async def record_challenge_practice(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    topic_id: int,
+    accuracy: int,
+    completed_at: datetime,
+) -> TopicProgress:
+    """Record one completed AI Quiz Battle as practice in existing topic progress.
+
+    This is deliberately a progress-service operation, not a second progress
+    system. Practice evidence can improve ``practice_score`` but never writes
+    ``understanding_score`` because a battle does not measure conceptual mastery.
+    ``sessions_completed`` counts completed practice sessions and is incremented
+    by the caller only when a ChallengeResult is first created.
+    """
+    row = (
+        await session.execute(
+            select(TopicProgress)
+            .where(
+                TopicProgress.user_id == user_id,
+                TopicProgress.topic_id == topic_id,
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+
+    accuracy = max(0, min(100, int(accuracy)))
+    if row is None:
+        row = TopicProgress(
+            user_id=user_id,
+            topic_id=topic_id,
+            understanding_score=None,
+            practice_score=accuracy,
+            sessions_completed=1,
+            needs_review=accuracy < 70,
+            last_studied_at=completed_at,
+        )
+        session.add(row)
+    else:
+        row.practice_score = max(row.practice_score or 0, accuracy)
+        row.sessions_completed = (row.sessions_completed or 0) + 1
+        row.needs_review = bool(row.needs_review or accuracy < 70)
+        row.last_studied_at = max(
+            row.last_studied_at or completed_at,
+            completed_at,
+        )
+        # Do not overwrite understanding_score: challenge results are practice
+        # evidence, not a direct comprehension/mastery measurement.
+
+    return row
 
 
 # ─────────────────────────────────────────────────────────────────────────────

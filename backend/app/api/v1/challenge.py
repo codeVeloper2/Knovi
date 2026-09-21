@@ -32,8 +32,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _ws_error(detail: str) -> dict[str, Any]:
-    return {"type": "error", "data": {"message": detail}}
+def _ws_error(detail: str, challenge_id: int | None = None) -> dict[str, Any]:
+    data: dict[str, Any] = {"message": detail}
+    if challenge_id is not None:
+        data["challengeId"] = challenge_id
+    return {"type": "error", "data": data}
 
 
 async def _load_ws_user(token: str) -> User:
@@ -308,12 +311,12 @@ async def challenge_websocket(
 
                 await websocket.send_json(_ws_error("Unsupported challenge event."))
             except ValidationError as exc:
-                await websocket.send_json(_ws_error(exc.errors()[0].get("msg", "Invalid event.")))
+                await websocket.send_json(_ws_error(exc.errors()[0].get("msg", "Invalid event."), challenge_id))
             except HTTPException as exc:
-                await websocket.send_json(_ws_error(str(exc.detail)))
+                await websocket.send_json(_ws_error(str(exc.detail), challenge_id))
             except Exception:
                 logger.exception("challenge_ws_event_failed challenge_id=%s user_id=%s", challenge_id, user.id)
-                await websocket.send_json(_ws_error("The challenge event could not be processed."))
+                await websocket.send_json(_ws_error("The challenge event could not be processed.", challenge_id))
 
     except WebSocketDisconnect:
         pass

@@ -13,6 +13,8 @@ from typing import Any
 
 from fastapi import WebSocket
 
+from app.schemas.challenge import ChallengeWSServerEvent
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,7 +49,14 @@ class ChallengeConnectionManager:
         async with self._lock:
             return bool(self._rooms.get(challenge_id, {}).get(user_id))
 
+    @staticmethod
+    def _validated_payload(payload: dict[str, Any]) -> dict[str, Any]:
+        # Keep the WS contract narrow without coupling the manager to challenge
+        # state. Challenge-specific state/question fields remain in ``data``.
+        return ChallengeWSServerEvent.model_validate(payload).model_dump(mode="json")
+
     async def broadcast(self, challenge_id: int, payload: dict[str, Any]) -> None:
+        payload = self._validated_payload(payload)
         async with self._lock:
             targets = [socket for sockets in self._rooms.get(challenge_id, {}).values() for socket in sockets]
         if not targets:
@@ -69,6 +78,7 @@ class ChallengeConnectionManager:
                     self._rooms.pop(challenge_id, None)
 
     async def send_user(self, challenge_id: int, user_id: int, payload: dict[str, Any]) -> None:
+        payload = self._validated_payload(payload)
         async with self._lock:
             targets = list(self._rooms.get(challenge_id, {}).get(user_id, set()))
         dead: list[WebSocket] = []

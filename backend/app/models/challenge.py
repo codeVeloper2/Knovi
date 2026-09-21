@@ -16,6 +16,7 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     Index,
+    text,
     Integer,
     String,
     Text,
@@ -79,6 +80,17 @@ class ChallengeSession(Base):
         Index("idx_challenges_concept", "concept_id"),
         Index("idx_challenges_status", "status"),
         Index("idx_challenges_expires", "expires_at"),
+        Index(
+            "uq_challenge_active_pair_concept",
+            text("LEAST(challenger_id, opponent_id)"),
+            text("GREATEST(challenger_id, opponent_id)"),
+            "concept_id",
+            unique=True,
+            postgresql_where=text(
+                "status IN ('pending','accepted','preparing','waiting','countdown',"
+                "'question_active','waiting_for_opponent','question_reveal','next_question')"
+            ),
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

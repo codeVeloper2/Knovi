@@ -1,1 +1,0 @@
-"""PeerUP backend application package."""
