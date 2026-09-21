@@ -4523,6 +4523,67 @@ kbd {
   100% { opacity: 0; }
 }
 
+/* AI Learning Profile Observation Cards */
+.observation-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--navy-line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  transition: background 0.2s;
+}
+.observation-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.observation-category {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  color: var(--blue);
+  background: rgba(91, 110, 245, 0.1);
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.observation-confidence {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+.observation-confidence.conf-low {
+  color: var(--text-soft);
+  background: rgba(255, 255, 255, 0.05);
+}
+.observation-confidence.conf-medium {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+}
+.observation-confidence.conf-high {
+  color: var(--teal);
+  background: rgba(52, 211, 153, 0.1);
+}
+
+.observation-text {
+  margin: 8px 0 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.observation-strategy {
+  margin: 8px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--text-soft);
+}
+.observation-strategy strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    CHAT UI REDESIGN — v2
    ═══════════════════════════════════════════════════════════════════ */

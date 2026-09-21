@@ -34,7 +34,9 @@ from app.models.ai_learning import (
     AISessionSummary, AISessionTeaching, AISessionTeachingAttempt,
 )
 from app.models.curriculum import Concept, LearningObjective, Misconception, Subject, Topic
+from app.models.learning_profile import AILearningProfile
 from app.services.ai_service import call_with_fallback, parse_json
+from app.services import learning_profile_service as lp_svc
 
 logger = logging.getLogger(__name__)
 
@@ -279,6 +281,7 @@ def _build_curriculum_context(
     topic: Topic,
     concept: Concept,
     session: AILearningSession,
+    learner_profile: Optional["AILearningProfile"] = None,
 ) -> str:
     objectives = "\n".join(
         f"  {i+1}. {lo.title}: {lo.description}"
@@ -300,6 +303,10 @@ def _build_curriculum_context(
 
     intent_note = _INTENT_PROMPT_MODIFIER.get(session.intent, "")
 
+    # Build the learner profile section (empty string if no profile / empty profile)
+    learner_ctx = lp_svc.build_learner_context(learner_profile, subject_name=subject.name)
+    learner_section = f"\n\n{learner_ctx}" if learner_ctx else ""
+
     return (
         f"CURRICULUM CONTEXT\n"
         f"Subject: {subject.name}\n"
@@ -316,6 +323,7 @@ def _build_curriculum_context(
         f"Student note: {session.student_note or '(none)'}\n"
         f"Custom intent text: {session.custom_intent_text or '(none)'}\n\n"
         f"TEACHING DIRECTIVE\n{intent_note}"
+        f"{learner_section}"
     )
 
 
@@ -681,7 +689,10 @@ async def teach_concept(session_id: int, user_id: int, db: AsyncSession, task_in
     used_strategies = [t.strategy for t in session.teaching]
     strategy        = _pick_next_strategy(used_strategies, session.intent)
     attempt_number  = len(used_strategies) + 1
-    curriculum_ctx  = _build_curriculum_context(subject, topic, concept, session)
+
+    # Load the learner profile once for this function — passed to all prompt builders.
+    _learner_profile = await lp_svc.get_profile(session.user_id, db)
+    curriculum_ctx  = _build_curriculum_context(subject, topic, concept, session, _learner_profile)
 
     # Build or reuse the AI-generated learning plan. The plan is persisted inside
     # the teaching snapshot/message metadata, so no new database table is required.
@@ -731,7 +742,7 @@ Return learning_tasks as:
 ]
 """ if not current_plan else ""
 
-    curriculum_ctx = _build_curriculum_context(subject, topic, concept, session)
+    curriculum_ctx = _build_curriculum_context(subject, topic, concept, session, _learner_profile)
     prompt = f"""{curriculum_ctx}
 
 TEACHING TASK
@@ -884,7 +895,8 @@ async def respond_to_student(
     subject, topic, concept = await _load_curriculum_chain(
         session.subject_id, session.topic_id, session.concept_id, db
     )
-    curriculum_ctx = _build_curriculum_context(subject, topic, concept, session)
+    _learner_profile_chat = await lp_svc.get_profile(session.user_id, db)
+    curriculum_ctx = _build_curriculum_context(subject, topic, concept, session, _learner_profile_chat)
 
     post_session_directive = ""
     if is_post_session:
@@ -1290,6 +1302,124 @@ def _correct_option_label(question: AISessionQuestion) -> Optional[str]:
             return label
     return None
 
+
+async def _generate_and_store_observations(
+    *,
+    user_id: int,
+    session: AILearningSession,
+    question: AISessionQuestion,
+    answer: AISessionAnswer,
+    understanding: str,
+    needs_reteach: bool,
+    misconception: Optional[str],
+    recommended_strategy: Optional[str],
+    subject_name: Optional[str],
+    db: AsyncSession,
+) -> None:
+    """
+    Generate structured AI observations from a single answer evaluation and
+    append them to the student's learning profile.
+
+    Observations are evidence-based statements with a confidence score.
+    They are kept separate from the student's self-reported preferences and
+    never overwrite them.  Only observations with confidence >= 0.50 are stored
+    (enforced inside learning_profile_service.append_observations_bulk).
+    """
+    observations: list[dict] = []
+    session_id = session.id
+
+    # ── 1. Teaching-strategy effectiveness ───────────────────────────────
+    # Find the strategy that was active when this answer was produced.
+    current_teaching = await _get_current_teaching(session_id, db)
+    if current_teaching:
+        strategy = current_teaching.strategy
+        if understanding == "strong":
+            observations.append({
+                "type": "learning_observation",
+                "category": "teaching_strategy",
+                "observation": (
+                    f"Student demonstrated strong understanding after a "
+                    f"'{strategy}' explanation — answers scored {answer.score}/100."
+                ),
+                "strategy": strategy,
+                "confidence": min(0.90, 0.65 + (answer.score or 0) / 200),
+                "source": "retrieval_answer",
+                "session_id": session_id,
+            })
+        elif understanding == "weak" and needs_reteach:
+            observations.append({
+                "type": "learning_observation",
+                "category": "teaching_strategy",
+                "observation": (
+                    f"Student struggled after a '{strategy}' explanation "
+                    f"(score: {answer.score}/100). A different approach may work better."
+                ),
+                "strategy": strategy,
+                "confidence": min(0.85, 0.55 + max(0, 50 - (answer.score or 0)) / 100),
+                "source": "retrieval_answer",
+                "session_id": session_id,
+            })
+
+    # ── 2. Misconception observation ──────────────────────────────────────
+    if misconception:
+        observations.append({
+            "type": "learning_observation",
+            "category": "misconception",
+            "observation": misconception,
+            "confidence": 0.78,
+            "source": "retrieval_answer",
+            "session_id": session_id,
+        })
+
+    # ── 3. Subject-level strength observation (strong performance) ────────
+    if understanding == "strong" and answer.score is not None and answer.score >= 85:
+        # Resolve subject name lazily if not provided
+        subject_label = subject_name
+        if not subject_label:
+            try:
+                subj = (await db.execute(
+                    select(AILearningSession).where(AILearningSession.id == session_id)
+                )).scalar_one_or_none()
+                if subj:
+                    from app.models.curriculum import Subject as SubjectModel
+                    s = (await db.execute(
+                        select(SubjectModel).where(SubjectModel.id == subj.subject_id)
+                    )).scalar_one_or_none()
+                    subject_label = s.name if s else None
+            except Exception:
+                pass
+
+        if subject_label:
+            observations.append({
+                "type": "learning_observation",
+                "category": "strength",
+                "observation": (
+                    f"Student answered a {subject_label} retrieval question correctly "
+                    f"with a score of {answer.score}/100."
+                ),
+                "confidence": 0.72,
+                "source": "retrieval_answer",
+                "session_id": session_id,
+            })
+
+    # ── 4. Persistent struggle observation ───────────────────────────────
+    if understanding == "weak" and answer.attempt_number >= 2:
+        observations.append({
+            "type": "learning_observation",
+            "category": "struggle",
+            "observation": (
+                f"Student has answered this question incorrectly across "
+                f"{answer.attempt_number} attempts (latest score: {answer.score}/100)."
+            ),
+            "confidence": min(0.90, 0.60 + answer.attempt_number * 0.10),
+            "source": "repeated_attempts",
+            "session_id": session_id,
+        })
+
+    if observations:
+        await lp_svc.append_observations_bulk(user_id, observations, db)
+
+
 async def submit_answer(
     session_id: int,
     user_id: int,
@@ -1443,6 +1573,24 @@ Scoring guide:
     await db.commit()
     await db.refresh(answer)
 
+    # ── Generate and persist AI observations from this answer ─────────────
+    # Best-effort: observation failure must never block the answer response.
+    try:
+        await _generate_and_store_observations(
+            user_id=user_id,
+            session=session,
+            question=question,
+            answer=answer,
+            understanding=understanding,
+            needs_reteach=needs_reteach,
+            misconception=parsed.get("misconception"),
+            recommended_strategy=parsed.get("recommended_strategy"),
+            subject_name=None,  # resolved lazily inside the helper
+            db=db,
+        )
+    except Exception as obs_exc:
+        logger.warning("Observation generation failed (non-fatal): %s", obs_exc)
+
     result = {
         **answer.serialize(),
         "understanding":       understanding,
@@ -1511,7 +1659,8 @@ async def generate_adaptive_reteach(
             + "\n".join(f"  - {m}" for m in identified_misconceptions[:3])
         )
 
-    curriculum_ctx = _build_curriculum_context(subject, topic, concept, session)
+    _learner_profile_reteach = await lp_svc.get_profile(session.user_id, db)
+    curriculum_ctx = _build_curriculum_context(subject, topic, concept, session, _learner_profile_reteach)
 
     system_prompt = (
         "You are an adaptive AI tutor. The student struggled with this concept. "
@@ -1598,6 +1747,28 @@ Return JSON (all array fields required; may be empty):
     )
     _set_status(session, "reteaching")
     await db.commit()
+
+    # Record that the AI switched strategy — this is itself an observation.
+    try:
+        await lp_svc.append_observation(
+            session.user_id,
+            {
+                "type": "learning_observation",
+                "category": "teaching_strategy",
+                "observation": (
+                    f"Student required reteaching — AI switched from previous strategy "
+                    f"to '{new_strategy}'. Reason: {reason or 'student struggled'}."
+                ),
+                "strategy": new_strategy,
+                "confidence": 0.65,
+                "source": "adaptive_reteach",
+                "session_id": session_id,
+            },
+            db,
+        )
+    except Exception as obs_exc:
+        logger.warning("Reteach observation failed (non-fatal): %s", obs_exc)
+
     await db.refresh(teaching)
     return teaching.serialize()
 

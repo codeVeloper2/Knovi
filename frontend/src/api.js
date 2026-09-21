@@ -628,3 +628,24 @@ export function recordIntegrityEvent(sessionId, eventType, meta = null) {
     meta,
   });
 }
+
+// ══════════════════════════════════════════════════════════════
+// AI LEARNING PROFILE
+// ══════════════════════════════════════════════════════════════
+
+/** Fetch the current student's AI learning profile (creates empty one if new). */
+export function getLearningProfile() {
+  return request("/api/learning/profile", { auth: true });
+}
+
+/**
+ * Create or update the student-reported learning profile.
+ * @param {{ strengths, struggles, learningPreferences, learningBehavior, personalNote }} profile
+ */
+export function saveLearningProfile(profile) {
+  return request("/api/learning/profile", {
+    method: "PUT",
+    body: profile,
+    auth: true,
+  });
+}

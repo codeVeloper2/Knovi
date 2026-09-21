@@ -22,6 +22,14 @@ const SECTIONS = [
     emoji: "📚",
   },
   {
+    icon: LearnIcon,
+    label: "Learning Profile",
+    desc: "Customize how PeerUP's AI teaches you",
+    route: "/app/settings/learning-profile",
+    accent: "#8b5cf6",
+    emoji: "🧠",
+  },
+  {
     icon: SecurityIcon,
     label: "Security",
     desc: "Password and account settings",

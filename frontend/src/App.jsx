@@ -32,6 +32,7 @@ import DiscoverPage from "./pages/discover/DiscoverPage";
 import MatchRequestsPage from "./pages/match/MatchRequestsPage";
 import SettingsProfile from "./pages/dashboard/settings/Profile";
 import SettingsSubjects from "./pages/dashboard/settings/Subjects";
+import SettingsLearningProfile from "./pages/dashboard/settings/LearningProfile";
 import SettingsSecurity from "./pages/dashboard/settings/Security";
 import SettingsNotifications from "./pages/dashboard/settings/Notifications";
 import SettingsMobile from "./pages/dashboard/settings/SettingsMobile";
@@ -113,6 +114,7 @@ function AppRoutes() {
           <Route index element={<SettingsIndex />} />
           <Route path="profile"       element={<SettingsProfile />} />
           <Route path="subjects"      element={<SettingsSubjects />} />
+          <Route path="learning-profile" element={<SettingsLearningProfile />} />
           <Route path="security"      element={<SettingsSecurity />} />
           <Route path="notifications" element={<SettingsNotifications />} />
         </Route>

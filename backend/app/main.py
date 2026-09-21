@@ -14,6 +14,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.api.v1 import ai, auth, chat, learn, match, notifications, profile, progress, users
 from app.api.v1 import admin_curriculum, curriculum
 from app.api.v1 import ai_learning
+from app.api.v1 import learning_profile
 from app.api.v1.auth import limiter
 from app.core.config import settings
 
@@ -50,3 +51,6 @@ app.include_router(curriculum.router, prefix="/api", tags=["curriculum"])
 
 # ── AI Learning Sessions ──
 app.include_router(ai_learning.router, prefix="/api", tags=["ai-learning"])
+
+# ── AI Learning Profile ──
+app.include_router(learning_profile.router, prefix="/api", tags=["learning-profile"])
