@@ -1024,8 +1024,8 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
         </div>
 
         <div className="cr-header-actions">
-          <button type="button" className="icon-btn" title="Voice call" onClick={() => setComingSoon("phone")} aria-label="Voice call"><PhoneIcon /></button>
-          <button type="button" className="icon-btn" title="Video call" onClick={() => setComingSoon("video")} aria-label="Video call"><VideoIcon /></button>
+          <button type="button" className="icon-btn cr-call-action" title="Voice call" onClick={() => setComingSoon("phone")} aria-label="Voice call"><PhoneIcon /></button>
+          <button type="button" className="icon-btn cr-video-action" title="Video call" onClick={() => setComingSoon("video")} aria-label="Video call"><VideoIcon /></button>
           <button type="button" className="icon-btn cr-search-action" title="Search in conversation" onClick={() => toast.info("Message search is coming soon.")} aria-label="Search in conversation"><SearchIcon /></button>
           <div ref={headerMenuRef} style={{ position: "relative" }}>
             <button type="button" className="icon-btn" onClick={() => setShowHeaderMenu(v => !v)} aria-label="More options">

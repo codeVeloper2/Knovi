@@ -60,6 +60,40 @@ function fmtDate(iso) {
 const TABS = ["Overview", "Badges", "Certificates"];
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Loading skeleton
+// ─────────────────────────────────────────────────────────────────────────────
+function ProgressSkeleton() {
+  return (
+    <div className="progress-page progress-page--loading" aria-label="Loading progress" aria-busy="true">
+      <MobileHeader />
+      <div className="progress-head">
+        <div className="progress-eyebrow skeleton" />
+        <div className="progress-title-skeleton skeleton" />
+        <div className="progress-subtitle-skeleton skeleton" />
+      </div>
+      <div className="progress-tabs-skeleton">
+        <span className="skeleton" /><span className="skeleton" /><span className="skeleton" />
+      </div>
+      <section className="progress-hero-skeleton">
+        <div className="progress-ring-skeleton skeleton" />
+        <div className="progress-copy-skeleton">
+          <span className="skeleton" /><span className="skeleton" /><span className="skeleton" />
+        </div>
+      </section>
+      <div className="progress-stats-skeleton">
+        {[1,2,3].map(i => <div className="progress-stat-skeleton" key={i}><i className="skeleton" /><div><b className="skeleton" /><span className="skeleton" /></div></div>)}
+      </div>
+      <section className="progress-section-skeleton">
+        <div className="skeleton progress-section-title-skeleton" />
+        <div className="progress-badge-skeleton-row">
+          {[1,2,3,4].map(i => <div className="progress-badge-skeleton" key={i}><i className="skeleton" /><span className="skeleton" /></div>)}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Progress() {
@@ -119,28 +153,14 @@ export default function Progress() {
   }, []);
 
   // ── Loading ──
-  if (loading) {
-    return (
-      <div className="home">
-        <MobileHeader />
-        <div className="home-head">
-          <h1>Your Progress</h1>
-          <p>Track your level, badges, and certificates as you learn.</p>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "60px 0", gap: 12, color: "var(--text-dim)" }}>
-          <span className="discover-spinner" />
-          Loading your progress…
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <ProgressSkeleton />;
 
   // ── Error ──
   if (error || !data) {
     return (
-      <div className="home">
+      <div className="progress-page">
         <MobileHeader />
-        <div className="home-head">
+        <div className="progress-head">
           <h1>Your Progress</h1>
         </div>
         <div className="placeholder-card">
@@ -178,21 +198,21 @@ export default function Progress() {
   const dash  = (pct / 100) * C;
 
   return (
-    <div className="home">
+    <div className="progress-page">
       {/* Mobile-only header */}
       <MobileHeader />
 
-      <div className="home-head">
+      <div className="progress-head">
         <h1>Your Progress</h1>
         <p>Track your level, badges, and certificates as you learn.</p>
       </div>
 
       {/* Tabs */}
-      <div className="seg-tabs">
+      <div className="progress-tabs">
         {TABS.map((t) => (
           <button
             key={t}
-            className={`seg-tab ${tab === t ? "active" : ""}`}
+            className={`progress-tab ${tab === t ? "active" : ""}`}
             type="button"
             onClick={() => setTab(t)}
           >
@@ -204,7 +224,7 @@ export default function Progress() {
       {/* ── Overview tab ── */}
       {tab === "Overview" && (
         <>
-          <div className="prog-grid">
+          <div className="progress-overview-grid">
             {/* Level ring card */}
             <div className="prog-level-card">
               <div className="ring-wrap">
@@ -261,7 +281,7 @@ export default function Progress() {
           </div>
 
           {/* Recent badges */}
-          <section className="home-block" style={{ marginTop: 20 }}>
+          <section className="home-block progress-section" style={{ marginTop: 20 }}>
             <div className="home-block-head">
               <h2>Recent Badges</h2>
               <button className="link-btn" type="button" onClick={() => setTab("Badges")}>
