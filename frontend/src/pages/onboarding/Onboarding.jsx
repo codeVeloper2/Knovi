@@ -14,10 +14,10 @@ const STEPS = [
 ];
 
 const TERMS = [
-  { title: "Learn with respect", body: "Treat classmates as partners, not competitors. No harassment, mockery, or pressure." },
-  { title: "Honest help", body: "Explain ideas and work through problems together. Don't complete graded work for someone else." },
-  { title: "Keep it private", body: "Don't share others' photos, messages, or personal details outside PeerUp." },
-  { title: "Show up as yourself", body: "Use a real name and a photo you're comfortable with so peers can recognize you." },
+  { title: "Learn with integrity", body: "Use AI assistance to understand and grow — not to complete graded work dishonestly or bypass real learning." },
+  { title: "Respect your peers", body: "Treat other students as partners. No harassment, mockery, or pressure — everyone is here to learn." },
+  { title: "Keep it private", body: "Don't share others' photos, messages, or personal details outside PeerUP." },
+  { title: "Show up as yourself", body: "Use a real name and a photo you're comfortable with so other students can recognise you." },
 ];
 
 export default function Onboarding() {
@@ -114,7 +114,7 @@ export default function Onboarding() {
             </li>
           ))}
         </ul>
-        <p className="wizard-hint">Complete your profile so we can match you with the right study partners.</p>
+        <p className="wizard-hint">Complete your profile to personalise your AI learning experience.</p>
       </aside>
 
       {/* ── Panel ── */}
@@ -124,8 +124,8 @@ export default function Onboarding() {
 
           {step === "personal" && (
             <>
-              <h2>Complete Your Profile</h2>
-              <p className="card-subtitle">Tell us a bit about yourself so we can match you with the right study partners.</p>
+              <h2>Set up your profile</h2>
+              <p className="card-subtitle">Tell us a bit about yourself so PeerUP can personalise your learning experience.</p>
 
               <div className="photo-row">
                 {preview ? (
@@ -158,7 +158,7 @@ export default function Onboarding() {
               <div className="field">
                 <label htmlFor="bio">Bio (optional)</label>
                 <textarea id="bio" rows={3} value={bio} onChange={(e) => setBio(e.target.value)}
-                  placeholder="What are you hoping to learn or teach this term?" />
+                  placeholder="What are you hoping to learn this term?" />
               </div>
 
               <div className="wizard-actions">
@@ -169,11 +169,11 @@ export default function Onboarding() {
 
           {step === "subjects" && (
             <>
-              <h2>Subjects &amp; Availability</h2>
-              <p className="card-subtitle">Let others know what you can teach and what you need help with.</p>
+              <h2>Your subjects</h2>
+              <p className="card-subtitle">Let PeerUP know what you're studying and where you want to focus your learning.</p>
 
               <div className="field">
-                <label>Subjects I can teach</label>
+                <label>Subjects I'm confident in</label>
                 <div className="chip-grid">
                   {SUBJECTS.map((s) => (
                     <button key={s} type="button" className={`chip ${goodAt.includes(s) ? "on" : ""}`}
@@ -183,7 +183,7 @@ export default function Onboarding() {
               </div>
 
               <div className="field">
-                <label>Subjects I need help with</label>
+                <label>Subjects I want to learn</label>
                 <div className="chip-grid">
                   {SUBJECTS.map((s) => (
                     <button key={s} type="button" className={`chip ${needHelp.includes(s) ? "on" : ""}`}
@@ -264,7 +264,7 @@ export default function Onboarding() {
 
           {step === "agreement" && (            <>
               <h2>Learning Agreement</h2>
-              <p className="card-subtitle">One quick agreement to keep PeerUp a safe place to study.</p>
+              <p className="card-subtitle">One quick agreement to keep PeerUP a safe, focused place to learn.</p>
 
               <div className="agreement">
                 {TERMS.map((t) => (
@@ -277,7 +277,7 @@ export default function Onboarding() {
 
               <label className="check">
                 <input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />
-                <span>By checking this box, you agree to use PeerUp for learning only. Our platform is for educational purposes and not for anything inappropriate.</span>
+                <span>By checking this box, you agree to use PeerUP respectfully and for educational purposes only.</span>
               </label>
 
               <div className="wizard-actions">

@@ -16,7 +16,7 @@ const SECTIONS = [
   {
     icon: LearnIcon,
     label: "Subjects",
-    desc: "What you teach and what you need help with",
+    desc: "Subjects you study and where you want to focus",
     route: "/app/settings/subjects",
     accent: "#0ea5e9",
     emoji: "📚",
@@ -158,7 +158,7 @@ export default function SettingsMobile() {
         </button>
       </div>
 
-      <p className="sm-footer">PeerUP · Your learning community</p>
+      <p className="sm-footer">PeerUP · Learn. Teach. Grow.</p>
 
       {/* ── Logout Confirmation Dialog ── */}
       <ConfirmDialog

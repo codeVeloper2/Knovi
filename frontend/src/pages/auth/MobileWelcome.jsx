@@ -147,10 +147,10 @@ export function LockIllustration() {
 }
 
 const FEATURES = [
-  { emoji: "🔍", text: "Find study partners" },
-  { emoji: "📚", text: "Access learning resources" },
-  { emoji: "💬", text: "Connect and collaborate" },
-  { emoji: "📈", text: "Track your progress" },
+  { emoji: "🤖", text: "Learn with an AI tutor" },
+  { emoji: "📚", text: "Study concepts and practice" },
+  { emoji: "📈", text: "Track your learning progress" },
+  { emoji: "🤝", text: "Connect with other students" },
 ];
 
 export default function MobileWelcome() {
@@ -190,7 +190,7 @@ export default function MobileWelcome() {
           <div className="mob-splash-illus">
             <SplashIllustration />
           </div>
-          <p className="mob-splash-tagline">Connecting students.<br />Building better futures.</p>
+          <p className="mob-splash-tagline">Learn. Teach. Grow.</p>
           <div className="mob-splash-dots">
             <span className="mob-dot mob-dot--active" />
             <span className="mob-dot" />
@@ -213,8 +213,8 @@ export default function MobileWelcome() {
 
         {/* Hero text */}
         <div className="mob-welcome-hero">
-          <h1 className="mob-welcome-title">Welcome to<br /><span className="mob-accent">PeerUp!</span></h1>
-          <p className="mob-welcome-sub">Join a community of learners and start your learning journey today.</p>
+          <h1 className="mob-welcome-title">Welcome to<br /><span className="mob-accent">PeerUP</span></h1>
+          <p className="mob-welcome-sub">Your AI-powered learning platform — study any concept, track your progress, and grow with every session.</p>
         </div>
 
         {/* Feature list */}

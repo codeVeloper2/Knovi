@@ -7,10 +7,10 @@ import { LogoMark } from "../../components/Logo";
    Shared auth shell (left brand + right panel)
    ──────────────────────────────────────────── */
 const FEATURES = [
-  { icon: "users",  color: "blue",   title: "Find study partners", body: "Learn from people who get you" },
-  { icon: "chat",   color: "teal",   title: "Connect & chat",      body: "Chat, share notes, collaborate" },
-  { icon: "spark",  color: "gold",   title: "Use AI tools",        body: "Get help, create notes, build flashcards" },
-  { icon: "chart",  color: "purple", title: "Track your progress", body: "Earn XP, unlock badges, reach your goals" },
+  { icon: "spark",  color: "blue",   title: "AI-powered learning",  body: "Learn any concept with a personal AI tutor" },
+  { icon: "study",  color: "teal",   title: "Study with a timer",   body: "Focus sessions, retrieval practice, and reteaching" },
+  { icon: "chart",  color: "purple", title: "Track your progress",  body: "Session summaries, XP, badges, and insights" },
+  { icon: "users",  color: "gold",   title: "Connect with peers",   body: "Learn with other students and share knowledge" },
 ];
 
 export function AuthShell({ topRight, mobileBack, children }) {
@@ -26,8 +26,8 @@ export function AuthShell({ topRight, mobileBack, children }) {
         </div>
 
         <div className="brand-hero">
-          <h1>Better Students.<br /><span className="gradient-text">Brighter Futures.</span></h1>
-          <p>Join a community of learners and start your journey today. Teach, learn, share and grow — together.</p>
+          <h1>Learn Smarter.<br /><span className="gradient-text">Grow Faster.</span></h1>
+          <p>PeerUP puts an AI tutor in your corner — pick a concept, set your goal, and learn at your own pace.</p>
           <ul className="feature-list">
             {FEATURES.map((f) => (
               <li key={f.title}>
@@ -39,7 +39,7 @@ export function AuthShell({ topRight, mobileBack, children }) {
         </div>
 
         <div className="brand-footer">
-          <span className="brand-tagline">Real students. Real help. Real progress.</span>
+          <span className="brand-tagline">Learn. Teach. Grow.</span>
         </div>
       </section>
 
@@ -107,8 +107,8 @@ export default function Login() {
       topRight={<>Don't have an account? <Link to="/signup">Sign up <Arrow small /></Link></>}
       mobileBack={<Link to="/welcome" className="mob-back-link"><MobBackIcon /> Back</Link>}
     >
-      <h2>Welcome Back!</h2>
-      <p className="card-subtitle">Log in to your PeerUp account</p>
+      <h2>Welcome back</h2>
+      <p className="card-subtitle">Sign in and continue your learning journey.</p>
 
       {!firebaseReady && (
         <div className="alert alert-error">Firebase isn't configured. Add your keys to <code>frontend/.env</code>.</div>
@@ -147,7 +147,7 @@ export default function Login() {
         </div>
 
         <button className="btn btn-primary" type="submit" disabled={busy || !firebaseReady}>
-          {busy ? <span className="btn-inner"><Spinner /> Logging in…</span> : <span className="btn-inner">Log In <Arrow /></span>}
+          {busy ? <span className="btn-inner"><Spinner /> Signing in…</span> : <span className="btn-inner">Sign In <Arrow /></span>}
         </button>
       </form>
 
@@ -176,6 +176,7 @@ export function FeatureIcon({ name }) {
   if (name === "chat")   return <svg {...p}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>;
   if (name === "spark")  return <svg {...p}><path d="M9 18h6M10 22h4" /><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1h6c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z" /></svg>;
   if (name === "chart")  return <svg {...p}><path d="M3 3v18h18" /><path d="m19 9-5 5-4-4-3 3" /></svg>;
+  if (name === "study")  return <svg {...p}><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 9h6M9 12h6M9 15h4" /></svg>;
   return null;
 }
 

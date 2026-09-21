@@ -105,8 +105,8 @@ export default function VerifyEmail() {
       {status === "success" ? (
         <div className="mob-success-state">
           <div className="mob-auth-illus"><SuccessIllustration /></div>
-          <h2 className="mob-success-title">Account Created!</h2>
-          <p className="mob-success-sub">Your account has been successfully verified. Welcome to PeerUp!</p>
+          <h2 className="mob-success-title">You're verified!</h2>
+          <p className="mob-success-sub">Your account is ready. Let's set up your learning profile.</p>
           <div className="alert alert-ok" style={{ display: "none" }}>Email verified! Taking you into PeerUp…</div>
         </div>
       ) : (

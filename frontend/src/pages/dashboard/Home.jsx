@@ -171,7 +171,7 @@ function MobileHome({ profile, user, connections, learning, learnHome, loading, 
       <div className="mdash-quick-actions">
         <button className="mdash-qa-btn" onClick={() => navigate("/app/discover")}>
           <span className="mdash-qa-icon mdash-qa-icon--blue"><DiscoverSvg /></span>
-          <span>Find Study Partners</span>
+          <span>Find Peers</span>
         </button>
         <button className="mdash-qa-btn" onClick={() => navigate("/app/learn")}>
           <span className="mdash-qa-icon mdash-qa-icon--purple"><LearnSvg /></span>
@@ -329,7 +329,7 @@ function MobileHome({ profile, user, connections, learning, learnHome, loading, 
       <div className="mdash-journey-banner" onClick={() => navigate("/app/progress")}>
         <div className="mdash-journey-text">
           <strong>Continue your learning journey</strong>
-          <span>Take a course, watch a tutorial, or find a study partner.</span>
+          <span>Learn with AI, practise concepts, and grow with every session.</span>
           <button className="mdash-journey-btn"
             onClick={(e) => { e.stopPropagation(); navigate("/app/learn"); }}>
             Explore Now →
@@ -512,7 +512,7 @@ function DesktopHome({ profile, user, connections, learning, learnHome, loading 
           {loading ? (
             <div className="learn-empty">Loading…</div>
           ) : connections.length === 0 ? (
-            <div className="learn-empty">No connections yet. Accept a friend request to start chatting!</div>
+            <div className="learn-empty">No connections yet. Accept a friend request to start chatting.</div>
           ) : (
             <ul className="match-list">
               {connections.slice(0, 5).map((conn) => (

@@ -343,8 +343,8 @@ export default function DashboardLayout() {
       <ShortcutsModal open={scOpen} onClose={() => setScOpen(false)} />
       <ConfirmDialog
         open={logoutOpen}
-        title="Sign out of PeerUp?"
-        message="You'll need to log in again to get back to your dashboard."
+        title="Sign out of PeerUP?"
+        message="You'll need to sign in again to get back to your dashboard."
         confirmText="Sign out"
         cancelText="Stay signed in"
         danger

@@ -77,8 +77,8 @@ export default function Signup() {
       topRight={<>Already have an account? <Link to="/login">Log in <Arrow small /></Link></>}
       mobileBack={<Link to="/welcome" className="mob-back-link"><MobBackIcon /> Back</Link>}
     >
-      <h2>Create Your Account</h2>
-      <p className="card-subtitle">Join our community of learners and start your journey today.</p>
+      <h2>Create your account</h2>
+      <p className="card-subtitle">Start learning with an AI tutor and connect with other students.</p>
 
       {!firebaseReady && (
         <div className="alert alert-error">Firebase isn't configured. Add your keys to <code>frontend/.env</code>.</div>
