@@ -101,7 +101,7 @@ async def prepare_session(
     db: AsyncSession = Depends(get_db),
 ):
     """Prepare the first AI teaching response from the saved session context."""
-    return await svc.teach_concept(session_id=session_id, user_id=user.id, db=db, task_index=body.task_index if body else None)
+    return await svc.teach_concept(session_id=session_id, user_id=user.id, db=db, task_index=None)
 
 
 @router.get("/learning/sessions/{session_id}/messages", response_model=list[MessageOut])
