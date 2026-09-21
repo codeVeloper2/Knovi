@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { PlusIcon, CloseIcon, ProgressIcon, ChatIcon } from "./DashIcons";
+import { PlusIcon, CloseIcon, ProgressIcon, ChatIcon, ChallengeIcon } from "./DashIcons";
 
 const FAB_ITEMS = [
   { to: "/app/progress", label: "Progress", Icon: ProgressIcon, pos: "left" },
+  { to: "/app/challenge", label: "Challenge", Icon: ChallengeIcon, pos: "top" },
   { to: "/app/chat", label: "Chat", Icon: ChatIcon, pos: "right" },
 ];
 
@@ -34,7 +35,7 @@ export default function MobileFabMenu() {
   return (
     <>
       {isOpen && <div className="mobile-fab-overlay" onClick={() => setIsOpen(false)} aria-hidden="true" />}
-      <div className={`fab-diamond fab-diamond--two${isOpen ? " open" : ""}`} aria-hidden={!isOpen}>
+      <div className={`fab-diamond fab-diamond--three${isOpen ? " open" : ""}`} aria-hidden={!isOpen}>
         {FAB_ITEMS.map(item => (
           <button key={item.to} type="button" className={`fab-item fab-item--${item.pos}${current?.to === item.to ? " active" : ""}`} onClick={() => go(item.to)} aria-label={item.label} tabIndex={isOpen ? 0 : -1}>
             <span className="fab-item-icon"><item.Icon width={20} height={20} /></span>

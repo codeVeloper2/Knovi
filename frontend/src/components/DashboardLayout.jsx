@@ -11,7 +11,7 @@ import MobileTopBar from "./MobileTopBar";
 import MobileBottomNav from "./MobileBottomNav";
 import MobileFabMenu from "./MobileFabMenu";
 import {
-  HomeIcon, DiscoverIcon, ChatIcon, LearnIcon,
+  HomeIcon, DiscoverIcon, ChatIcon, ChallengeIcon, LearnIcon,
   ProgressIcon, SettingsIcon, LogoutIcon,
   ChevronRight, ProfileIcon, SecurityIcon, BellIcon,
 } from "./DashIcons";
@@ -22,6 +22,7 @@ const MAIN_NAV = [
   { to: "/app",          label: "Home",      Icon: HomeIcon,      end: true },
   { to: "/app/discover", label: "Discover",  Icon: DiscoverIcon },
   { to: "/app/chat",     label: "Chat",      Icon: ChatIcon },
+  { to: "/app/challenge", label: "Challenge", Icon: ChallengeIcon },
   { to: "/app/learn",    label: "Learn",     Icon: LearnIcon },
   { to: "/app/progress", label: "Progress",  Icon: ProgressIcon },
 ];

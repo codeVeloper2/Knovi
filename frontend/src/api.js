@@ -622,3 +622,63 @@ export function saveLearningProfile(profile) {
     auth: true,
   });
 }
+
+// ── AI Quiz Battle ──────────────────────────────────────────────────────────
+export function listChallenges(limit = 30) {
+  return get(`/api/challenges?limit=${encodeURIComponent(limit)}`);
+}
+
+export function getChallenge(challengeId) {
+  return get(`/api/challenges/${challengeId}`);
+}
+
+export function createChallenge({ opponentId, subjectId, topicId, conceptId, questionCount = 5 }) {
+  return post("/api/challenges", {
+    opponent_id: Number(opponentId),
+    subject_id: Number(subjectId),
+    topic_id: Number(topicId),
+    concept_id: Number(conceptId),
+    question_count: Number(questionCount),
+  });
+}
+
+export function acceptChallenge(challengeId) {
+  return post(`/api/challenges/${challengeId}/accept`);
+}
+
+export function declineChallenge(challengeId) {
+  return post(`/api/challenges/${challengeId}/decline`);
+}
+
+export function prepareChallenge(challengeId) {
+  return post(`/api/challenges/${challengeId}/prepare`);
+}
+
+export function startChallenge(challengeId) {
+  return post(`/api/challenges/${challengeId}/start`);
+}
+
+export function answerChallenge(challengeId, questionId, answer) {
+  return post(`/api/challenges/${challengeId}/questions/${questionId}/answer`, { answer });
+}
+
+export function getChallengeResults(challengeId) {
+  return get(`/api/challenges/${challengeId}/results`);
+}
+
+export function getChallengeReview(challengeId) {
+  return get(`/api/challenges/${challengeId}/review`);
+}
+
+export function openChallengeSocket(challengeId, handlers = {}) {
+  const wsBase = (API_BASE || "").replace(/^http/, "ws") || `ws://${window.location.host}`;
+  const token = getToken();
+  const ws = new WebSocket(`${wsBase}/api/challenges/ws/${challengeId}?token=${encodeURIComponent(token)}`);
+  ws.onopen = () => handlers.onOpen?.(ws);
+  ws.onmessage = event => {
+    try { handlers.onMessage?.(JSON.parse(event.data)); } catch { /* ignore malformed server events */ }
+  };
+  ws.onerror = event => handlers.onError?.(event);
+  ws.onclose = event => handlers.onClose?.(event);
+  return ws;
+}

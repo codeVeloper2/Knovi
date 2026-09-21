@@ -34,6 +34,7 @@ import SettingsLearningProfile from "./pages/dashboard/settings/LearningProfile"
 import SettingsSecurity from "./pages/dashboard/settings/Security";
 import SettingsNotifications from "./pages/dashboard/settings/Notifications";
 import SettingsMobile from "./pages/dashboard/settings/SettingsMobile";
+import ChallengePage from "./pages/challenge/ChallengePage";
 
 // ── Video Learn pages ──
 import LearnLayout from "./pages/learn/LearnLayout";
@@ -79,6 +80,8 @@ function AppRoutes() {
         <Route path="discover"       element={<DiscoverPage />} />
         <Route path="chat"           element={<ChatPage />} />
         <Route path="chat/:convId"   element={<ChatPage />} />
+        <Route path="challenge" element={<ChallengePage />} />
+        <Route path="challenge/:challengeId" element={<ChallengePage />} />
 
         {/* ── Learn (all learn pages share the LearnLayout sidebar) ── */}
         <Route path="learn" element={<LearnLayout />}>
