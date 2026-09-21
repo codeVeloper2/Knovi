@@ -38,11 +38,11 @@ const DESKTOP_MAIN_NAV = [
 const MOBILE_MAIN_NAV = MAIN_NAV;
 
 const SETTINGS_NAV = [
-  { to: "/app/settings",               label: "Profile",          Icon: ProfileIcon,  end: true },
-  { to: "/app/settings/subjects",      label: "Subjects",         Icon: LearnIcon },
+  { to: "/app/settings",                  label: "Profile",          Icon: ProfileIcon,  end: true },
+  { to: "/app/settings/peer-learning",    label: "Peer Learning",    Icon: LearnIcon },
   { to: "/app/settings/learning-profile", label: "Learning Profile", Icon: LearnIcon },
-  { to: "/app/settings/security",      label: "Security",         Icon: SecurityIcon },
-  { to: "/app/settings/notifications", label: "Notifications",    Icon: BellIcon },
+  { to: "/app/settings/security",         label: "Security",         Icon: SecurityIcon },
+  { to: "/app/settings/notifications",    label: "Notifications",    Icon: BellIcon },
 ];
 
 const STORAGE_KEY = "peerup_sidebar_collapsed";

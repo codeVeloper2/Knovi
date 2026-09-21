@@ -15,11 +15,11 @@ const SECTIONS = [
   },
   {
     icon: LearnIcon,
-    label: "Subjects",
-    desc: "Subjects you study and where you want to focus",
-    route: "/app/settings/subjects",
+    label: "Peer Learning",
+    desc: "Subjects for peer matching and study groups",
+    route: "/app/settings/peer-learning",
     accent: "#0ea5e9",
-    emoji: "📚",
+    emoji: "🤝",
   },
   {
     icon: LearnIcon,

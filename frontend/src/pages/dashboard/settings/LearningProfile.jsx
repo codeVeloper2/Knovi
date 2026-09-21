@@ -4,7 +4,7 @@ import { useAuth } from "../../../context/AuthContext";
 import * as api from "../../../api";
 import SettingsMobileHeader from "./SettingsMobileHeader";
 
-// Predefined options for the learning profile fields
+// Predefined options for the learning profile fields (matching onboarding)
 const STRENGTH_OPTIONS = [
   "Visual learning", "Verbal explanations", "Hands-on practice", "Pattern recognition",
   "Logical reasoning", "Creative problem-solving", "Memory retention", "Quick computation",
@@ -24,10 +24,8 @@ const PREFERENCE_OPTIONS = [
 ];
 
 const BEHAVIOR_OPTIONS = [
-  "I ask lots of questions", "I need time to think", "I prefer working through examples",
-  "I learn best by doing", "I need frequent breaks", "I like challenging problems",
-  "I prefer detailed feedback", "I work better with encouragement",
-  "I need to see the big picture first", "I prefer bite-sized lessons"
+  "Another explanation", "A worked example", "Simpler explanation", "Practice questions",
+  "Real-world example", "Breaking it into smaller steps", "I'm not sure yet"
 ];
 
 const CONFIDENCE_LABELS = {
@@ -166,7 +164,7 @@ export default function SettingsLearningProfile() {
       <SettingsMobileHeader title="Learning Profile" />
       <h1>Learning Profile</h1>
       <p className="settings-sub">
-        Help PeerUP's AI understand how you learn best. These preferences guide how the AI teaches you—separate from your peer matching preferences.
+        Tell us how you learn best so your AI tutor can personalize your learning experience. This is separate from your peer matching preferences.
       </p>
 
       {/* Student-reported section */}
@@ -213,8 +211,8 @@ export default function SettingsLearningProfile() {
         </div>
 
         <div className="field">
-          <label>Teaching style I prefer</label>
-          <p className="hint" style={{ marginBottom: 8 }}>How do you like concepts explained?</p>
+          <label>How do you learn faster?</label>
+          <p className="hint" style={{ marginBottom: 8 }}>Choose teaching styles that work for you</p>
           <div className="chip-grid">
             {PREFERENCE_OPTIONS.map((p) => (
               <button
@@ -230,8 +228,8 @@ export default function SettingsLearningProfile() {
         </div>
 
         <div className="field">
-          <label>How I learn</label>
-          <p className="hint" style={{ marginBottom: 8 }}>Describe your learning behavior.</p>
+          <label>What usually helps when you're stuck?</label>
+          <p className="hint" style={{ marginBottom: 8 }}>Tell us what works when you hit a roadblock</p>
           <div className="chip-grid">
             {BEHAVIOR_OPTIONS.map((b) => (
               <button
@@ -247,17 +245,17 @@ export default function SettingsLearningProfile() {
         </div>
 
         <div className="field field-full">
-          <label htmlFor="lp-note">Personal note (optional)</label>
+          <label htmlFor="lp-note">Anything else your AI tutor should know? (optional)</label>
           <textarea
             id="lp-note"
             rows={4}
-            maxLength={2000}
+            maxLength={500}
             value={personalNote}
             onChange={(e) => setPersonalNote(e.target.value)}
-            placeholder="Anything else the AI should know about how you learn? (e.g., 'I'm dyslexic and prefer shorter text blocks' or 'I love space analogies')"
+            placeholder="e.g., 'I'm dyslexic and prefer shorter text' or 'I love space analogies'"
           />
           <p className="hint" style={{ marginTop: 4 }}>
-            {personalNote.length}/2000 characters
+            {personalNote.length}/500 characters
           </p>
         </div>
 
@@ -275,9 +273,9 @@ export default function SettingsLearningProfile() {
       <div className="settings-card" style={{ marginTop: 24 }}>
         <div className="settings-section-header">
           <div>
-            <h2 style={{ fontSize: "1.05rem", margin: 0 }}>AI Observations</h2>
+            <h2 style={{ fontSize: "1.05rem", margin: 0 }}>AI Learning Insights</h2>
             <p className="settings-sub" style={{ margin: "4px 0 0" }}>
-              Patterns the AI has noticed from your learning sessions. These help personalize your experience.
+              Patterns observed from your learning sessions. These help personalize your AI tutoring experience.
             </p>
           </div>
         </div>

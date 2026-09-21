@@ -3,14 +3,40 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import Logo from "../../components/Logo";
 import { GRADES, SKILL_LEVELS, SUBJECTS } from "../../subjects";
+import * as api from "../../api";
 
 const LANGUAGES = ["English", "Spanish", "French", "Arabic", "Mandarin", "Hindi", "Portuguese", "Other"];
 
+// Learning Profile options
+const STRENGTH_OPTIONS = [
+  "Visual learning", "Verbal explanations", "Hands-on practice", "Pattern recognition",
+  "Logical reasoning", "Creative problem-solving", "Memory retention", "Quick computation",
+  "Abstract thinking", "Real-world applications"
+];
+
+const STRUGGLE_OPTIONS = [
+  "Word problems", "Abstract concepts", "Multi-step problems", "Time pressure",
+  "Mental math", "Reading comprehension", "Following instructions", "Concentration",
+  "Test anxiety", "Expressing answers clearly"
+];
+
+const LEARNING_PREFERENCES = [
+  "Step-by-step explanations", "Visual diagrams", "Real-world examples", "Practice problems",
+  "Socratic questioning", "Analogies & metaphors", "Repetition & review", "Interactive exercises",
+  "Video content", "Written summaries"
+];
+
+const STUCK_HELP = [
+  "Another explanation", "A worked example", "Simpler explanation", "Practice questions",
+  "Real-world example", "Breaking it into smaller steps", "I'm not sure yet"
+];
+
 const STEPS = [
-  { key: "personal",   label: "Personal Info" },
-  { key: "subjects",   label: "Subjects" },
-  { key: "privacy",    label: "Privacy" },
-  { key: "agreement",  label: "Learning Agreement" },
+  { key: "personal",      label: "Personal Info" },
+  { key: "learning",      label: "Learning Profile" },
+  { key: "peer",          label: "Peer Learning" },
+  { key: "privacy",       label: "Privacy" },
+  { key: "agreement",     label: "Agreement" },
 ];
 
 const TERMS = [
@@ -32,11 +58,22 @@ export default function Onboarding() {
   const [displayName, setDisplayName] = useState(profile?.displayName || user?.displayName || "");
   const [grade, setGrade] = useState(profile?.grade || "");
   const [photoFile, setPhotoFile] = useState(null);
+  const [bio, setBio] = useState(profile?.bio || "");
+  
+  // Learning Profile state
+  const [strengths, setStrengths] = useState([]);
+  const [struggles, setStruggles] = useState([]);
+  const [learningPreferences, setLearningPreferences] = useState([]);
+  const [stuckHelp, setStuckHelp] = useState([]);
+  const [personalNote, setPersonalNote] = useState("");
+  
+  // Peer Learning state (for matching)
   const [goodAt, setGoodAt] = useState(profile?.subjectsGoodAt || []);
   const [needHelp, setNeedHelp] = useState(profile?.subjectsNeedHelp || []);
   const [skillLevel, setSkillLevel] = useState(profile?.skillLevel || "Intermediate");
   const [language, setLanguage] = useState(profile?.language || "");
-  const [bio, setBio] = useState(profile?.bio || "");
+  
+  // Privacy/agreement state
   const [accepted, setAccepted] = useState(profile?.agreedToLearningAgreement || false);
   const [isPublic, setIsPublic] = useState(profile?.isPublic ?? true);
   const [allowDM, setAllowDM] = useState(profile?.allowDirectMessage ?? true);
@@ -75,6 +112,8 @@ export default function Onboarding() {
       if (!profile?.agreedToLearningAgreement) {
         await agreeToLearning();
       }
+      
+      // Save basic profile + peer matching data
       await completeProfile(
         {
           displayName: displayName.trim(),
@@ -90,6 +129,25 @@ export default function Onboarding() {
         },
         photoFile
       );
+      
+      // Save learning profile separately (only if at least one field is filled)
+      const hasLearningProfile = 
+        strengths.length > 0 || 
+        struggles.length > 0 || 
+        learningPreferences.length > 0 || 
+        stuckHelp.length > 0 || 
+        personalNote.trim();
+        
+      if (hasLearningProfile) {
+        await api.saveLearningProfile({
+          strengths,
+          struggles,
+          learningPreferences,
+          learningBehavior: stuckHelp,
+          personalNote: personalNote.trim()
+        });
+      }
+      
       navigate("/app");
     } catch (err) {
       setError(mapError(err));
@@ -114,7 +172,7 @@ export default function Onboarding() {
             </li>
           ))}
         </ul>
-        <p className="wizard-hint">Complete your profile to personalise your AI learning experience.</p>
+        <p className="wizard-hint">Complete your profile and let us know how you learn best.</p>
       </aside>
 
       {/* ── Panel ── */}
@@ -167,13 +225,78 @@ export default function Onboarding() {
             </>
           )}
 
-          {step === "subjects" && (
+          {step === "learning" && (
             <>
-              <h2>Your subjects</h2>
-              <p className="card-subtitle">Let PeerUP know what you're studying and where you want to focus your learning.</p>
+              <h2>Your Learning Profile</h2>
+              <p className="card-subtitle">Help PeerUP understand how you learn so your AI tutor can teach you better.</p>
 
               <div className="field">
-                <label>Subjects I'm confident in</label>
+                <label>What are you good at?</label>
+                <p className="hint" style={{ marginBottom: 8 }}>Select strengths that help you learn</p>
+                <div className="chip-grid">
+                  {STRENGTH_OPTIONS.map((s) => (
+                    <button key={s} type="button" className={`chip ${strengths.includes(s) ? "on" : ""}`}
+                      onClick={() => toggle(strengths, setStrengths, s)}>{s}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="field">
+                <label>What do you struggle with?</label>
+                <p className="hint" style={{ marginBottom: 8 }}>Identifying challenges helps us support you better</p>
+                <div className="chip-grid">
+                  {STRUGGLE_OPTIONS.map((s) => (
+                    <button key={s} type="button" className={`chip ${struggles.includes(s) ? "on" : ""}`}
+                      onClick={() => toggle(struggles, setStruggles, s)}>{s}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="field">
+                <label>How do you learn faster?</label>
+                <p className="hint" style={{ marginBottom: 8 }}>Choose teaching styles that work for you</p>
+                <div className="chip-grid">
+                  {LEARNING_PREFERENCES.map((p) => (
+                    <button key={p} type="button" className={`chip ${learningPreferences.includes(p) ? "on" : ""}`}
+                      onClick={() => toggle(learningPreferences, setLearningPreferences, p)}>{p}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="field">
+                <label>What usually helps when you're stuck?</label>
+                <p className="hint" style={{ marginBottom: 8 }}>Tell us what works when you hit a roadblock</p>
+                <div className="chip-grid">
+                  {STUCK_HELP.map((h) => (
+                    <button key={h} type="button" className={`chip ${stuckHelp.includes(h) ? "on" : ""}`}
+                      onClick={() => toggle(stuckHelp, setStuckHelp, h)}>{h}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="field field-full">
+                <label htmlFor="lp-note">Anything else your AI tutor should know? (optional)</label>
+                <textarea id="lp-note" rows={3} maxLength={500} value={personalNote}
+                  onChange={(e) => setPersonalNote(e.target.value)}
+                  placeholder="e.g., 'I'm dyslexic and prefer shorter text' or 'I love space analogies'" />
+                <p className="hint" style={{ marginTop: 4 }}>{personalNote.length}/500 characters</p>
+              </div>
+
+              <div className="wizard-actions">
+                <button className="btn-ghost" type="button" onClick={back}>← Back</button>
+                <button className="btn btn-primary" type="button" onClick={next}>Next →</button>
+              </div>
+            </>
+          )}
+
+          {step === "peer" && (
+            <>
+              <h2>Peer Learning</h2>
+              <p className="card-subtitle">Connect with classmates who can help you learn and grow together.</p>
+
+              <div className="field">
+                <label>Subjects I can help others with</label>
+                <p className="hint" style={{ marginBottom: 8 }}>What subjects are you confident teaching?</p>
                 <div className="chip-grid">
                   {SUBJECTS.map((s) => (
                     <button key={s} type="button" className={`chip ${goodAt.includes(s) ? "on" : ""}`}
@@ -183,7 +306,8 @@ export default function Onboarding() {
               </div>
 
               <div className="field">
-                <label>Subjects I want to learn</label>
+                <label>Subjects I need help with</label>
+                <p className="hint" style={{ marginBottom: 8 }}>What subjects would you like peer support in?</p>
                 <div className="chip-grid">
                   {SUBJECTS.map((s) => (
                     <button key={s} type="button" className={`chip ${needHelp.includes(s) ? "on" : ""}`}
@@ -192,19 +316,21 @@ export default function Onboarding() {
                 </div>
               </div>
 
-              <div className="field">
-                <label htmlFor="skill">Overall skill level</label>
-                <select id="skill" value={skillLevel} onChange={(e) => setSkillLevel(e.target.value)}>
-                  {SKILL_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
-                </select>
-              </div>
+              <div className="settings-grid">
+                <div className="field">
+                  <label htmlFor="skill">Overall skill level</label>
+                  <select id="skill" value={skillLevel} onChange={(e) => setSkillLevel(e.target.value)}>
+                    {SKILL_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                </div>
 
-              <div className="field">
-                <label htmlFor="language">Language</label>
-                <select id="language" value={language} onChange={(e) => setLanguage(e.target.value)}>
-                  <option value="">Select language</option>
-                  {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
-                </select>
+                <div className="field">
+                  <label htmlFor="language">Preferred language</label>
+                  <select id="language" value={language} onChange={(e) => setLanguage(e.target.value)}>
+                    <option value="">Select language</option>
+                    {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                </div>
               </div>
 
               <div className="wizard-actions">
@@ -262,7 +388,8 @@ export default function Onboarding() {
             </>
           )}
 
-          {step === "agreement" && (            <>
+          {step === "agreement" && (
+            <>
               <h2>Learning Agreement</h2>
               <p className="card-subtitle">One quick agreement to keep PeerUP a safe, focused place to learn.</p>
 

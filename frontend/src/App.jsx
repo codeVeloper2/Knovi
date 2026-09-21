@@ -31,7 +31,7 @@ import ChatPage from "./pages/chat/Chat";
 import DiscoverPage from "./pages/discover/DiscoverPage";
 import MatchRequestsPage from "./pages/match/MatchRequestsPage";
 import SettingsProfile from "./pages/dashboard/settings/Profile";
-import SettingsSubjects from "./pages/dashboard/settings/Subjects";
+import SettingsPeerLearning from "./pages/dashboard/settings/PeerLearning";
 import SettingsLearningProfile from "./pages/dashboard/settings/LearningProfile";
 import SettingsSecurity from "./pages/dashboard/settings/Security";
 import SettingsNotifications from "./pages/dashboard/settings/Notifications";
@@ -113,7 +113,7 @@ function AppRoutes() {
         <Route path="settings">
           <Route index element={<SettingsIndex />} />
           <Route path="profile"       element={<SettingsProfile />} />
-          <Route path="subjects"      element={<SettingsSubjects />} />
+          <Route path="peer-learning" element={<SettingsPeerLearning />} />
           <Route path="learning-profile" element={<SettingsLearningProfile />} />
           <Route path="security"      element={<SettingsSecurity />} />
           <Route path="notifications" element={<SettingsNotifications />} />
