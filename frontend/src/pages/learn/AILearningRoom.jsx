@@ -275,6 +275,8 @@ export default function AILearningRoom() {
     setMsgInput("");
     setAiWorking(true);
     setError(null);
+    // Clear any old suggestion when student asks a new question
+    setPostSuggestion(null);
     setMessages(prev => [...prev, {
       id: `local-${Date.now()}`, role: "student", messageType: "question",
       content, sequence: prev.length + 1, createdAt: new Date().toISOString(),
@@ -282,9 +284,40 @@ export default function AILearningRoom() {
     try {
       const msg = await api.sendStudentMessage(sessionId, content);
       setMessages(prev => [...prev, msg]);
+      // Check if AI flagged a suggestion for a new session (only show once per question)
+      const extra = msg.extra || {};
+      if (extra.suggestNewSession && !suggestionShown) {
+        setPostSuggestion({
+          subject: extra.detectedSubject || null,
+          topic:   extra.detectedTopic   || null,
+          note:    extra.sessionNote     || null,
+        });
+        setSuggestionShown(true);
+      }
     } catch (err) {
       setError(err.message || "Failed to send message.");
     } finally {
+      setAiWorking(false);
+    }
+  }
+
+  async function handleStartSuggestedSession() {
+    if (!postSuggestion || !session) return;
+    setAiWorking(true);
+    setPostSuggestion(null);
+    try {
+      const next = await api.createAISession({
+        subjectId:   session.subjectId,
+        topicId:     session.topicId,
+        conceptId:   session.conceptId,
+        familiarity: "revisit",
+        intent:      "teach_me",
+        studentNote: postSuggestion.note || `Follow-up from previous session. Topic of interest: ${postSuggestion.topic || postSuggestion.subject || "related concept"}`,
+      });
+      await api.prepareAISession(next.id);
+      navigate(`/app/learn/ai/session/${next.id}`);
+    } catch (err) {
+      setError(err.message || "Could not start focused session.");
       setAiWorking(false);
     }
   }
@@ -552,7 +585,7 @@ export default function AILearningRoom() {
     );
   }
 
-  const canType = (phase === "teaching" || phase === "reteaching") && !aiWorking;
+  const canType = (phase === "teaching" || phase === "reteaching" || phase === "summary") && !aiWorking;
 
   return (
     <div className="wa-shell">
@@ -699,6 +732,16 @@ export default function AILearningRoom() {
           </div>
         )}
 
+        {/* Post-session new-session suggestion — shown once after AI flags it */}
+        {postSuggestion && !aiWorking && (
+          <PostSessionSuggestion
+            subject={postSuggestion.subject}
+            topic={postSuggestion.topic}
+            onStart={handleStartSuggestedSession}
+            onDismiss={() => setPostSuggestion(null)}
+          />
+        )}
+
         <div ref={bottomRef} style={{ height: 1 }} />
       </main>
 
@@ -738,7 +781,7 @@ export default function AILearningRoom() {
             placeholder={
               phase === "studying"                                   ? "Focus time — chat resumes after timer…" :
               phase === "retrieval" || phase === "practice"          ? "Answer the question above…" :
-              phase === "summary"                                    ? "Session complete" :
+              phase === "summary"                                    ? "Ask a follow-up question…" :
               phase === "preparing"                                  ? "Tutor is getting ready…" :
               "Ask your tutor a question…"
             }
@@ -1023,6 +1066,28 @@ function ReteachActions({ onStudyAgain, onPracticeNow, onAskQuestion }) {
         <button className="wa-btn-primary"   onClick={onStudyAgain}>📖 Study this explanation</button>
         <button className="wa-btn-secondary" onClick={onPracticeNow}>✅ Try practice questions</button>
         <button className="wa-chip"          onClick={onAskQuestion}>💬 Ask a question</button>
+      </div>
+    </div>
+  );
+}
+
+function PostSessionSuggestion({ subject, topic, onStart, onDismiss }) {
+  const label = topic && subject
+    ? `${topic} · ${subject}`
+    : topic || subject || "a different topic";
+  return (
+    <div className="wa-post-suggestion">
+      <div className="wa-post-suggestion-body">
+        <span className="wa-post-suggestion-icon">✦</span>
+        <p>This looks like a <strong>{label}</strong> question. Want a focused session on it?</p>
+      </div>
+      <div className="wa-post-suggestion-actions">
+        <button className="wa-btn-primary wa-post-suggestion-start" onClick={onStart}>
+          Start focused session
+        </button>
+        <button className="wa-post-suggestion-dismiss" onClick={onDismiss}>
+          No thanks
+        </button>
       </div>
     </div>
   );

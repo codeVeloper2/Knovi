@@ -2831,3 +2831,74 @@
     font-size: .68rem;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   POST-SESSION SUGGESTION CARD
+   Shown once after AI detects off-topic / different subject question
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.wa-post-suggestion {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 13px 15px;
+  background: rgba(79, 110, 247, 0.07);
+  border: 1px solid rgba(79, 110, 247, 0.25);
+  border-radius: 12px;
+  margin: 4px 0;
+  animation: wa-review-slide .2s ease-out;
+}
+
+.wa-post-suggestion-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.wa-post-suggestion-icon {
+  font-size: 0.9rem;
+  color: var(--wa-primary);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.wa-post-suggestion-body p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--wa-text);
+  line-height: 1.5;
+}
+
+.wa-post-suggestion-body strong {
+  color: var(--wa-primary);
+}
+
+.wa-post-suggestion-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wa-post-suggestion-start {
+  padding: 7px 16px;
+  font-size: 0.8125rem;
+}
+
+.wa-post-suggestion-dismiss {
+  background: none;
+  border: none;
+  color: var(--wa-text-muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: color 0.15s;
+}
+.wa-post-suggestion-dismiss:hover { color: var(--wa-text); }
+
+@media (max-width: 480px) {
+  .wa-post-suggestion-actions {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .wa-post-suggestion-start { width: 100%; }
+}

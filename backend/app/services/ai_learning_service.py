@@ -758,8 +758,11 @@ async def respond_to_student(
     session = await _get_session_owned(
         session_id, user_id, db, load_messages=True, load_teaching=True
     )
-    if session.status in ("completed", "abandoned"):
+    # Allow post-session follow-up questions; only block abandoned sessions
+    if session.status == "abandoned":
         raise HTTPException(409, "Session is closed.")
+
+    is_post_session = session.status == "completed"
 
     await _add_message(session_id, "student", "question", content, db)
     await db.flush()
@@ -774,7 +777,7 @@ async def respond_to_student(
 
     current_teaching = await _get_current_teaching(session_id, db)
     teaching_context = ""
-    if current_teaching and session.status not in _PROTECTED_STATES:
+    if current_teaching and not is_post_session:
         teaching_context = (
             f"\nCurrent teaching snapshot (strategy: {current_teaching.strategy}):\n"
             f"{(current_teaching.explanation or '')[:600]}"
@@ -785,23 +788,51 @@ async def respond_to_student(
     )
     curriculum_ctx = _build_curriculum_context(subject, topic, concept, session)
 
+    post_session_directive = ""
+    if is_post_session:
+        post_session_directive = """
+POST-SESSION FOLLOW-UP RULES:
+- The student has completed the session. They are asking a follow-up question.
+- ALWAYS answer educational questions fully, regardless of subject or topic.
+- After answering, detect whether the question is:
+  a) About the SAME concept as this session -> suggest_new_session: false
+  b) About a DIFFERENT topic in the same or different subject -> suggest_new_session: true
+  c) Non-educational (jokes, homework writing, etc.) -> politely redirect, suggest_new_session: false
+- If suggest_new_session is true, identify the subject and topic the question belongs to,
+  and write a brief session_note (1-2 sentences) describing what the student needs to work on.
+- Be warm and encouraging. This is a learning platform for students.
+"""
+
     system_prompt = (
-        "You are an AI tutor in an active learning session on PeerUP. "
-        "Answer the student's question helpfully, staying on topic within the concept. "
-        "Be concise but thorough. Return JSON only."
+        "You are an AI tutor on PeerUP, a peer learning platform for students. "
+        "You always answer educational questions helpfully and warmly. "
+        "Return JSON only — no markdown outside the response field."
     )
+
     prompt = f"""{curriculum_ctx}
 {teaching_context}
+{post_session_directive}
 
 RECENT CONVERSATION:
 {history_text}
 
 Student just asked: {content}
 
-Respond as the AI tutor. Return JSON:
+Return JSON:
 {{
-  "response": "Your tutor response here (markdown supported)"
+  "response": "Your full tutor response here (markdown supported, be thorough)",
+  "suggest_new_session": false,
+  "detected_subject": null,
+  "detected_topic": null,
+  "session_note": null
 }}
+
+Rules:
+- response: always required, always educational
+- suggest_new_session: true only if question is from a clearly different topic/subject
+- detected_subject: name of the subject if suggest_new_session is true, else null
+- detected_topic: name of the topic if suggest_new_session is true, else null  
+- session_note: 1-2 sentence note for the new session tutor about what the student needs, else null
 """
     try:
         raw, provider = await call_with_fallback(
@@ -813,9 +844,21 @@ Respond as the AI tutor. Return JSON:
         raise HTTPException(502, f"AI service error: {exc}")
 
     response_text = _safe_str(parsed.get("response"), "I'm sorry, I couldn't generate a response right now.")
+    suggest_new_session = bool(parsed.get("suggest_new_session", False))
+    detected_subject   = parsed.get("detected_subject") or None
+    detected_topic     = parsed.get("detected_topic") or None
+    session_note       = parsed.get("session_note") or None
+
     msg = await _add_message(
         session_id, "ai", "teaching", response_text, db,
-        extra={"provider": provider, "inResponseTo": content[:100]},
+        extra={
+            "provider": provider,
+            "inResponseTo": content[:100],
+            "suggestNewSession": suggest_new_session,
+            "detectedSubject": detected_subject,
+            "detectedTopic": detected_topic,
+            "sessionNote": session_note,
+        },
     )
     await db.commit()
     await db.refresh(msg)
