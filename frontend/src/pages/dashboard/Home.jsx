@@ -84,6 +84,90 @@ function ProgressBar({ pct, className = "mdash-progress-bar" }) {
   );
 }
 
+
+// ── Dashboard loading skeleton ───────────────────────────────────────────────
+// Mirrors the real dashboard structure so loading never causes a layout jump.
+function DashboardSkeleton({ mobile = false }) {
+  if (mobile) {
+    return (
+      <div className="mdash-wrap mdash-skeleton-page" aria-label="Loading dashboard" aria-busy="true">
+        <div className="mdash-header">
+          <div className="mdash-skeleton mdash-sk-menu" />
+          <div className="mdash-skeleton mdash-sk-logo" />
+          <div className="mdash-sk-header-right">
+            <div className="mdash-skeleton mdash-sk-bell" />
+            <div className="mdash-skeleton mdash-sk-avatar" />
+          </div>
+        </div>
+
+        <div className="mdash-greeting">
+          <div className="mdash-skeleton mdash-sk-title" />
+          <div className="mdash-skeleton mdash-sk-subtitle" />
+        </div>
+
+        <div className="mdash-skeleton mdash-sk-profile" />
+
+        <div className="mdash-sk-actions">
+          {[1, 2, 3, 4].map(i => <div className="mdash-skeleton mdash-sk-action" key={i} />)}
+        </div>
+
+        {["Continue Learning", "Recommended for You", "Your Matches"].map((title, section) => (
+          <section className="mdash-section" key={title}>
+            <div className="mdash-section-head">
+              <div className="mdash-skeleton mdash-sk-section-title" />
+              <div className="mdash-skeleton mdash-sk-see-all" />
+            </div>
+            <div className="mdash-skeleton-list">
+              {[1, 2, 3].map(i => (
+                <div className="mdash-skeleton mdash-sk-list-card" key={`${section}-${i}`} />
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="home home-skeleton-page" aria-label="Loading dashboard" aria-busy="true">
+      <div className="home-skeleton-hero">
+        <div>
+          <div className="skeleton sk-hero-title" />
+          <div className="skeleton sk-hero-subtitle" />
+        </div>
+        <div className="skeleton sk-hero-orb" />
+      </div>
+
+      <div className="stat-cards">
+        {[1, 2, 3].map(i => (
+          <div className="stat-card dashboard-skeleton-card" key={i}>
+            <div className="skeleton sk-stat-icon" />
+            <div className="sk-stat-copy">
+              <div className="skeleton sk-stat-title" />
+              <div className="skeleton sk-stat-subtitle" />
+            </div>
+            <div className="skeleton sk-stat-arrow" />
+          </div>
+        ))}
+      </div>
+
+      <div className="dashboard-skeleton-grid">
+        {[1, 2, 3, 4].map(i => (
+          <section className="home-block dashboard-skeleton-block" key={i}>
+            <div className="home-block-head">
+              <div className="skeleton sk-block-title" />
+              <div className="skeleton sk-block-link" />
+            </div>
+            <div className="skeleton sk-content-row" />
+            <div className="skeleton sk-content-row" />
+            <div className="skeleton sk-content-row short" />
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Mobile Home ──────────────────────────────────────────────────────────────
 
 function MobileHome({ profile, user, connections, learning, learnHome, loading, navigate, onOpenMenu }) {
@@ -432,6 +516,13 @@ function DesktopHome({ profile, user, connections, learning, learnHome, loading 
       </div>
 
       {/* Stat cards */}
+      <div className="home-quick-actions">
+        <button type="button" onClick={() => navigate("/app/learn")}><span>📚</span> Continue learning</button>
+        <button type="button" onClick={() => navigate("/app/discover")}><span>🤝</span> Find a peer</button>
+        <button type="button" onClick={() => navigate("/app/learn")}><span>▶</span> Watch tutorials</button>
+        <button type="button" onClick={() => navigate("/app/progress")}><span>📈</span> View progress</button>
+      </div>
+
       <div className="stat-cards">
         <div className="stat-card stat-card--teal">
           <div className="stat-ic">🎯</div>
@@ -644,6 +735,10 @@ export default function Home() {
     learnHome,
     loading: dataLoading,
   };
+
+  if (dataLoading) {
+    return <DashboardSkeleton mobile={isMobile} />;
+  }
 
   if (isMobile) {
     return (
