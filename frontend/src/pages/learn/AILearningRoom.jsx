@@ -161,34 +161,16 @@ export default function AILearningRoom() {
       const nextIndex = nextQuestions.findIndex(q => !answered.has(Number(q.id)));
       setQIndex(nextIndex === -1 ? Math.max(0, nextQuestions.length - 1) : nextIndex);
 
-      // Rebuild question_ask bubbles from server data so they show on reload.
-      // They are injected optimistically at runtime but never stored server-side.
-      const currentMsgs = safeMessages;
-      const existingQIds = new Set(currentMsgs.filter(m => m.messageType === "question_ask").map(m => m.id));
-      const rebuiltBubbles = nextQuestions
-        .map((q, idx) => {
-          const syntheticId = `q-${q.id}`;
-          if (existingQIds.has(syntheticId)) return null;
-          return {
-            id: syntheticId, role: "ai", messageType: "question_ask",
-            content: q.question, sequence: 10000 + idx,
-            createdAt: q.createdAt || new Date().toISOString(),
-            extra: { questionType: q.questionType, questionNumber: idx + 1, totalQuestions: nextQuestions.length },
-          };
-        })
-        .filter(Boolean);
-
-      if (rebuiltBubbles.length > 0) {
+      // Submitted quiz questions are rendered as ordinary chat history after
+      // answering. The active unanswered question is the only Quick Check card.
+      // Rebuild the answered chat turns on resume because these UI messages are
+      // intentionally not persisted as session messages by the backend.
+      const answeredChat = buildQuizChatMessages(nextQuestions, sess.answers || []);
+      if (answeredChat.length > 0) {
         setMessages(prev => {
-          // Merge: insert each question bubble after the last non-question message
-          // that has an earlier sequence, so order is preserved.
-          const merged = [...prev];
-          for (const bubble of rebuiltBubbles) {
-            const insertIdx = merged.findIndex(m => m.sequence > bubble.sequence);
-            if (insertIdx === -1) merged.push(bubble);
-            else merged.splice(insertIdx, 0, bubble);
-          }
-          return merged;
+          const existingIds = new Set(prev.map(m => m.id));
+          const additions = answeredChat.filter(m => !existingIds.has(m.id));
+          return additions.length ? [...prev, ...additions] : prev;
         });
       }
     }
@@ -309,6 +291,19 @@ export default function AILearningRoom() {
       id: `local-${Date.now()}`, role: "student", messageType: "question",
       content, sequence: prev.length + 1, createdAt: new Date().toISOString(),
     }]);
+
+    // A direct quiz request opens the structured Quick Check UI. It must not
+    // be answered as a normal AI chat message.
+    if (isQuizRequest(content)) {
+      try {
+        await triggerRetrieval();
+      } catch (err) {
+        setError(err.message || "Failed to generate questions.");
+        setAiWorking(false);
+      }
+      return;
+    }
+
     try {
       const msg = await api.sendStudentMessage(sessionId, content);
       setMessages(prev => [...prev, msg]);
@@ -350,21 +345,6 @@ export default function AILearningRoom() {
     }
   }
 
-  function injectQuestionBubble(questionArr, idx) {
-    const q = questionArr[idx];
-    if (!q) return;
-    setMessages(prev => {
-      // avoid duplicate if already present
-      if (prev.some(m => m.id === `q-${q.id}`)) return prev;
-      return [...prev, {
-        id: `q-${q.id}`, role: "ai", messageType: "question_ask",
-        content: q.question, sequence: prev.length + 1,
-        createdAt: new Date().toISOString(),
-        extra: { questionType: q.questionType, questionNumber: idx + 1, totalQuestions: questionArr.length },
-      }];
-    });
-  }
-
   async function triggerRetrieval() {
     try {
       const qs = await api.generateRetrievalQuestions(sessionId, 3);
@@ -375,8 +355,8 @@ export default function AILearningRoom() {
       setLastEval(null);
       setSession(prev => ({ ...prev, status: "retrieval" }));
       setPhase("retrieval");
-      // Inject first question as chat bubble
-      injectQuestionBubble(arr, 0);
+      // The unanswered question is rendered as the Quick Check card.
+      // It becomes normal chat history only after submission.
     } finally {
       setAiWorking(false);
     }
@@ -400,19 +380,22 @@ export default function AILearningRoom() {
 
     try {
       const evaluation = await api.submitAnswer(sessionId, question.id, studentAnswer, null);
-      setCheckResults(prev => ({
-        ...prev,
-        [question.id]: {
-          ...evaluation,
-          questionId: question.id,
-          question: question.question,
-          questionType: question.questionType,
-          options: question.options || null,
-          studentAnswer,
-        },
-      }));
+      const result = {
+        ...evaluation,
+        questionId: question.id,
+        question: question.question,
+        questionType: question.questionType,
+        options: question.options || null,
+        studentAnswer,
+      };
+
+      setCheckResults(prev => ({ ...prev, [question.id]: result }));
       setAnswerInput("");
       setLastEval(evaluation);
+
+      // The Quick Check card is a temporary interaction. Once submitted,
+      // replace it with natural AI/student chat turns instead of a result pill.
+      setMessages(prev => [...prev, ...buildQuizChatMessages(questions, [result])]);
 
       const sess = await api.getAISession(sessionId);
       setSession(sess);
@@ -490,7 +473,6 @@ export default function AILearningRoom() {
       setAnswerInput("");
       setLastEval(null);
       setPhase("practice");
-      injectQuestionBubble(arr, 0);
     } catch (err) {
       setError(err.message || "Failed to generate practice questions.");
     } finally {
@@ -518,7 +500,10 @@ export default function AILearningRoom() {
 
       setSummary(s || freshSession?.summary || null);
       setSession(freshSession);
-      setMessages(freshMessages);
+      setMessages([
+        ...freshMessages,
+        ...buildQuizChatMessages(freshSession?.questions || questions, freshSession?.answers || []),
+      ]);
       setPhase("summary");
       setLastEval(null);
       setAnswerInput("");
@@ -558,6 +543,10 @@ export default function AILearningRoom() {
     } catch (err) {
       setError(err.message || "Failed to end session.");
     }
+  }
+
+  function isQuizRequest(text) {
+    return /\b(give me (a )?quiz|quiz me|test me|test my knowledge)\b/i.test(text || "");
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -722,20 +711,12 @@ export default function AILearningRoom() {
           )
         )}
 
-        {phase === "reteaching" && Object.keys(checkResults).length > 0 && (
-          <QuickCheckHistory questions={questions} results={checkResults} />
-        )}
-
         {phase === "reteaching" && !aiWorking && (
           <ReteachActions
             onStudyAgain={handleStudyReteach}
             onPracticeNow={handlePracticeAfterReteach}
             onAskQuestion={() => inputRef.current?.focus()}
           />
-        )}
-
-        {phase === "summary" && Object.keys(checkResults).length > 0 && (
-          <QuickCheckHistory questions={questions} results={checkResults} />
         )}
 
         {phase === "summary" && summary && (
@@ -975,6 +956,69 @@ function StudyTimerPanel({ seconds, totalSeconds, paused, onTogglePause }) {
       </button>
     </div>
   );
+}
+
+function buildQuizChatMessages(questions = [], answers = []) {
+  const byId = new Map(questions.map(q => [Number(q.id), q]));
+  return answers
+    .map((result, offset) => {
+      const question = byId.get(Number(result.questionId)) || result;
+      if (!question?.question || result?.studentAnswer == null) return null;
+      const index = questions.findIndex(q => Number(q.id) === Number(result.questionId));
+      const number = index >= 0 ? index + 1 : offset + 1;
+      const total = questions.length || 1;
+      const time = result.createdAt || new Date().toISOString();
+      return [
+        {
+          id: `quiz-q-${result.questionId}`,
+          role: "ai",
+          messageType: "question_ask",
+          content: question.question,
+          sequence: 20000 + number * 3,
+          createdAt: time,
+          extra: { questionType: question.questionType, questionNumber: number, totalQuestions: total },
+        },
+        {
+          id: `quiz-a-${result.questionId}-${result.attemptNumber || 1}`,
+          role: "student",
+          messageType: "quiz_answer",
+          content: formatQuizStudentAnswer(question, result.studentAnswer),
+          sequence: 20000 + number * 3 + 1,
+          createdAt: time,
+        },
+        {
+          id: `quiz-f-${result.questionId}-${result.attemptNumber || 1}`,
+          role: "ai",
+          messageType: "feedback",
+          content: result.feedback || "Answer recorded.",
+          sequence: 20000 + number * 3 + 2,
+          createdAt: time,
+          extra: {
+            score: result.score,
+            understanding: result.understanding,
+          },
+        },
+      ];
+    })
+    .filter(Boolean)
+    .flat();
+}
+
+function formatQuizStudentAnswer(question, answer) {
+  if (question?.questionType === "multiple_choice" && Array.isArray(question.options)) {
+    const match = question.options.find((opt, index) => {
+      const label = typeof opt === "string" ? String.fromCharCode(65 + index) : opt.label;
+      const text = typeof opt === "string" ? opt : opt.text;
+      return answer === label || answer === text;
+    });
+    if (match) {
+      const index = question.options.indexOf(match);
+      const label = typeof match === "string" ? String.fromCharCode(65 + index) : match.label;
+      const text = typeof match === "string" ? match : match.text;
+      return `${label} · ${text}`;
+    }
+  }
+  return answer;
 }
 
 function QuickCheckHistory({ questions = [], results = {} }) {
