@@ -92,6 +92,10 @@ class MessageOut(BaseModel):
 # TEACHING
 # ─────────────────────────────────────────────────────────────────────────────
 
+class TaskTeachRequest(StrictModel):
+    task_index: Optional[int] = Field(default=None, ge=0, le=20)
+
+
 class TeachingOut(BaseModel):
     id:            int
     sessionId:     int
@@ -106,6 +110,7 @@ class TeachingOut(BaseModel):
     misconceptions:list
     summary:       Optional[str]
     rawContent:    Optional[str]
+    learningPlan:  list = []
     isCurrent:     bool
     createdAt:     str
 
@@ -115,7 +120,8 @@ class TeachingOut(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class StartStudyPeriodRequest(StrictModel):
-    duration_seconds: int = Field(default=300, ge=30, le=3600)
+    duration_seconds: int = Field(default=300, ge=30, le=600)
+    task_index: Optional[int] = Field(default=None, ge=0, le=20)
 
 
 class FinishStudyPeriodRequest(StrictModel):
@@ -180,6 +186,7 @@ class AnswerOut(BaseModel):
     options: Optional[list] = None
     correctAnswer: Optional[str] = None
     correctOptionLabel: Optional[str] = None
+    taskIndex: Optional[int] = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -17,6 +17,7 @@ from app.schemas.ai_learning import (
     AnswerOut,
     CreateSessionRequest,
     FinishStudyPeriodRequest,
+    TaskTeachRequest,
     IntegrityEventOut,
     IntegrityEventRequest,
     MessageOut,
@@ -100,7 +101,7 @@ async def prepare_session(
     db: AsyncSession = Depends(get_db),
 ):
     """Prepare the first AI teaching response from the saved session context."""
-    return await svc.teach_concept(session_id=session_id, user_id=user.id, db=db)
+    return await svc.teach_concept(session_id=session_id, user_id=user.id, db=db, task_index=body.task_index if body else None)
 
 
 @router.get("/learning/sessions/{session_id}/messages", response_model=list[MessageOut])
@@ -153,6 +154,7 @@ async def complete_session(
 @router.post("/learning/sessions/{session_id}/teach", response_model=TeachingOut)
 async def teach_concept(
     session_id: int,
+    body: TaskTeachRequest | None = None,
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -196,7 +198,7 @@ async def start_study_period(
     """
     return await svc.start_study_period(
         session_id=session_id, user_id=user.id,
-        duration_seconds=body.duration_seconds, db=db,
+        duration_seconds=body.duration_seconds, task_index=body.task_index, db=db,
     )
 
 
@@ -227,6 +229,7 @@ async def finish_study_period(
 async def generate_questions(
     session_id: int,
     count: int = Query(default=3, ge=1, le=10),
+    task_index: Optional[int] = Query(default=None, ge=0, le=20),
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -236,7 +239,7 @@ async def generate_questions(
     expected_answer and rubric are stored server-side and never sent to the student.
     """
     return await svc.generate_retrieval_questions(
-        session_id=session_id, user_id=user.id, db=db, count=count,
+        session_id=session_id, user_id=user.id, db=db, count=count, task_index=task_index,
     )
 
 
@@ -332,19 +335,4 @@ async def record_integrity_event(
     return await svc.record_integrity_event(
         session_id=session_id, user_id=user.id,
         event_type=body.event_type, meta=body.meta, db=db,
-    )
-
-@router.post("/learning/sessions/{session_id}/tasks", response_model=list)
-async def generate_task_list(
-    session_id: int,
-    user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Generate a task list for the session concept.
-    Called once after session creation / on first room load.
-    Returns a list of task objects.
-    """
-    return await svc.generate_task_list(
-        session_id=session_id, user_id=user.id, db=db,
     )

@@ -578,12 +578,8 @@ export function completeLearningSession(sessionId) {
   return post(`/api/learning/sessions/${sessionId}/complete`);
 }
 
-export function teachConcept(sessionId) {
-  return post(`/api/learning/sessions/${sessionId}/teach`);
-}
-
-export function generateTaskList(sessionId) {
-  return post(`/api/learning/sessions/${sessionId}/tasks`, {});
+export function teachConcept(sessionId, taskIndex = null) {
+  return post(`/api/learning/sessions/${sessionId}/teach`, taskIndex == null ? {} : { task_index: taskIndex });
 }
 
 export function prepareAISession(sessionId) {
@@ -594,16 +590,20 @@ export function sendStudentMessage(sessionId, content) {
   return post(`/api/learning/sessions/${sessionId}/message`, { content });
 }
 
-export function startStudyPeriod(sessionId, durationSeconds = 300) {
-  return post(`/api/learning/sessions/${sessionId}/study/start`, { duration_seconds: durationSeconds });
+export function startStudyPeriod(sessionId, durationSeconds = 300, taskIndex = null) {
+  return post(`/api/learning/sessions/${sessionId}/study/start`, {
+    duration_seconds: durationSeconds,
+    ...(taskIndex == null ? {} : { task_index: taskIndex }),
+  });
 }
 
 export function finishStudyPeriod(sessionId, studyPeriodId) {
   return post(`/api/learning/sessions/${sessionId}/study/finish`, { study_period_id: studyPeriodId });
 }
 
-export function generateRetrievalQuestions(sessionId, count = 3) {
-  return post(`/api/learning/sessions/${sessionId}/questions?count=${count}`);
+export function generateRetrievalQuestions(sessionId, count = 3, taskIndex = null) {
+  const suffix = taskIndex == null ? "" : `&task_index=${taskIndex}`;
+  return post(`/api/learning/sessions/${sessionId}/questions?count=${count}${suffix}`);
 }
 
 export function submitAnswer(sessionId, questionId, studentAnswer, responseTimeSeconds = null) {

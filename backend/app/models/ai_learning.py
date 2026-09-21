@@ -14,6 +14,7 @@ Tables (in creation / dependency order):
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 from typing import Optional
 
 from sqlalchemy import (
@@ -250,6 +251,12 @@ class AISessionTeaching(Base):
     session: Mapped["AILearningSession"] = relationship("AILearningSession", back_populates="teaching")
 
     def serialize(self) -> dict:
+        learning_plan = []
+        try:
+            parsed = json.loads(self.raw_content or "{}")
+            learning_plan = parsed.get("learning_tasks") or []
+        except Exception:
+            learning_plan = []
         return {
             "id": self.id,
             "sessionId": self.session_id,
@@ -263,6 +270,7 @@ class AISessionTeaching(Base):
             "workedExamples": self.worked_examples or [],
             "misconceptions": self.misconceptions or [],
             "summary": self.summary,
+            "learningPlan": learning_plan,
             "rawContent": self.raw_content,
             "isCurrent": self.is_current,
             "createdAt": self.created_at.isoformat(),

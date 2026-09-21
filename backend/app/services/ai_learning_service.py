@@ -19,6 +19,7 @@ Fixes applied (v2):
 from __future__ import annotations
 
 import logging
+import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -98,7 +99,7 @@ _VALID_TRANSITIONS: dict[str, set[str]] = {
     "teaching":   {"studying", "retrieval", "reteaching", "abandoned"},
     "studying":   {"retrieval", "abandoned"},
     "retrieval":  {"reteaching", "practice", "completed", "abandoned"},
-    "reteaching": {"studying", "retrieval", "reteaching", "practice", "completed", "abandoned"},
+    "reteaching": {"studying", "retrieval", "practice", "completed", "abandoned"},
     "practice":   {"retrieval", "completed", "abandoned"},
     "completed":  set(),
     "abandoned":  set(),
@@ -144,88 +145,6 @@ def _safe_int(v: Any, lo: int = 0, hi: int = 100) -> Optional[int]:
     if isinstance(v, (int, float)):
         return max(lo, min(hi, int(v)))
     return None
-
-
-async def generate_task_list(
-    session_id: int, user_id: int, db: AsyncSession
-) -> list[dict]:
-    """
-    Generate a structured task list for the session concept.
-    Idempotent: returns existing tasks if already generated.
-    """
-    session = await _get_session_owned(session_id, user_id, db, load_messages=True)
-
-    # Return existing task list if already generated
-    existing = next(
-        (m for m in session.messages if m.message_type == "task_list"),
-        None
-    )
-    if existing and existing.extra and existing.extra.get("tasks"):
-        return existing.extra["tasks"]
-
-    subject, topic, concept = await _load_curriculum_chain(
-        session.subject_id, session.topic_id, session.concept_id, db
-    )
-
-    system_prompt = (
-        "You are an expert curriculum designer. Generate a focused task list "
-        "for a single learning concept. Return JSON only."
-    )
-    prompt = f"""CONCEPT TO LEARN: {concept.name}
-SUBJECT: {subject.name} | TOPIC: {topic.name}
-STUDENT FAMILIARITY: {session.student_familiarity}
-CONCEPT EXPLANATION: {(concept.explanation or '')[:600]}
-
-Generate 3-5 learning tasks that together fully cover this concept.
-Each task should be a discrete, testable piece of knowledge or skill.
-Tasks should build on each other progressively.
-Estimated minutes per task: 2-10 (AI decides based on complexity).
-Max total: 30 minutes.
-
-Return JSON:
-{{
-  "tasks": [
-    {{
-      "id": 1,
-      "title": "Short task name (3-6 words)",
-      "description": "What specifically the student needs to understand or do (1-2 sentences)",
-      "estimated_minutes": 5,
-      "key_skill": "The core thing being tested"
-    }}
-  ]
-}}
-"""
-    try:
-        raw, _ = await call_with_fallback(
-            prompt, system=system_prompt, temperature=0.5, json_mode=True
-        )
-        parsed = parse_json(raw)
-    except Exception as exc:
-        logger.error("Task list generation failed: %s", exc)
-        # Fallback: 3 generic tasks
-        return [
-            {"id": 1, "title": "Understand the concept", "description": f"Learn what {concept.name} is and why it matters.", "estimated_minutes": 5, "key_skill": "comprehension"},
-            {"id": 2, "title": "Apply with examples", "description": "Work through concrete examples.", "estimated_minutes": 5, "key_skill": "application"},
-            {"id": 3, "title": "Test your knowledge", "description": "Confirm understanding with a quick quiz.", "estimated_minutes": 5, "key_skill": "recall"},
-        ]
-
-    tasks = _safe_list(parsed.get("tasks"))
-    if not tasks:
-        tasks = [
-            {"id": 1, "title": "Understand the concept", "description": f"Learn what {concept.name} is.", "estimated_minutes": 5, "key_skill": "comprehension"},
-            {"id": 2, "title": "Apply with examples", "description": "Work through examples.", "estimated_minutes": 5, "key_skill": "application"},
-            {"id": 3, "title": "Test your knowledge", "description": "Quick recall quiz.", "estimated_minutes": 5, "key_skill": "recall"},
-        ]
-
-    # Persist as a system message so it's part of session history
-    await _add_message(
-        session_id, "system", "task_list",
-        f"Task list generated: {len(tasks)} tasks",
-        db,
-        extra={"tasks": tasks},
-    )
-    await db.commit()
-    return tasks
 
 
 # ── Session ownership loader ──────────────────────────────────────────────────
@@ -569,12 +488,6 @@ async def get_session(session_id: int, user_id: int, db: AsyncSession) -> dict:
         safe_messages = [m.serialize() for m in all_messages]
     data["messages"] = safe_messages
 
-    # Expose task list so frontend gets it on initial load
-    task_list_msg = next(
-        (m for m in all_messages if m.message_type == "task_list"), None
-    )
-    data["taskList"] = task_list_msg.extra.get("tasks", []) if task_list_msg and task_list_msg.extra else []
-
     data["questions"]        = [q.serialize() for q in session.questions]
 
     # Return submitted answers for review/resume. Never expose expected answers here;
@@ -590,6 +503,10 @@ async def get_session(session_id: int, user_id: int, db: AsyncSession) -> dict:
 
     review_answers = []
     question_by_id = {q.id: q for q in session.questions}
+    timer_starts = [
+        m for m in all_messages
+        if m.message_type == "timer_start" and (m.extra or {}).get("taskIndex") is not None
+    ]
     for question_id, answer_row in latest_answers.items():
         q = question_by_id.get(question_id)
         if not q:
@@ -607,6 +524,14 @@ async def get_session(session_id: int, user_id: int, db: AsyncSession) -> dict:
             "correctAnswer": q.expected_answer if q.question_type != "multiple_choice" else None,
             "correctOptionLabel": _correct_option_label(q),
         }
+        # Restore which learning task this answer belonged to without adding
+        # another database column. Timer-start metadata is persisted in messages.
+        prior_timers = [
+            m for m in timer_starts
+            if m.created_at <= answer_row.created_at
+        ]
+        if prior_timers:
+            item["taskIndex"] = (prior_timers[-1].extra or {}).get("taskIndex")
         review_answers.append(item)
     data["answers"] = review_answers
     data["teachingAttempts"] = [a.serialize() for a in session.teaching_attempts]
@@ -738,11 +663,11 @@ async def complete_session(session_id: int, user_id: int, db: AsyncSession) -> d
 # TEACHING
 # ─────────────────────────────────────────────────────────────────────────────
 
-async def teach_concept(session_id: int, user_id: int, db: AsyncSession) -> dict:
+async def teach_concept(session_id: int, user_id: int, db: AsyncSession, task_index: Optional[int] = None) -> dict:
     session = await _get_session_owned(
         session_id, user_id, db, load_teaching=True, load_attempts=True
     )
-    if session.status not in ("created", "teaching", "paused"):
+    if session.status not in ("created", "teaching", "paused", "retrieval", "practice", "reteaching"):
         raise HTTPException(
             409,
             f"Cannot teach: session status is '{session.status}'."
@@ -757,31 +682,80 @@ async def teach_concept(session_id: int, user_id: int, db: AsyncSession) -> dict
     attempt_number  = len(used_strategies) + 1
     curriculum_ctx  = _build_curriculum_context(subject, topic, concept, session)
 
+    # Build or reuse the AI-generated learning plan. The plan is persisted inside
+    # the teaching snapshot/message metadata, so no new database table is required.
+    current_plan = []
+    for existing in session.teaching:
+        raw = existing.raw_content or ""
+        try:
+            candidate = parse_json(raw).get("learning_tasks")
+            if isinstance(candidate, list) and candidate:
+                current_plan = candidate
+                break
+        except Exception:
+            pass
+
+    task_context = ""
+    selected_task = None
+    orientation_mode = task_index is None
+    if task_index is not None and current_plan:
+        if task_index < 0 or task_index >= len(current_plan):
+            raise HTTPException(400, "Invalid learning task.")
+        selected_task = current_plan[task_index]
+        task_context = f"""
+FOCUSED LEARNING TASK
+Task number: {task_index + 1}
+Task title: {selected_task.get("title", "Learning task")}
+Task focus: {selected_task.get("focus", "")}
+Task description: {selected_task.get("description", "")}
+Teach ONLY this task deeply enough for the student to study it and later retrieve it.
+Do not teach the whole concept again. Connect briefly to prerequisite ideas when needed.
+"""
+
     system_prompt = (
-        "You are an expert AI tutor for PeerUP. Teach concepts clearly, adapting to the "
-        "student's familiarity and intent. Be encouraging, precise, and pedagogically sound. "
+        "You are an expert AI tutor for PeerUP. Teach concepts clearly and adaptively. "
         "Return structured JSON only — no markdown outside JSON strings."
     )
+    plan_instruction = """
+Also create a learning plan for this concept. Break the concept into the smallest useful
+learning tasks a student should master before considering the concept understood.
+For Physics motion/SHM, for example, tasks could include meaning/definitions, quantities,
+relationships, calculations, graphs/applications, and common mistakes — but choose tasks
+that actually fit the supplied curriculum concept.
+Each task must be concrete and independently assessable.
+Choose 3–7 tasks. Choose a study duration of 2–10 minutes for each task based on complexity.
+Return learning_tasks as:
+[
+  {"title":"...", "description":"...", "focus":"...", "recommended_minutes":5}
+]
+""" if not current_plan else ""
+
+    curriculum_ctx = _build_curriculum_context(subject, topic, concept, session)
     prompt = f"""{curriculum_ctx}
 
 TEACHING TASK
 Strategy to use: {strategy}
 Attempt number: {attempt_number}
+{task_context}
+{plan_instruction}
 
-Generate complete teaching content for the concept above using the '{strategy}' strategy.
+If a focused learning task was supplied, teach ONLY that task deeply enough to study and retrieve later.
+If no focused task was supplied, this is the orientation step: briefly introduce the concept and explain the learning plan,
+but DO NOT teach all tasks yet. Keep the orientation to about 120–220 words.
 Adapt depth and language to the student's familiarity ({session.student_familiarity}) and intent ({session.intent}).
 
 Return JSON (all fields required; arrays may be empty []):
 {{
-  "explanation": "Start with a short, natural tutor greeting that acknowledges the student's familiarity and goal, then teach the concept. Markdown is supported inside this string. 400–800 words.",
+  "explanation": "Natural tutor orientation (about 120–220 words) or focused task teaching (350–750 words).",
   "key_points": ["point 1", "point 2"],
   "examples": ["example 1", "example 2"],
   "formulas": ["formula 1"],
   "analogies": ["analogy 1"],
   "worked_examples": ["step-by-step worked example"],
   "misconceptions": ["common mistake to avoid"],
-  "summary": "One-paragraph summary the student can review after studying.",
-  "study_prompt": "Short message telling the student what to focus on while studying."
+  "summary": "One-paragraph summary.",
+  "study_prompt": "Short instruction telling the student what to focus on while studying.",
+  "learning_tasks": [{{"title":"...","description":"...","focus":"...","recommended_minutes":5}}]
 }}
 """
     try:
@@ -793,9 +767,37 @@ Return JSON (all fields required; arrays may be empty []):
         logger.error("AI teaching generation failed: %s", exc)
         raise HTTPException(502, f"AI service error: {exc}")
 
+    if current_plan:
+        parsed["learning_tasks"] = current_plan
     explanation  = _safe_str(parsed.get("explanation"), "Teaching content temporarily unavailable.")
+    raw_plan = current_plan if current_plan else _safe_list(parsed.get("learning_tasks"))
+    learning_tasks = []
+    for idx, task in enumerate(raw_plan, 1):
+        if not isinstance(task, dict):
+            continue
+        try:
+            mins = max(2, min(10, int(task.get("recommended_minutes", 5))))
+        except Exception:
+            mins = 5
+        learning_tasks.append({
+            "id": str(task.get("id") or f"task-{idx}"),
+            "title": _safe_str(task.get("title"), f"Learning task {idx}"),
+            "description": _safe_str(task.get("description"), ""),
+            "focus": _safe_str(task.get("focus"), ""),
+            "recommendedMinutes": mins,
+            "order": idx,
+        })
     summary_text = _safe_str(parsed.get("summary"), "")
     study_prompt = _safe_str(parsed.get("study_prompt"), "Take time to read through the material above carefully.")
+
+    stored_raw_content = raw
+    if current_plan:
+        try:
+            stored_payload = parse_json(raw)
+            stored_payload["learning_tasks"] = learning_tasks
+            stored_raw_content = json.dumps(stored_payload)
+        except Exception:
+            stored_raw_content = raw
 
     await _retire_current_teaching(session_id, db)
 
@@ -811,7 +813,7 @@ Return JSON (all fields required; arrays may be empty []):
         worked_examples=_safe_list(parsed.get("worked_examples")),
         misconceptions=_safe_list(parsed.get("misconceptions")),
         summary=summary_text,
-        raw_content=raw,
+        raw_content=stored_raw_content,
         is_current=True,
     )
     db.add(teaching)
@@ -829,7 +831,14 @@ Return JSON (all fields required; arrays may be empty []):
     message_content = f"{explanation}\n\n---\n*{study_prompt}*"
     await _add_message(
         session_id, "ai", "teaching", message_content, db,
-        extra={"strategy": strategy, "teachingId": teaching.id, "provider": provider},
+        extra={
+            "strategy": strategy,
+            "teachingId": teaching.id,
+            "provider": provider,
+            "learningPlan": learning_tasks,
+            "taskIndex": task_index,
+            "taskTitle": selected_task.get("title") if selected_task else None,
+        },
     )
 
     if session.status == "created":
@@ -958,7 +967,7 @@ Rules:
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def start_study_period(
-    session_id: int, user_id: int, duration_seconds: int, db: AsyncSession
+    session_id: int, user_id: int, duration_seconds: int, db: AsyncSession, task_index: Optional[int] = None
 ) -> dict:
     session = await _get_session_owned(
         session_id, user_id, db, load_study_periods=True
@@ -997,7 +1006,7 @@ async def start_study_period(
         session_id, "system", "timer_start",
         f"Study timer started: {duration_seconds} seconds.",
         db,
-        extra={"studyPeriodId": period.id, "durationSeconds": duration_seconds},
+        extra={"studyPeriodId": period.id, "durationSeconds": duration_seconds, "taskIndex": task_index},
     )
     await db.commit()
     await db.refresh(period)
@@ -1066,7 +1075,7 @@ async def finish_study_period(
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def generate_retrieval_questions(
-    session_id: int, user_id: int, db: AsyncSession, *, count: int = 3
+    session_id: int, user_id: int, db: AsyncSession, *, count: int = 3, task_index: Optional[int] = None
 ) -> list[dict]:
     session = await _get_session_owned(
         session_id, user_id, db, load_teaching=True
@@ -1092,6 +1101,25 @@ async def generate_retrieval_questions(
         f"Examples covered: {', '.join((current_teaching.examples or [])[:3])}"
     )
 
+    task_context = ""
+    if task_index is not None:
+        task_msg_result = await db.execute(
+            select(AISessionMessage)
+            .where(
+                AISessionMessage.session_id == session_id,
+                AISessionMessage.message_type == "teaching",
+            )
+            .order_by(AISessionMessage.sequence.desc())
+            .limit(1)
+        )
+        task_msg = task_msg_result.scalar_one_or_none()
+        extra = task_msg.extra or {} if task_msg else {}
+        task_context = (
+            f"THIS RETRIEVAL CHECK IS FOR LEARNING TASK {task_index + 1}. "
+            f"Task: {extra.get('taskTitle', 'current task')}. "
+            "Test this task specifically and do not assess unrelated material."
+        )
+
     system_prompt = (
         "You are an expert AI tutor generating retrieval practice questions. "
         "Questions must test understanding of what was actually taught, not generic knowledge. "
@@ -1102,6 +1130,8 @@ Subject: {subject.name} | Topic: {topic.name} | Concept: {concept.name}
 
 WHAT WAS TAUGHT (ground questions ONLY in this content — do not test knowledge not covered):
 {teaching_summary}
+
+{task_context}
 
 STUDENT CONTEXT
 Familiarity: {session.student_familiarity} | Intent: {session.intent}
@@ -1311,6 +1341,21 @@ Scoring guide:
         "provider":             provider,
     }
 
+    # Associate the answer with the learning task that was active when its timer started.
+    task_index = None
+    msg_result = await db.execute(
+        select(AISessionMessage)
+        .where(
+            AISessionMessage.session_id == session_id,
+            AISessionMessage.message_type == "timer_start",
+        )
+        .order_by(AISessionMessage.sequence.desc())
+        .limit(1)
+    )
+    latest_timer_message = msg_result.scalar_one_or_none()
+    if latest_timer_message and latest_timer_message.extra:
+        task_index = latest_timer_message.extra.get("taskIndex")
+
     # Feedback message
     correctness_label = "Correct!" if answer.is_correct else ("Close." if understanding == "partial" else "Not quite.")
     score_display     = f"{answer.score}/100" if answer.score is not None else "–"
@@ -1348,6 +1393,7 @@ Scoring guide:
         "options":             question.options,
         "correctAnswer":       question.expected_answer if question.question_type != "multiple_choice" else None,
         "correctOptionLabel":  _correct_option_label(question),
+        "taskIndex":           task_index,
     }
     return result
 

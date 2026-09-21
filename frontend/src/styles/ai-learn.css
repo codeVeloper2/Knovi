@@ -2903,191 +2903,236 @@
   .wa-post-suggestion-start { width: 100%; }
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   TASK LIST + CLOCK TIMER + QUESTION-AS-CHAT additions
-   ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ── Task dots in topbar ────────────────────────────────────────────────── */
-.wa-task-dots {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex-shrink: 0;
+/* ── Adaptive learning plan ─────────────────────────────────────────────── */
+.wa-learning-plan {
+  width: min(760px, 100%);
+  margin: 18px auto 24px;
+  padding: 18px;
+  border: 1px solid rgba(79,110,247,.25);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(15,30,53,.96), rgba(8,20,37,.96));
+  box-sizing: border-box;
 }
-.wa-task-dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.15);
-  transition: all 0.2s;
-}
-.wa-task-dot.active { background: var(--wa-primary); box-shadow: 0 0 0 3px rgba(79,110,247,0.3); }
-.wa-task-dot.done   { background: var(--wa-success); }
-
-/* ── Task list banner ───────────────────────────────────────────────────── */
-.wa-task-banner {
-  background: rgba(79,110,247,0.07);
-  border: 1px solid rgba(79,110,247,0.15);
-  border-radius: 12px;
-  margin-bottom: 12px;
-  overflow: hidden;
-}
-.wa-task-banner-toggle {
+.wa-plan-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  width: 100%;
-  padding: 10px 14px;
-  background: none;
-  border: none;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+.wa-plan-kicker {
+  display: block;
+  color: #7ea2ff;
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+.wa-plan-header h3 {
+  margin: 0 0 4px;
   color: var(--wa-text);
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: 1.05rem;
+}
+.wa-plan-header p {
+  margin: 0;
+  color: var(--wa-text-muted);
+  font-size: .8rem;
+  line-height: 1.45;
+}
+.wa-plan-count {
+  min-width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(79,110,247,.12);
+  color: #9bb6ff;
+  font-size: .75rem;
+  font-weight: 800;
+}
+.wa-plan-list { display: flex; flex-direction: column; gap: 7px; }
+.wa-plan-task {
+  display: grid;
+  grid-template-columns: 30px minmax(0,1fr) auto;
+  gap: 11px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,.065);
+  border-radius: 11px;
+  background: rgba(255,255,255,.025);
+}
+.wa-plan-task.is-active {
+  border-color: rgba(79,110,247,.45);
+  background: rgba(79,110,247,.08);
+}
+.wa-plan-task.is-done {
+  border-color: rgba(34,197,94,.18);
+  background: rgba(34,197,94,.045);
+}
+.wa-plan-task.is-locked { opacity: .48; }
+.wa-plan-task-marker {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255,255,255,.055);
+  color: var(--wa-text-muted);
+  font-size: .72rem;
+  font-weight: 800;
+}
+.wa-plan-task.is-active .wa-plan-task-marker {
+  background: var(--wa-primary);
+  color: white;
+}
+.wa-plan-task.is-done .wa-plan-task-marker {
+  background: rgba(34,197,94,.15);
+  color: #86efac;
+}
+.wa-plan-task-copy { min-width: 0; }
+.wa-plan-task-copy strong {
+  display: block;
+  color: var(--wa-text);
+  font-size: .86rem;
+  margin-bottom: 2px;
+}
+.wa-plan-task-copy span {
+  display: block;
+  color: var(--wa-text-muted);
+  font-size: .75rem;
+  line-height: 1.35;
+}
+.wa-plan-task-copy small {
+  display: block;
+  color: rgba(148,163,184,.7);
+  font-size: .67rem;
+  margin-top: 5px;
+}
+.wa-plan-task-btn {
+  border: 0;
+  border-radius: 8px;
+  background: var(--wa-primary);
+  color: #fff;
+  padding: 8px 11px;
+  font: inherit;
+  font-size: .72rem;
+  font-weight: 750;
   cursor: pointer;
 }
-.wa-task-list {
-  list-style: none;
+.wa-plan-done {
+  color: #86efac;
+  font-size: .7rem;
+  font-weight: 750;
+}
+.wa-plan-empty { text-align: center; align-items: center; }
+.wa-plan-empty-icon { font-size: 1.8rem; display: block; margin-bottom: 8px; }
+.wa-plan-empty p { color: var(--wa-text-muted); font-size: .8rem; margin: 5px 0 0; }
+
+/* ── Task study timer / real SVG clock ─────────────────────────────────── */
+.wa-task-timer {
+  width: min(760px, 100%);
+  margin: 18px auto 24px;
+  padding: 18px;
+  box-sizing: border-box;
+  border: 1px solid rgba(79,110,247,.30);
+  border-radius: 16px;
+  background: #081a31;
+}
+.wa-task-timer-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.wa-task-timer-header h3 {
+  margin: 0 0 4px;
+  color: var(--wa-text);
+  font-size: 1.08rem;
+}
+.wa-task-timer-header p {
   margin: 0;
-  padding: 0 14px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.wa-task-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  opacity: 0.5;
-  transition: opacity 0.2s;
-}
-.wa-task-item.active { opacity: 1; }
-.wa-task-item.done   { opacity: 0.65; }
-.wa-task-item.done strong { text-decoration: line-through; }
-.wa-task-check {
-  font-size: 0.85rem;
-  color: var(--wa-primary);
-  flex-shrink: 0;
-  margin-top: 2px;
-  min-width: 14px;
-}
-.wa-task-item.done .wa-task-check { color: var(--wa-success); }
-.wa-task-item strong { font-size: 0.875rem; color: var(--wa-text); display: block; }
-.wa-task-item p { margin: 2px 0 0; font-size: 0.8rem; color: var(--wa-text-muted); line-height: 1.45; }
-.wa-task-time { font-size: 0.7rem; color: var(--wa-text-muted); }
-
-.wa-task-badge {
-  font-size: 0.8rem;
+  max-width: 520px;
   color: var(--wa-text-muted);
-  padding: 6px 10px;
-  background: rgba(79,110,247,0.08);
-  border-radius: 8px;
-  margin-bottom: 4px;
+  font-size: .8rem;
+  line-height: 1.45;
 }
-
-/* ── Task transition bubble ────────────────────────────────────────────── */
-.wa-bubble--task-transition {
-  background: rgba(34,197,94,0.08) !important;
-  border-color: rgba(34,197,94,0.2) !important;
+.wa-timer-status {
+  flex-shrink: 0;
+  align-self: flex-start;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(34,197,94,.10);
+  color: #86efac;
+  font-size: .65rem;
+  font-weight: 750;
 }
-
-/* ── Clock SVG timer ────────────────────────────────────────────────────── */
 .wa-clock-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0;
+  position: relative;
+  width: min(230px, 70vw);
+  aspect-ratio: 1;
+  margin: 12px auto 6px;
 }
-.wa-clock-svg {
-  width: 160px;
-  height: 160px;
-}
+.wa-real-clock { width: 100%; height: 100%; overflow: visible; }
 .wa-clock-face {
-  fill: rgba(255,255,255,0.03);
-  stroke: rgba(255,255,255,0.08);
+  fill: #061326;
+  stroke: rgba(255,255,255,.08);
   stroke-width: 1.5;
 }
-.wa-clock-tick {
-  stroke: rgba(255,255,255,0.2);
-  stroke-width: 2;
-}
-.wa-clock-arc {
+.wa-clock-progress {
+  fill: none;
   stroke: var(--wa-primary);
-  stroke-width: 6;
+  stroke-width: 5;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 110px 110px;
+  opacity: .95;
   transition: stroke-dasharray 1s linear;
 }
-.wa-clock-arc.warning { stroke: var(--wa-warning); }
-.wa-clock-minute-hand {
-  stroke: var(--wa-text);
-  stroke-width: 3;
-}
-.wa-clock-second-hand {
-  stroke: var(--wa-primary);
-  stroke-width: 1.5;
-  transition: transform 1s linear;
-}
-.wa-clock-second-hand.warning { stroke: var(--wa-warning); }
-.wa-clock-center {
-  fill: var(--wa-primary);
-}
-.wa-clock-digits {
-  fill: var(--wa-text);
-  font-size: 13px;
-  font-weight: 700;
-  font-family: "Outfit", sans-serif;
-  font-variant-numeric: tabular-nums;
-}
-.wa-clock-digits.warning { fill: var(--wa-warning); }
-.wa-clock-paused {
-  fill: var(--wa-text-muted);
-  font-size: 8px;
-  letter-spacing: 0.1em;
-  font-family: "Outfit", sans-serif;
-}
-
-/* ── Question-as-chat bubble ────────────────────────────────────────────── */
-.wa-bubble--question {
-  background: rgba(79,110,247,0.08) !important;
-  border-color: rgba(79,110,247,0.2) !important;
-}
-.wa-q-text {
-  font-size: 0.9375rem;
-  color: var(--wa-text);
-  line-height: 1.6;
-  margin: 8px 0 10px;
-}
-.wa-inline-answer {
-  display: flex;
-  gap: 8px;
-  align-items: flex-end;
-  margin-top: 8px;
-}
-.wa-inline-answer .wa-answer-input {
-  flex: 1;
-}
-
-/* ── Loading screen ─────────────────────────────────────────────────────── */
-.wa-loading-screen {
-  flex: 1;
+.wa-clock-tick { stroke: rgba(226,232,240,.34); stroke-width: 1.5; }
+.wa-clock-tick.major { stroke: rgba(226,232,240,.72); stroke-width: 2.5; }
+.wa-clock-hand { stroke-linecap: round; transform-origin: 110px 110px; }
+.wa-clock-hour { stroke: #e2e8f0; stroke-width: 4; }
+.wa-clock-minute { stroke: #cbd5e1; stroke-width: 3; }
+.wa-clock-second { stroke: #4f6ef7; stroke-width: 1.5; }
+.wa-clock-pin { fill: #4f6ef7; }
+.wa-clock-digital {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
   justify-content: center;
-  gap: 20px;
+  align-items: center;
+  pointer-events: none;
 }
-.wa-loading-dots {
-  display: flex;
-  gap: 8px;
+.wa-clock-digital strong {
+  color: var(--wa-text);
+  font-size: 1.7rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.03em;
 }
-.wa-loading-dots span {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--wa-primary);
-  animation: waDot 1.2s ease-in-out infinite;
-}
-.wa-loading-dots span:nth-child(2) { animation-delay: 0.2s; }
-.wa-loading-dots span:nth-child(3) { animation-delay: 0.4s; }
-.wa-loading-text {
-  font-size: 0.875rem;
+.wa-clock-digital span {
   color: var(--wa-text-muted);
-  margin: 0;
+  font-size: .62rem;
+  margin-top: 2px;
+}
+.wa-task-timer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+.wa-task-timer-footer > span {
+  color: var(--wa-text-muted);
+  font-size: .72rem;
+  line-height: 1.4;
+}
+@media (max-width: 560px) {
+  .wa-learning-plan, .wa-task-timer { border-radius: 13px; padding: 14px; }
+  .wa-plan-task { grid-template-columns: 28px minmax(0,1fr); }
+  .wa-plan-task-btn, .wa-plan-done { grid-column: 2; justify-self: start; }
+  .wa-task-timer-footer { flex-direction: column; align-items: stretch; }
+  .wa-task-timer-footer .wa-btn-secondary { width: 100%; }
 }
