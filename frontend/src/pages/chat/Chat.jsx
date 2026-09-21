@@ -99,6 +99,16 @@ const PlusIcon = () => (
     <path d="M12 5v14M5 12h14"/>
   </svg>
 );
+const SmileIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9.5"/><path d="M8 14.2s1.6 2 4 2 4-2 4-2"/><path d="M9 9.5h.01M15 9.5h.01"/>
+  </svg>
+);
+const ChevronDownIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m6 9 6 6 6-6"/>
+  </svg>
+);
 
 // ─────────────────────────────────────────────────────────────────
 // Helpers
@@ -658,30 +668,29 @@ function ConversationList({ convs, activeId, onSelect, onNew, myId }) {
     <aside className="chatx-sidebar">
       <div className="chatx-sidebar-top">
         <div className="chatx-brand-row">
-          <div>
-            <div className="chatx-eyebrow">PEERUP MESSENGER</div>
-            <h1>Messages</h1>
+          <h1>Chats</h1>
+          <div className="chatx-header-actions">
+            <button type="button" className="chatx-header-icon" onClick={() => setFilter("all")} title="More options" aria-label="More options"><DotsIcon /></button>
+            <button type="button" className="chatx-compose" onClick={onNew} title="New chat" aria-label="New chat"><PlusIcon /></button>
           </div>
-          <button type="button" className="chatx-compose" onClick={onNew} title="New conversation" aria-label="New conversation">
-            <PlusIcon />
-          </button>
         </div>
 
         <div className="chatx-search">
           <SearchIcon />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search conversations" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search or start a new chat" />
           {search && <button type="button" onClick={() => setSearch("")} aria-label="Clear search"><CloseIcon /></button>}
         </div>
 
         <div className="chatx-tabs" role="tablist" aria-label="Conversation filters">
-          <button type="button" className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>All <span>{convs.length}</span></button>
+          <button type="button" className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>All</button>
           <button type="button" className={filter === "unread" ? "active" : ""} onClick={() => setFilter("unread")}>Unread {unreadTotal > 0 && <span>{unreadTotal}</span>}</button>
-          <button type="button" className={pinnedOnly ? "active" : ""} onClick={() => setPinnedOnly(v => !v)}>Goals</button>
+          <button type="button" className={pinnedOnly ? "active" : ""} onClick={() => setPinnedOnly(v => !v)}>Favorites</button>
+          <button type="button" className="chatx-filter-btn" onClick={() => setPinnedOnly(v => !v)} title="Filter chats" aria-label="Filter chats"><ChevronDownIcon /></button>
         </div>
       </div>
 
       <div className="chatx-list-label">
-        <span>{filter === "unread" ? "Unread messages" : pinnedOnly ? "Study goals" : "Recent conversations"}</span>
+        <span>{filter === "unread" ? "Unread" : pinnedOnly ? "Favorites" : ""}</span>
         <span>{filtered.length}</span>
       </div>
 
@@ -1014,12 +1023,9 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
         </div>
 
         <div className="cr-header-actions">
-          <button type="button" className="icon-btn" title="Voice call" onClick={() => setComingSoon("phone")} aria-label="Voice call">
-            <PhoneIcon />
-          </button>
-          <button type="button" className="icon-btn" title="Video call" onClick={() => setComingSoon("video")} aria-label="Video call">
-            <VideoIcon />
-          </button>
+          <button type="button" className="icon-btn" title="Voice call" onClick={() => setComingSoon("phone")} aria-label="Voice call"><PhoneIcon /></button>
+          <button type="button" className="icon-btn" title="Video call" onClick={() => setComingSoon("video")} aria-label="Video call"><VideoIcon /></button>
+          <button type="button" className="icon-btn cr-search-action" title="Search in conversation" onClick={() => toast.info("Message search is coming soon.")} aria-label="Search in conversation"><SearchIcon /></button>
           <div ref={headerMenuRef} style={{ position: "relative" }}>
             <button type="button" className="icon-btn" onClick={() => setShowHeaderMenu(v => !v)} aria-label="More options">
               <DotsIcon />
@@ -1145,6 +1151,8 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
             accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt" />
 
           {/* Text input */}
+          <button type="button" className="cr-emoji-btn" title="Emoji" aria-label="Emoji" onClick={() => setText(prev => `${prev}${prev ? " " : ""}😊`)}><SmileIcon /></button>
+
           <input
             className="cr-input"
             value={text}
