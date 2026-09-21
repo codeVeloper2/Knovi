@@ -368,7 +368,7 @@ function EmojiPickerPortal({ anchor, onPick, onClose }) {
 // ─────────────────────────────────────────────────────────────────
 // Message Bubble
 // ─────────────────────────────────────────────────────────────────
-function MessageBubble({ msg, myId, partnerName, partnerUrl, onDelete, onReport, onReact, onReply, onLightbox }) {
+function MessageBubble({ msg, myId, partnerName, partnerUrl, onDelete, onReport, onReact, onReply, onLightbox, onCopy }) {
   const mine = msg.senderId === myId;
   const [showPicker, setShowPicker] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -595,6 +595,12 @@ function MessageBubble({ msg, myId, partnerName, partnerUrl, onDelete, onReport,
               </svg>
               Reply
             </button>
+            <button type="button" onClick={() => { onCopy?.(msg); setShowMenu(false); }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+              Copy
+            </button>
             {mine && (
               <button type="button" className="danger" onClick={() => { onDelete(msg.id); setShowMenu(false); }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -806,6 +812,19 @@ function ConversationList({ convs, activeId, onSelect, onNew, myId }) {
   );
 }
 
+function ChatMessagesSkeleton() {
+  return (
+    <div className="cr-skeleton" aria-label="Loading messages" aria-busy="true">
+      <div className="cr-skeleton-day" />
+      <div className="cr-skeleton-msg cr-skeleton-msg--left"><span /><i /></div>
+      <div className="cr-skeleton-msg cr-skeleton-msg--right"><span /><i /></div>
+      <div className="cr-skeleton-msg cr-skeleton-msg--left wide"><span /><i /></div>
+      <div className="cr-skeleton-msg cr-skeleton-msg--right short"><span /><i /></div>
+      <div className="cr-skeleton-msg cr-skeleton-msg--left"><span /><i /></div>
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Chat Room
 // ─────────────────────────────────────────────────────────────────
@@ -1012,6 +1031,17 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
     catch { toast.error("Couldn't report message. Please try again."); }
   }
 
+  async function copyMsg(msg) {
+    const value = msg?.body || (msg?.attachmentName ? `📎 ${msg.attachmentName}` : "");
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success("Message copied.");
+    } catch {
+      toast.error("Couldn't copy the message.");
+    }
+  }
+
   async function saveGoal() {
     try {
       const res = await api.setGoal(conv.id, goalText);
@@ -1121,11 +1151,7 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
 
       {/* ── Messages ── */}
       <div className="cr-messages">
-        {loading && (
-          <div className="cr-loading">
-            <span className="discover-spinner" /> Loading messages…
-          </div>
-        )}
+        {loading && <ChatMessagesSkeleton />}
         {groups.map((g, i) =>
           g.type === "date"
             ? <div key={`d${i}`} className="cr-date-pill"><span>{g.label}</span></div>
@@ -1139,6 +1165,7 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
                 onReport={reportMsg}
                 onReact={reactMsg}
                 onLightbox={(url, name) => setLightbox({ url, name })}
+                onCopy={copyMsg}
                 onReply={m => setReplyTo({
                   id: m.id,
                   body: m.body || (m.attachmentName ? `📎 ${m.attachmentName}` : ""),
