@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_session
 from app.core.security import current_user
 from app.models.chat import Conversation, Message
-from app.models.match import MatchRequest
 from app.models.user import User
 
 router = APIRouter()
@@ -23,39 +22,11 @@ async def get_notifications(
 ) -> dict:
     """
     Return aggregated notifications for the authenticated user:
-    - Pending incoming friend requests
     - Conversations with unread messages
     """
     notifications = []
 
-    # ── 1. Pending friend requests ─────────────────────────────────────────
-    pending_requests = (await session.execute(
-        select(MatchRequest).where(
-            and_(
-                MatchRequest.receiver_id == user.id,
-                MatchRequest.status == "pending",
-            )
-        ).order_by(MatchRequest.created_at.desc()).limit(10)
-    )).scalars().all()
-
-    for req in pending_requests:
-        sender = (await session.execute(
-            select(User).where(User.id == req.sender_id)
-        )).scalar_one_or_none()
-        if not sender:
-            continue
-        notifications.append({
-            "id": f"fr_{req.id}",
-            "type": "friend_request",
-            "title": f"{sender.full_name or sender.email} sent you a friend request",
-            "body": f"Wants to {req.mode} {req.subject}",
-            "photoURL": sender.photo_url or "",
-            "linkTo": "/app/match-requests",
-            "createdAt": req.created_at.isoformat(),
-            "meta": {"requestId": req.id, "senderId": sender.id},
-        })
-
-    # ── 2. Unread messages ─────────────────────────────────────────────────
+    # ── Unread messages ─────────────────────────────────────────────────
     my_convs = (await session.execute(
         select(Conversation.id, Conversation.user_a_id, Conversation.user_b_id).where(
             or_(Conversation.user_a_id == user.id, Conversation.user_b_id == user.id)

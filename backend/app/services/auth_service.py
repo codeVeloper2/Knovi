@@ -295,10 +295,6 @@ async def update_profile(session: AsyncSession, user: User, data: dict) -> User:
 
     user.full_name = data.get("displayName", user.full_name)
     user.grade = data.get("grade", user.grade)
-    user.subjects_good_at = data.get("subjectsGoodAt", user.subjects_good_at)
-    user.subjects_need_help = data.get("subjectsNeedHelp", user.subjects_need_help)
-    user.skill_level = data.get("skillLevel", user.skill_level)
-    user.language = data.get("language", user.language)
     user.bio = data.get("bio", user.bio)
     if data.get("photoURL"):
         user.photo_url = data["photoURL"]

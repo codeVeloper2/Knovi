@@ -1,7 +1,6 @@
 """ORM models package. Importing this registers all tables on Base.metadata."""
 from app.models.user import User
 from app.models.chat import Conversation, Message
-from app.models.match import MatchRequest
 from app.models.learn import (
     Course, Lesson, Tutorial, VideoProgress,
     CourseEnrollment, SavedContent, LearnComment,
@@ -26,7 +25,7 @@ from app.models.ai_learning import (
 
 __all__ = [
     # Auth / social
-    "User", "Conversation", "Message", "MatchRequest",
+    "User", "Conversation", "Message",
     # Legacy video learn
     "Course", "Lesson", "Tutorial", "VideoProgress",
     "CourseEnrollment", "SavedContent", "LearnComment",

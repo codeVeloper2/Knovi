@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SUBJECTS, GRADES } from "../../subjects";
+import { GRADES } from "../../subjects";
 
 // ── Icons ─────────────────────────────────────────────────────────
 const CloseIcon = () => (
@@ -7,34 +7,20 @@ const CloseIcon = () => (
     <path d="M18 6 6 18M6 6l12 12"/>
   </svg>
 );
-const TeachIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>
-  </svg>
-);
-const LearnIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-  </svg>
-);
 
 export default function FiltersPanel({ initialFilters, onClose, onApply }) {
-  const [mode, setMode] = useState(initialFilters.mode || "learn");
-  const [subject, setSubject] = useState(initialFilters.subject || "All Subjects");
   const [level, setLevel] = useState(initialFilters.level || "All Levels");
   const [availability, setAvailability] = useState(initialFilters.availability || "all");
   const [sort, setSort] = useState(initialFilters.sort || "recommended");
 
   function handleReset() {
-    setMode("learn");
-    setSubject("All Subjects");
     setLevel("All Levels");
     setAvailability("all");
     setSort("recommended");
   }
 
   function handleApply() {
-    onApply({ mode, subject, level, availability, sort });
+    onApply({ level, availability, sort });
   }
 
   return (
@@ -51,40 +37,6 @@ export default function FiltersPanel({ initialFilters, onClose, onApply }) {
 
         {/* Content */}
         <div className="filters-content">
-          {/* What do you want? */}
-          <div className="filters-section">
-            <label className="filters-label">What do you want?</label>
-            <div className="filters-mode-cards">
-              <button
-                type="button"
-                className={`filters-mode-card ${mode === "teach" ? "active" : ""}`}
-                onClick={() => setMode("teach")}
-              >
-                <TeachIcon />
-                <div className="filters-mode-card-title">Teach</div>
-                <div className="filters-mode-card-desc">Find people who need help in your subject(s)</div>
-              </button>
-              <button
-                type="button"
-                className={`filters-mode-card ${mode === "learn" ? "active" : ""}`}
-                onClick={() => setMode("learn")}
-              >
-                <LearnIcon />
-                <div className="filters-mode-card-title">Learn</div>
-                <div className="filters-mode-card-desc">Find people who can teach you</div>
-              </button>
-            </div>
-          </div>
-
-          {/* Subject */}
-          <div className="filters-section">
-            <label className="filters-label">Subject</label>
-            <select value={subject} onChange={e => setSubject(e.target.value)} className="filters-select">
-              <option>All Subjects</option>
-              {SUBJECTS.map(s => <option key={s}>{s}</option>)}
-            </select>
-          </div>
-
           {/* Level */}
           <div className="filters-section">
             <label className="filters-label">Level</label>
@@ -116,7 +68,7 @@ export default function FiltersPanel({ initialFilters, onClose, onApply }) {
                   checked={availability === "all"}
                   onChange={() => setAvailability("all")}
                 />
-                <span>All (Online & Offline)</span>
+                <span>All (Online &amp; Offline)</span>
               </label>
             </div>
           </div>

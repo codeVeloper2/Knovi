@@ -16,22 +16,20 @@
 
 // Main navigation shortcuts (Ctrl/Cmd + letter) — keyed by route.
 export const NAV_SHORTCUTS = {
-  "/app":                  { combo: "mod+h", keys: ["Ctrl", "H"], label: "Home" },
-  "/app/discover":         { combo: "mod+d", keys: ["Ctrl", "D"], label: "Discover" },
-  "/app/chat":             { combo: "mod+e", keys: ["Ctrl", "E"], label: "Chat" },
-  "/app/match-requests":   { combo: "mod+k", keys: ["Ctrl", "K"], label: "Match Requests" },
-  "/app/solo":             { combo: "mod+l", keys: ["Ctrl", "L"], label: "Learning" },
-  "/app/sync":             { combo: "mod+o", keys: ["Ctrl", "O"], label: "Sync" },
-  "/app/progress":         { combo: "mod+u", keys: ["Ctrl", "U"], label: "Progress" },
-  "/app/settings":         { combo: "mod+s", keys: ["Ctrl", "S"], label: "Settings" },
+  "/app":          { combo: "mod+h", keys: ["Ctrl", "H"], label: "Home" },
+  "/app/discover": { combo: "mod+d", keys: ["Ctrl", "D"], label: "Discover" },
+  "/app/chat":     { combo: "mod+e", keys: ["Ctrl", "E"], label: "Chat" },
+  "/app/learn":    { combo: "mod+l", keys: ["Ctrl", "L"], label: "Learn" },
+  "/app/progress": { combo: "mod+u", keys: ["Ctrl", "U"], label: "Progress" },
+  "/app/settings": { combo: "mod+s", keys: ["Ctrl", "S"], label: "Settings" },
 };
 
 // Settings sub-nav shortcuts (Ctrl/Cmd + digit) — keyed by route.
 export const SETTINGS_SHORTCUTS = {
-  "/app/settings":               { combo: "mod+1", keys: ["Ctrl", "1"], label: "Profile" },
-  "/app/settings/subjects":      { combo: "mod+2", keys: ["Ctrl", "2"], label: "Subjects" },
-  "/app/settings/security":      { combo: "mod+3", keys: ["Ctrl", "3"], label: "Security" },
-  "/app/settings/notifications": { combo: "mod+4", keys: ["Ctrl", "4"], label: "Notifications" },
+  "/app/settings":                  { combo: "mod+1", keys: ["Ctrl", "1"], label: "Profile" },
+  "/app/settings/learning-profile": { combo: "mod+2", keys: ["Ctrl", "2"], label: "Learning Profile" },
+  "/app/settings/security":         { combo: "mod+3", keys: ["Ctrl", "3"], label: "Security" },
+  "/app/settings/notifications":    { combo: "mod+4", keys: ["Ctrl", "4"], label: "Notifications" },
 };
 
 // Back-to-menu (from settings) shortcut.

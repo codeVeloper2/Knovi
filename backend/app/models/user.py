@@ -57,10 +57,6 @@ class User(Base):
     full_name: Mapped[str] = mapped_column(String(120), default="", nullable=False)
     photo_url: Mapped[str] = mapped_column(Text, default="", nullable=False)
     grade: Mapped[str] = mapped_column(String(40), default="", nullable=False)
-    subjects_good_at: Mapped[list[str]] = mapped_column(ARRAY(String), default=list, nullable=False)
-    subjects_need_help: Mapped[list[str]] = mapped_column(ARRAY(String), default=list, nullable=False)
-    skill_level: Mapped[str] = mapped_column(String(40), default="", nullable=False)
-    language: Mapped[str] = mapped_column(String(60), default="", nullable=False)
     bio: Mapped[str] = mapped_column(Text, default="", nullable=False)
     location: Mapped[str] = mapped_column(String(100), default="", nullable=False)
     is_online: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -106,10 +102,6 @@ class User(Base):
             "exists": True,
             "displayName": self.full_name,
             "grade": self.grade,
-            "subjectsGoodAt": list(self.subjects_good_at or []),
-            "subjectsNeedHelp": list(self.subjects_need_help or []),
-            "skillLevel": self.skill_level,
-            "language": self.language,
             "bio": self.bio,
             "photoURL": self.photo_url,
             "location": self.location,

@@ -220,9 +220,10 @@ function NewChatModal({ onClose, onStart }) {
   const [starting, setStarting] = useState(false);
 
   useEffect(() => {
-    api.getAcceptedMatchPartners()
-      .then(setConnections).catch(() => setConnections([]))
-      .finally(() => setLoading(false));
+    // Since we removed the peer matching system, there are no pre-approved connections.
+    // Users can now message anyone directly from the Discover page.
+    setConnections([]);
+    setLoading(false);
   }, []);
 
   const filtered = connections.filter(u =>

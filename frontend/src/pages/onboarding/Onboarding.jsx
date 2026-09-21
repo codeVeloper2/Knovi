@@ -2,10 +2,8 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import Logo from "../../components/Logo";
-import { GRADES, SKILL_LEVELS, SUBJECTS } from "../../subjects";
+import { GRADES } from "../../subjects";
 import * as api from "../../api";
-
-const LANGUAGES = ["English", "Spanish", "French", "Arabic", "Mandarin", "Hindi", "Portuguese", "Other"];
 
 // Learning Profile options
 const STRENGTH_OPTIONS = [
@@ -34,7 +32,6 @@ const STUCK_HELP = [
 const STEPS = [
   { key: "personal",      label: "Personal Info" },
   { key: "learning",      label: "Learning Profile" },
-  { key: "peer",          label: "Peer Learning" },
   { key: "privacy",       label: "Privacy" },
   { key: "agreement",     label: "Agreement" },
 ];
@@ -66,12 +63,6 @@ export default function Onboarding() {
   const [learningPreferences, setLearningPreferences] = useState([]);
   const [stuckHelp, setStuckHelp] = useState([]);
   const [personalNote, setPersonalNote] = useState("");
-  
-  // Peer Learning state (for matching)
-  const [goodAt, setGoodAt] = useState(profile?.subjectsGoodAt || []);
-  const [needHelp, setNeedHelp] = useState(profile?.subjectsNeedHelp || []);
-  const [skillLevel, setSkillLevel] = useState(profile?.skillLevel || "Intermediate");
-  const [language, setLanguage] = useState(profile?.language || "");
   
   // Privacy/agreement state
   const [accepted, setAccepted] = useState(profile?.agreedToLearningAgreement || false);
@@ -113,15 +104,11 @@ export default function Onboarding() {
         await agreeToLearning();
       }
       
-      // Save basic profile + peer matching data
+      // Save basic profile
       await completeProfile(
         {
           displayName: displayName.trim(),
           grade,
-          subjectsGoodAt: goodAt,
-          subjectsNeedHelp: needHelp,
-          skillLevel,
-          language,
           bio: bio.trim(),
           photoURL: profile?.photoURL || user?.photoURL || "",
           isPublic,
@@ -289,57 +276,6 @@ export default function Onboarding() {
             </>
           )}
 
-          {step === "peer" && (
-            <>
-              <h2>Peer Learning</h2>
-              <p className="card-subtitle">Connect with classmates who can help you learn and grow together.</p>
-
-              <div className="field">
-                <label>Subjects I can help others with</label>
-                <p className="hint" style={{ marginBottom: 8 }}>What subjects are you confident teaching?</p>
-                <div className="chip-grid">
-                  {SUBJECTS.map((s) => (
-                    <button key={s} type="button" className={`chip ${goodAt.includes(s) ? "on" : ""}`}
-                      onClick={() => toggle(goodAt, setGoodAt, s)}>{s}</button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="field">
-                <label>Subjects I need help with</label>
-                <p className="hint" style={{ marginBottom: 8 }}>What subjects would you like peer support in?</p>
-                <div className="chip-grid">
-                  {SUBJECTS.map((s) => (
-                    <button key={s} type="button" className={`chip ${needHelp.includes(s) ? "on" : ""}`}
-                      onClick={() => toggle(needHelp, setNeedHelp, s)}>{s}</button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="settings-grid">
-                <div className="field">
-                  <label htmlFor="skill">Overall skill level</label>
-                  <select id="skill" value={skillLevel} onChange={(e) => setSkillLevel(e.target.value)}>
-                    {SKILL_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
-                  </select>
-                </div>
-
-                <div className="field">
-                  <label htmlFor="language">Preferred language</label>
-                  <select id="language" value={language} onChange={(e) => setLanguage(e.target.value)}>
-                    <option value="">Select language</option>
-                    {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="wizard-actions">
-                <button className="btn-ghost" type="button" onClick={back}>← Back</button>
-                <button className="btn btn-primary" type="button" onClick={next}>Next →</button>
-              </div>
-            </>
-          )}
-
           {step === "privacy" && (
             <>
               <h2>Privacy Settings</h2>
@@ -368,7 +304,7 @@ export default function Onboarding() {
                   <span className="privacy-toggle-icon">💬</span>
                   <div>
                     <div className="privacy-toggle-title">Allow direct messages</div>
-                    <div className="privacy-toggle-desc">Let anyone message you directly without sending a friend request first. Turning this off means they must send a friend request before chatting.</div>
+                    <div className="privacy-toggle-desc">Let anyone message you directly. Turning this off means only you can start conversations.</div>
                   </div>
                 </div>
                 <button

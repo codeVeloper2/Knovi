@@ -73,33 +73,14 @@ async def start_conversation(
     )).scalar_one_or_none()
 
     if existing is None:
-        # Require an accepted connection (match request) between the two users.
-        from app.models.match import MatchRequest
-        from sqlalchemy import and_, or_
-        accepted_conn = (await session.execute(
-            sa_select(MatchRequest).where(
-                and_(
-                    or_(
-                        and_(MatchRequest.sender_id == user.id, MatchRequest.receiver_id == body.partnerId),
-                        and_(MatchRequest.sender_id == body.partnerId, MatchRequest.receiver_id == user.id),
-                    ),
-                    MatchRequest.status == "accepted",
-                )
-            )
-        )).scalar_one_or_none()
-        if not accepted_conn:
-            raise HTTPException(
-                status_code=403,
-                detail="You must have an accepted friend request with this student before you can chat."
-            )
-        # Also honour the partner's privacy setting.
+        # Honour the partner's privacy setting.
         partner = (await session.execute(
             sa_select(User).where(User.id == body.partnerId)
         )).scalar_one_or_none()
         if partner and not partner.allow_direct_message:
             raise HTTPException(
                 status_code=403,
-                detail="This student does not accept direct messages. Send a friend request first."
+                detail="This student does not accept direct messages."
             )
 
     conv = await chat_service.get_or_create_conversation(

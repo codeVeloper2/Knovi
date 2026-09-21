@@ -14,18 +14,17 @@ import * as api from "../api";
 import {
   HomeIcon, DiscoverIcon, ChatIcon, LearnIcon,
   ProgressIcon, SettingsIcon, SearchIcon, LogoutIcon,
-  ChevronRight, ProfileIcon, SecurityIcon, BellIcon, MatchRequestsIcon,
+  ChevronRight, ProfileIcon, SecurityIcon, BellIcon,
 } from "./DashIcons";
 
 // ── Nav configuration ─────────────────────────────────────────────────────────
 
 const MAIN_NAV = [
-  { to: "/app",                label: "Home",            Icon: HomeIcon,          end: true },
-  { to: "/app/discover",       label: "Discover",        Icon: DiscoverIcon },
-  { to: "/app/chat",           label: "Chat",            Icon: ChatIcon },
-  { to: "/app/match-requests", label: "Friend Requests", Icon: MatchRequestsIcon },
-  { to: "/app/learn",          label: "Learn",           Icon: LearnIcon },
-  { to: "/app/progress",       label: "Progress",        Icon: ProgressIcon },
+  { to: "/app",          label: "Home",     Icon: HomeIcon,     end: true },
+  { to: "/app/discover", label: "Discover", Icon: DiscoverIcon },
+  { to: "/app/chat",     label: "Chat",     Icon: ChatIcon },
+  { to: "/app/learn",    label: "Learn",    Icon: LearnIcon },
+  { to: "/app/progress", label: "Progress", Icon: ProgressIcon },
 ];
 
 // Desktop nav adds Settings at the bottom
@@ -39,7 +38,6 @@ const MOBILE_MAIN_NAV = MAIN_NAV;
 
 const SETTINGS_NAV = [
   { to: "/app/settings",                  label: "Profile",          Icon: ProfileIcon,  end: true },
-  { to: "/app/settings/peer-learning",    label: "Peer Learning",    Icon: LearnIcon },
   { to: "/app/settings/learning-profile", label: "Learning Profile", Icon: LearnIcon },
   { to: "/app/settings/security",         label: "Security",         Icon: SecurityIcon },
   { to: "/app/settings/notifications",    label: "Notifications",    Icon: BellIcon },
@@ -79,7 +77,6 @@ export default function DashboardLayout() {
 
   function openSettings()  { clearTimeout(settingsLeaveTimer.current); setDesktopSettingsHover(true);  }
   function closeSettings() { settingsLeaveTimer.current = setTimeout(() => setDesktopSettingsHover(false), 120); }
-  const [pendingMatchCount,  setPendingMatchCount]  = useState(0);
   const searchRef = useRef(null);
 
   const inSettings = location.pathname.startsWith("/app/settings");
@@ -101,21 +98,6 @@ export default function DashboardLayout() {
     const handler = () => setMobileOpen(true);
     window.addEventListener("peerup:open-nav", handler);
     return () => window.removeEventListener("peerup:open-nav", handler);
-  }, []);
-
-  // Poll badge counts every 30 s
-  useEffect(() => {
-    let active = true;
-    async function fetchCounts() {
-      const [matchRes] = await Promise.allSettled([
-        api.getPendingRequestCount(),
-      ]);
-      if (!active) return;
-      if (matchRes.status === "fulfilled") setPendingMatchCount(matchRes.value.count ?? 0);
-    }
-    fetchCounts();
-    const interval = setInterval(fetchCounts, 30000);
-    return () => { active = false; clearInterval(interval); };
   }, []);
 
   function toggle() {
@@ -146,8 +128,7 @@ export default function DashboardLayout() {
   }
 
   function NavItem({ to, label, Icon, end, inSettingsNav }) {
-    const sc    = inSettingsNav ? SETTINGS_SHORTCUTS[to] : NAV_SHORTCUTS[to];
-    const badge = (to === "/app/match-requests" && pendingMatchCount > 0) ? pendingMatchCount : null;
+    const sc = inSettingsNav ? SETTINGS_SHORTCUTS[to] : NAV_SHORTCUTS[to];
     return (
       <NavLink
         to={to} end={end}
@@ -157,7 +138,6 @@ export default function DashboardLayout() {
       >
         <span className="dash-link-icon-wrap">
           <Icon />
-          {badge != null && <span className="dash-icon-badge">{badge > 9 ? "9+" : badge}</span>}
         </span>
         <span className="dash-link-label">{label}</span>
         {sc && (
@@ -230,9 +210,7 @@ export default function DashboardLayout() {
             <nav className="desktop-topbar-nav">
               {DESKTOP_MAIN_NAV
                 .filter(({ to }) => to !== "/app/settings")
-                .map(({ to, label, Icon, end }) => {
-                  const badge = (to === "/app/match-requests" && pendingMatchCount > 0) ? pendingMatchCount : null;
-                  return (
+                .map(({ to, label, Icon, end }) => (
                     <NavLink
                       key={to}
                       to={to}
@@ -242,12 +220,10 @@ export default function DashboardLayout() {
                     >
                       <div className="desktop-nav-icon-wrap">
                         <Icon />
-                        {badge != null && <span className="desktop-nav-badge">{badge > 9 ? "9+" : badge}</span>}
                       </div>
                       <span>{label}</span>
                     </NavLink>
-                  );
-                })}
+                  ))}
             </nav>
 
             {/* Right Side — Bell + Settings dropdown + Avatar (no search here) */}

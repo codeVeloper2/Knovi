@@ -3,29 +3,29 @@ import { useNavigate, useLocation } from "react-router-dom";
 import {
   PlusIcon,
   CloseIcon,
-  FriendRequestsIcon,
   ProgressIcon,
   LearnIcon,
+  ChatIcon,
 } from "./DashIcons";
 
 /**
  * MobileFabMenu — 3-item fan arc spreading upward from the FAB button.
  *
  *   left  → Learn
- *   top   → Friend Requests  (tallest point, centre)
+ *   top   → Chat  (tallest point, centre)
  *   right → Progress
  */
 
 const FAB_ITEMS = [
-  { to: "/app/learn",          label: "Learn",           Icon: LearnIcon,          pos: "left"  },
-  { to: "/app/match-requests", label: "Friend Requ...",  Icon: FriendRequestsIcon, pos: "top"   },
-  { to: "/app/progress",       label: "Progress",        Icon: ProgressIcon,       pos: "right" },
+  { to: "/app/learn",    label: "Learn",    Icon: LearnIcon,    pos: "left"  },
+  { to: "/app/chat",     label: "Chat",     Icon: ChatIcon,     pos: "top"   },
+  { to: "/app/progress", label: "Progress", Icon: ProgressIcon, pos: "right" },
 ];
 
 function getCurrentSection(pathname) {
-  if (pathname.startsWith("/app/learn"))          return FAB_ITEMS[0];
-  if (pathname.startsWith("/app/match-requests")) return FAB_ITEMS[1];
-  if (pathname.startsWith("/app/progress"))       return FAB_ITEMS[2];
+  if (pathname.startsWith("/app/learn"))    return FAB_ITEMS[0];
+  if (pathname.startsWith("/app/chat"))     return FAB_ITEMS[1];
+  if (pathname.startsWith("/app/progress")) return FAB_ITEMS[2];
   return null;
 }
 

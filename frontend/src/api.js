@@ -183,39 +183,12 @@ export function setOffline() {
 }
 
 // ── Discover ─────────────────────────────────────────────────────
-export function discoverUsers(mode, subject, level, availability, sort) {
+export function discoverUsers(level, availability, sort) {
   const params = new URLSearchParams();
-  if (mode) params.set("mode", mode);
-  if (subject && subject !== "All Subjects") params.set("subject", subject);
   if (level && level !== "All Levels") params.set("level", level);
   if (availability) params.set("availability", availability);
   if (sort) params.set("sort", sort);
   return request(`/api/users/discover?${params}`, { auth: true });
-}
-
-// ── Match requests ───────────────────────────────────────────────
-export function sendMatchRequest(receiverId, mode, subject, message) {
-  return request("/api/match/requests", {
-    method: "POST",
-    body: { receiverId, mode, subject, message: message || null },
-    auth: true,
-  });
-}
-export function listMatchRequests(direction = "incoming", status = "pending") {
-  return request(`/api/match/requests?direction=${direction}&status=${status}`, { auth: true });
-}
-export function respondMatchRequest(reqId, action) {
-  return request(`/api/match/requests/${reqId}`, {
-    method: "PATCH",
-    body: { action },
-    auth: true,
-  });
-}
-export function getPendingRequestCount() {
-  return request("/api/match/requests/count", { auth: true });
-}
-export function getAcceptedMatchPartners() {
-  return request("/api/match/accepted-partners", { auth: true });
 }
 
 // ── Chat ─────────────────────────────────────────────────────────

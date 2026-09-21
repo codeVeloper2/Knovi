@@ -161,9 +161,9 @@ export default function NotificationsBell({ className = "notif-bell-btn" }) {
               <button
                 type="button"
                 className="notif-see-all"
-                onClick={() => { setOpen(false); navigate("/app/match-requests"); }}
+                onClick={() => { setOpen(false); navigate("/app/chat"); }}
               >
-                View all requests →
+                Go to Chat →
               </button>
             </div>
           )}

@@ -15,14 +15,6 @@ const SECTIONS = [
   },
   {
     icon: LearnIcon,
-    label: "Peer Learning",
-    desc: "Subjects for peer matching and study groups",
-    route: "/app/settings/peer-learning",
-    accent: "#0ea5e9",
-    emoji: "🤝",
-  },
-  {
-    icon: LearnIcon,
     label: "Learning Profile",
     desc: "Customize how PeerUP's AI teaches you",
     route: "/app/settings/learning-profile",
@@ -112,11 +104,6 @@ export default function SettingsMobile() {
           <div className="sm-stat">
             <span className="sm-stat-val">{streak}</span>
             <span className="sm-stat-lbl">Streak 🔥</span>
-          </div>
-          <div className="sm-stat-divider" />
-          <div className="sm-stat">
-            <span className="sm-stat-val">{(profile?.subjectsGoodAt || []).length}</span>
-            <span className="sm-stat-lbl">Subjects</span>
           </div>
         </div>
 

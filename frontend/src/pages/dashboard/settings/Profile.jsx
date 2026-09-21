@@ -44,10 +44,6 @@ export default function SettingsProfile() {
         {
           displayName: displayName.trim(),
           grade,
-          subjectsGoodAt: profile?.subjectsGoodAt || [],
-          subjectsNeedHelp: profile?.subjectsNeedHelp || [],
-          skillLevel: profile?.skillLevel || "Intermediate",
-          language: profile?.language || "",
           bio: bio.trim(),
           photoURL: profile?.photoURL || "",
         },

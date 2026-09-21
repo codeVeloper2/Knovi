@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import * as api from "../../api";
-import { SUBJECTS, GRADES } from "../../subjects";
-import StudentCard from "./StudentCard";
+import { GRADES } from "../../subjects";
 import StudentProfilePanel from "./StudentProfilePanel";
 import FiltersPanel from "./FiltersPanel";
-import SendMatchRequestModal from "./SendMatchRequestModal";
-import NotificationsBell from "../../components/NotificationsPanel";
 
 // ── Hooks ──────────────────────────────────────────────────────────────────
 function useIsMobile() {
@@ -31,211 +29,27 @@ const FilterIcon = () => (
     <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
   </svg>
 );
-const HamburgerIcon = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="3" y1="6" x2="21" y2="6"/>
-    <line x1="3" y1="12" x2="21" y2="12"/>
-    <line x1="3" y1="18" x2="21" y2="18"/>
-  </svg>
-);
-const BellIcon = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+const ChatIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
   </svg>
 );
 
-function MobileAvatar({ name, photo, size = 34 }) {
-  const initials = (name || "?")[0].toUpperCase();
-  if (photo) {
-    return (
-      <img src={photo} alt={name} referrerPolicy="no-referrer"
-        style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover" }} />
-    );
-  }
+// ── Avatar helper ──────────────────────────────────────────────────────────
+function avatarBg(name) {
   const colors = ["#f59e0b","#34d399","#a78bfa","#60a5fa","#f472b6","#fb923c"];
   let h = 0;
-  for (let i = 0; i < (name||"").length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return (
-    <span style={{
-      width: size, height: size, borderRadius: "50%", background: colors[h % colors.length],
-      display: "flex", alignItems: "center", justifyContent: "center",
-      fontWeight: 700, fontSize: size * 0.4, color: "#fff", flexShrink: 0,
-    }}>{initials}</span>
-  );
+  for (let i = 0; i < (name || "").length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return colors[h % colors.length];
 }
 
-// ── Mobile Discover ────────────────────────────────────────────────────────
-function MobileDiscover({
-  profile, students, loading, filteredStudents,
-  searchQuery, setSearchQuery,
-  subject, setSubject,
-  sort, setSort,
-  showFilters, setShowFilters,
-  selectedStudent, setSelectedStudent,
-  openMatchModal,
-  mode, level, availability,
-  handleFiltersApply,
-  showMatchModal, matchModalStudent,
-  setShowMatchModal, setMatchModalStudent,
-  loadStudents,
-}) {
-  const name = profile?.displayName || "";
-  const photo = profile?.photoURL || "";
-
-  return (
-    <div className="disc-mobile-wrap">
-
-      {/* ── Page title ── */}
-      <div className="disc-mobile-title-row">
-        <div>
-          <h1 className="disc-mobile-title">Discover</h1>
-          <p className="disc-mobile-subtitle">Find peers who can help you learn</p>
-        </div>
-      </div>
-
-      {/* ── Filter button only (no search bar on mobile) ── */}
-      <div className="disc-mobile-controls">
-        <button className="disc-mobile-filter-btn disc-mobile-filter-btn--full" onClick={() => setShowFilters(true)}>
-          <FilterIcon />
-          <span>Filter</span>
-        </button>
-      </div>
-
-      {/* ── Active filter chips ── */}
-      {(subject !== "All Subjects" || sort !== "recommended") && (
-        <div className="disc-mobile-chips">
-          {subject !== "All Subjects" && (
-            <span className="disc-mobile-chip">
-              {subject}
-              <button onClick={() => setSubject("All Subjects")}>✕</button>
-            </span>
-          )}
-          {sort !== "recommended" && (
-            <span className="disc-mobile-chip">
-              {sort === "top_rated" ? "Top Rated" : sort === "most_active" ? "Most Active" : "Newest"}
-              <button onClick={() => setSort("recommended")}>✕</button>
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* ── Sort tabs ── */}
-      <div className="disc-mobile-sort-tabs">
-        {[
-          { val: "recommended", label: "For You" },
-          { val: "top_rated",   label: "Top Rated" },
-          { val: "most_active", label: "Active" },
-          { val: "newest",      label: "New" },
-        ].map(tab => (
-          <button key={tab.val}
-            className={`disc-mobile-sort-tab${sort === tab.val ? " active" : ""}`}
-            onClick={() => setSort(tab.val)}>
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Results count ── */}
-      {!loading && (
-        <div className="disc-mobile-count">
-          {filteredStudents.length} peer{filteredStudents.length !== 1 ? "s" : ""} found
-        </div>
-      )}
-
-      {/* ── Cards ── */}
-      <div className="disc-mobile-list">
-        {loading ? (
-          <>
-            <div className="disc-mobile-shimmer" />
-            <div className="disc-mobile-shimmer" />
-            <div className="disc-mobile-shimmer" />
-            <div className="disc-mobile-shimmer" />
-          </>
-        ) : filteredStudents.length === 0 ? (
-          <div className="disc-mobile-empty">
-            <span className="disc-mobile-empty-icon">🔍</span>
-            <h3>No peers found</h3>
-            <p>{searchQuery ? `No results for "${searchQuery}"` : "Try adjusting your filters."}</p>
-            {searchQuery && (
-              <button className="disc-mobile-empty-btn" onClick={() => setSearchQuery("")}>Clear search</button>
-            )}
-          </div>
-        ) : (
-          filteredStudents.map(student => (
-            <MobileStudentCard
-              key={student.uid}
-              student={student}
-              currentUser={profile}
-              onViewProfile={() => setSelectedStudent(student)}
-              onSendRequest={() => openMatchModal(student)}
-            />
-          ))
-        )}
-      </div>
-
-      <div style={{ height: 32 }} />
-
-      {/* ── Profile panel ── */}
-      {selectedStudent && (
-        <StudentProfilePanel
-          student={selectedStudent}
-          currentUser={profile}
-          onClose={() => setSelectedStudent(null)}
-          onSendRequest={() => {
-            openMatchModal(selectedStudent);
-            setSelectedStudent(null);
-          }}
-        />
-      )}
-
-      {/* ── Filters panel ── */}
-      {showFilters && (
-        <FiltersPanel
-          initialFilters={{ mode, subject, level, availability, sort }}
-          onClose={() => setShowFilters(false)}
-          onApply={handleFiltersApply}
-        />
-      )}
-
-      {/* ── Match request modal ── */}
-      {showMatchModal && matchModalStudent && (
-        <SendMatchRequestModal
-          student={matchModalStudent}
-          currentUser={profile}
-          onClose={() => { setShowMatchModal(false); setMatchModalStudent(null); }}
-          onSuccess={() => {
-            setShowMatchModal(false);
-            setMatchModalStudent(null);
-            loadStudents();
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-// ── Mobile student card ────────────────────────────────────────────────────
-function MobileStudentCard({ student, currentUser, onViewProfile, onSendRequest }) {
-  const myGoodAt   = new Set(currentUser?.subjectsGoodAt  || []);
-  const myNeedHelp = new Set(currentUser?.subjectsNeedHelp || []);
-  const theirGoodAt   = new Set(student.subjectsGoodAt  || []);
-  const theirNeedHelp = new Set(student.subjectsNeedHelp || []);
-
-  const theyCanTeachMe = [...theirGoodAt].filter(s => myNeedHelp.has(s));
-  const iCanTeachThem  = [...myGoodAt].filter(s => theirNeedHelp.has(s));
-  const canMatch = theyCanTeachMe.length > 0 || iCanTeachThem.length > 0;
-
+// ── Student Card ───────────────────────────────────────────────────────────
+function StudentCard({ student, onViewProfile, onMessage }) {
   const initials = (student.displayName || "?")[0].toUpperCase();
-  const colors = ["#f59e0b","#34d399","#a78bfa","#60a5fa","#f472b6","#fb923c"];
-  let h = 0;
-  for (let i = 0; i < (student.displayName||"").length; i++)
-    h = (h * 31 + student.displayName.charCodeAt(i)) >>> 0;
-  const bg = colors[h % colors.length];
+  const bg = avatarBg(student.displayName);
 
   return (
     <div className="disc-student-card">
-      {/* Avatar + info row */}
       <div className="disc-student-top">
         <div className="disc-student-avatar-wrap">
           {student.photoURL
@@ -264,56 +78,19 @@ function MobileStudentCard({ student, currentUser, onViewProfile, onSendRequest 
         </div>
       </div>
 
-      {/* Bio */}
       {student.bio && (
         <p className="disc-student-bio">
           {student.bio.length > 100 ? student.bio.slice(0, 100) + "…" : student.bio}
         </p>
       )}
 
-      {/* Subject tags */}
-      {theyCanTeachMe.length > 0 && (
-        <div className="disc-student-tags-row">
-          <span className="disc-student-tags-label disc-tags-label--teach">Can teach you</span>
-          <div className="disc-student-tags">
-            {theyCanTeachMe.slice(0, 3).map(s => (
-              <span key={s} className="disc-tag disc-tag--teach">{s}</span>
-            ))}
-            {theyCanTeachMe.length > 3 && (
-              <span className="disc-tag disc-tag--teach">+{theyCanTeachMe.length - 3}</span>
-            )}
-          </div>
-        </div>
-      )}
-      {iCanTeachThem.length > 0 && (
-        <div className="disc-student-tags-row">
-          <span className="disc-student-tags-label disc-tags-label--learn">You can teach</span>
-          <div className="disc-student-tags">
-            {iCanTeachThem.slice(0, 3).map(s => (
-              <span key={s} className="disc-tag disc-tag--learn">{s}</span>
-            ))}
-            {iCanTeachThem.length > 3 && (
-              <span className="disc-tag disc-tag--learn">+{iCanTeachThem.length - 3}</span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Actions */}
       <div className="disc-student-actions">
         <button className="disc-student-btn disc-student-btn--ghost" onClick={onViewProfile}>
           View Profile
         </button>
-        {canMatch ? (
-          <button className="disc-student-btn disc-student-btn--primary" onClick={onSendRequest}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="m22 2-7 20-4-9-9-4 20-7z"/><path d="M22 2 11 13"/>
-            </svg>
-            Connect
-          </button>
-        ) : (
-          <button className="disc-student-btn disc-student-btn--ghost" disabled>No match</button>
-        )}
+        <button className="disc-student-btn disc-student-btn--primary" onClick={onMessage}>
+          <ChatIcon /> Message
+        </button>
       </div>
     </div>
   );
@@ -322,6 +99,7 @@ function MobileStudentCard({ student, currentUser, onViewProfile, onSendRequest 
 // ── Main page ──────────────────────────────────────────────────────────────
 export default function DiscoverPage() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const toast = useToast();
   const isMobile = useIsMobile();
 
@@ -329,28 +107,24 @@ export default function DiscoverPage() {
   const [loading,     setLoading]     = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const [mode,         setMode]         = useState("learn");
-  const [subject,      setSubject]      = useState("All Subjects");
   const [level,        setLevel]        = useState("All Levels");
   const [availability, setAvailability] = useState("all");
   const [sort,         setSort]         = useState("recommended");
 
-  const [showFilters,      setShowFilters]      = useState(false);
-  const [selectedStudent,  setSelectedStudent]  = useState(null);
-  const [showMatchModal,   setShowMatchModal]   = useState(false);
-  const [matchModalStudent,setMatchModalStudent] = useState(null);
+  const [showFilters,     setShowFilters]     = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState(null);
 
   const loadStudents = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.discoverUsers(mode, subject, level, availability, sort);
+      const data = await api.discoverUsers(level, availability, sort);
       setStudents(data);
     } catch (err) {
       toast.error(err.message || "Failed to load students");
     } finally {
       setLoading(false);
     }
-  }, [mode, subject, level, availability, sort, toast]);
+  }, [level, availability, sort, toast]);
 
   useEffect(() => { loadStudents(); }, [loadStudents]);
 
@@ -360,84 +134,130 @@ export default function DiscoverPage() {
     return (
       (s.displayName || "").toLowerCase().includes(q) ||
       (s.bio         || "").toLowerCase().includes(q) ||
-      (s.grade       || "").toLowerCase().includes(q) ||
-      (s.subjectsGoodAt  || []).some(sub => sub.toLowerCase().includes(q)) ||
-      (s.subjectsNeedHelp|| []).some(sub => sub.toLowerCase().includes(q))
+      (s.grade       || "").toLowerCase().includes(q)
     );
   });
 
-  function openMatchModal(student) {
-    setMatchModalStudent(student);
-    setShowMatchModal(true);
+  async function handleMessage(student) {
+    if (!student.allowDirectMessage) {
+      toast.error("This student has disabled direct messages.");
+      return;
+    }
+    try {
+      const conv = await api.startConversation(student.uid, "", null);
+      navigate(`/app/chat/${conv.id}`);
+    } catch (err) {
+      toast.error(err.message || "Couldn't start chat.");
+    }
   }
 
   function handleFiltersApply(filters) {
-    setMode(filters.mode);
-    setSubject(filters.subject);
     setLevel(filters.level);
     setAvailability(filters.availability);
     setSort(filters.sort);
     setShowFilters(false);
   }
 
-  // ── Shared modals (used by both layouts) ──
-  const sharedModals = (
-    <>
-      {selectedStudent && (
-        <StudentProfilePanel
-          student={selectedStudent}
-          currentUser={profile}
-          onClose={() => setSelectedStudent(null)}
-          onSendRequest={() => { openMatchModal(selectedStudent); setSelectedStudent(null); }}
-        />
-      )}
-      {showFilters && (
-        <FiltersPanel
-          initialFilters={{ mode, subject, level, availability, sort }}
-          onClose={() => setShowFilters(false)}
-          onApply={handleFiltersApply}
-        />
-      )}
-      {showMatchModal && matchModalStudent && (
-        <SendMatchRequestModal
-          student={matchModalStudent}
-          currentUser={profile}
-          onClose={() => { setShowMatchModal(false); setMatchModalStudent(null); }}
-          onSuccess={() => {
-            setShowMatchModal(false);
-            setMatchModalStudent(null);
-            toast.success("Match request sent!");
-            loadStudents();
-          }}
-        />
-      )}
-    </>
-  );
-
-  // ── Mobile layout ──
+  // ── Mobile layout ──────────────────────────────────────────────────────
   if (isMobile) {
     return (
-      <MobileDiscover
-        profile={profile}
-        students={students}
-        loading={loading}
-        filteredStudents={filteredStudents}
-        searchQuery={searchQuery}   setSearchQuery={setSearchQuery}
-        subject={subject}           setSubject={setSubject}
-        sort={sort}                 setSort={setSort}
-        showFilters={showFilters}   setShowFilters={setShowFilters}
-        selectedStudent={selectedStudent} setSelectedStudent={setSelectedStudent}
-        openMatchModal={openMatchModal}
-        mode={mode} level={level} availability={availability}
-        handleFiltersApply={handleFiltersApply}
-        showMatchModal={showMatchModal}     matchModalStudent={matchModalStudent}
-        setShowMatchModal={setShowMatchModal} setMatchModalStudent={setMatchModalStudent}
-        loadStudents={loadStudents}
-      />
+      <div className="disc-mobile-wrap">
+        <div className="disc-mobile-title-row">
+          <div>
+            <h1 className="disc-mobile-title">Discover</h1>
+            <p className="disc-mobile-subtitle">Find peers to study and chat with</p>
+          </div>
+        </div>
+
+        <div className="disc-mobile-controls">
+          <button className="disc-mobile-filter-btn disc-mobile-filter-btn--full" onClick={() => setShowFilters(true)}>
+            <FilterIcon />
+            <span>Filter</span>
+          </button>
+        </div>
+
+        {sort !== "recommended" && (
+          <div className="disc-mobile-chips">
+            <span className="disc-mobile-chip">
+              {sort === "top_rated" ? "Top Rated" : sort === "most_active" ? "Most Active" : "Newest"}
+              <button onClick={() => setSort("recommended")}>✕</button>
+            </span>
+          </div>
+        )}
+
+        <div className="disc-mobile-sort-tabs">
+          {[
+            { val: "recommended", label: "For You" },
+            { val: "top_rated",   label: "Top Rated" },
+            { val: "most_active", label: "Active" },
+            { val: "newest",      label: "New" },
+          ].map(tab => (
+            <button key={tab.val}
+              className={`disc-mobile-sort-tab${sort === tab.val ? " active" : ""}`}
+              onClick={() => setSort(tab.val)}>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {!loading && (
+          <div className="disc-mobile-count">
+            {filteredStudents.length} peer{filteredStudents.length !== 1 ? "s" : ""} found
+          </div>
+        )}
+
+        <div className="disc-mobile-list">
+          {loading ? (
+            <>
+              <div className="disc-mobile-shimmer" />
+              <div className="disc-mobile-shimmer" />
+              <div className="disc-mobile-shimmer" />
+              <div className="disc-mobile-shimmer" />
+            </>
+          ) : filteredStudents.length === 0 ? (
+            <div className="disc-mobile-empty">
+              <span className="disc-mobile-empty-icon">🔍</span>
+              <h3>No peers found</h3>
+              <p>{searchQuery ? `No results for "${searchQuery}"` : "Try adjusting your filters."}</p>
+              {searchQuery && (
+                <button className="disc-mobile-empty-btn" onClick={() => setSearchQuery("")}>Clear search</button>
+              )}
+            </div>
+          ) : (
+            filteredStudents.map(student => (
+              <StudentCard
+                key={student.uid}
+                student={student}
+                onViewProfile={() => setSelectedStudent(student)}
+                onMessage={() => handleMessage(student)}
+              />
+            ))
+          )}
+        </div>
+
+        <div style={{ height: 32 }} />
+
+        {selectedStudent && (
+          <StudentProfilePanel
+            student={selectedStudent}
+            currentUser={profile}
+            onClose={() => setSelectedStudent(null)}
+            onMessage={() => { handleMessage(selectedStudent); setSelectedStudent(null); }}
+          />
+        )}
+
+        {showFilters && (
+          <FiltersPanel
+            initialFilters={{ level, availability, sort }}
+            onClose={() => setShowFilters(false)}
+            onApply={handleFiltersApply}
+          />
+        )}
+      </div>
     );
   }
 
-  // ── Desktop layout (unchanged) ──
+  // ── Desktop layout ─────────────────────────────────────────────────────
   return (
     <div className="discover-page">
       <div className="discover-header">
@@ -449,7 +269,7 @@ export default function DiscoverPage() {
           </div>
           <div>
             <h1 className="discover-title">Discover</h1>
-            <p className="discover-subtitle">Find and connect with peers who can help you learn.</p>
+            <p className="discover-subtitle">Find peers to study, chat, and learn with.</p>
           </div>
         </div>
         <div className="discover-controls">
@@ -457,16 +277,12 @@ export default function DiscoverPage() {
             <SearchIcon />
             <input
               type="text"
-              placeholder="Search by name or subject..."
+              placeholder="Search by name, grade or bio..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               className="discover-search-input"
             />
           </div>
-          <select value={subject} onChange={e => setSubject(e.target.value)} className="discover-select">
-            <option>All Subjects</option>
-            {SUBJECTS.map(s => <option key={s}>{s}</option>)}
-          </select>
           <select value={level} onChange={e => setLevel(e.target.value)} className="discover-select">
             <option>All Levels</option>
             {GRADES.map(g => <option key={g}>{g}</option>)}
@@ -496,7 +312,7 @@ export default function DiscoverPage() {
               <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
             </svg>
             <h3>{searchQuery ? `No results for "${searchQuery}"` : "No students found"}</h3>
-            <p>{searchQuery ? "Try a different name or subject." : "Try adjusting your filters."}</p>
+            <p>{searchQuery ? "Try a different name or grade." : "Try adjusting your filters."}</p>
             {searchQuery && (
               <button type="button" className="btn btn-ghost" style={{ marginTop: 8 }} onClick={() => setSearchQuery("")}>
                 Clear search
@@ -509,16 +325,30 @@ export default function DiscoverPage() {
               <StudentCard
                 key={student.uid}
                 student={student}
-                currentUser={profile}
                 onViewProfile={() => setSelectedStudent(student)}
-                onSendRequest={() => openMatchModal(student)}
+                onMessage={() => handleMessage(student)}
               />
             ))}
           </div>
         )}
       </div>
 
-      {sharedModals}
+      {selectedStudent && (
+        <StudentProfilePanel
+          student={selectedStudent}
+          currentUser={profile}
+          onClose={() => setSelectedStudent(null)}
+          onMessage={() => { handleMessage(selectedStudent); setSelectedStudent(null); }}
+        />
+      )}
+
+      {showFilters && (
+        <FiltersPanel
+          initialFilters={{ level, availability, sort }}
+          onClose={() => setShowFilters(false)}
+          onApply={handleFiltersApply}
+        />
+      )}
     </div>
   );
 }

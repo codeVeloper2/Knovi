@@ -1,14 +1,7 @@
-import { useNavigate } from "react-router-dom";
-
 // ── Icons ─────────────────────────────────────────────────────────
 const CloseIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
     <path d="M18 6 6 18M6 6l12 12"/>
-  </svg>
-);
-const SendIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <path d="m22 2-7 20-4-9-9-4 20-7z"/><path d="M22 2 11 13"/>
   </svg>
 );
 const MessageIcon = () => (
@@ -24,11 +17,6 @@ const StarIcon = () => (
 const VerifiedIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
     <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-  </svg>
-);
-const LocationIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
   </svg>
 );
 const CalendarIcon = () => (
@@ -53,34 +41,13 @@ function Avatar({ url, name, size = 80, isOnline = false }) {
   );
 }
 
-export default function StudentProfilePanel({ student, currentUser, onClose, onSendRequest }) {
-  const navigate = useNavigate();
+function formatJoinDate(dateStr) {
+  if (!dateStr) return "Recently";
+  const date = new Date(dateStr);
+  return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
 
-  // Calculate if match is possible
-  const myGoodAt = new Set(currentUser?.subjectsGoodAt || []);
-  const myNeedHelp = new Set(currentUser?.subjectsNeedHelp || []);
-  const theirGoodAt = new Set(student.subjectsGoodAt || []);
-  const theirNeedHelp = new Set(student.subjectsNeedHelp || []);
-
-  const canLearnSubjects = [...theirGoodAt].filter(s => myNeedHelp.has(s));
-  const canTeachSubjects = [...theirNeedHelp].filter(s => myGoodAt.has(s));
-  const canMatch = canLearnSubjects.length > 0 || canTeachSubjects.length > 0;
-
-  // TODO: Check if already matched (query conversations collection)
-  const isMatched = false; // Placeholder
-
-  function handleMessage() {
-    // Navigate to chat with this user
-    navigate("/app/chat");
-    onClose();
-  }
-
-  function formatJoinDate(dateStr) {
-    if (!dateStr) return "Recently";
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
-  }
-
+export default function StudentProfilePanel({ student, onClose, onMessage }) {
   return (
     <>
       <div className="profile-panel-overlay" onClick={onClose} />
@@ -110,7 +77,7 @@ export default function StudentProfilePanel({ student, currentUser, onClose, onS
                 </span>
               )}
             </div>
-            <p className="profile-panel-level">{student.grade || "University Student"}</p>
+            <p className="profile-panel-level">{student.grade || "Student"}</p>
           </div>
 
           {/* Stats */}
@@ -132,28 +99,17 @@ export default function StudentProfilePanel({ student, currentUser, onClose, onS
             </div>
           </div>
 
-          {/* Action buttons */}
+          {/* Action button */}
           <div className="profile-panel-actions">
-            {isMatched ? (
-              student.allowDirectMessage !== false ? (
-                <button type="button" className="btn btn-primary btn-full" onClick={handleMessage}>
-                  <MessageIcon />
-                  Message
-                </button>
-              ) : (
-                <button type="button" className="btn btn-ghost btn-full" disabled title="This student does not accept direct messages">
-                  <MessageIcon />
-                  Direct messages disabled
-                </button>
-              )
-            ) : canMatch ? (
-              <button type="button" className="btn btn-primary btn-full" onClick={onSendRequest}>
-                <SendIcon />
-                Send Friend Request
+            {student.allowDirectMessage !== false ? (
+              <button type="button" className="btn btn-primary btn-full" onClick={onMessage}>
+                <MessageIcon />
+                Message
               </button>
             ) : (
-              <button type="button" className="btn btn-ghost btn-full" disabled>
-                No matching subjects
+              <button type="button" className="btn btn-ghost btn-full" disabled title="This student does not accept direct messages">
+                <MessageIcon />
+                Direct messages disabled
               </button>
             )}
           </div>
@@ -163,48 +119,6 @@ export default function StudentProfilePanel({ student, currentUser, onClose, onS
             <div className="profile-panel-section">
               <h3 className="profile-panel-section-title">About Me</h3>
               <p className="profile-panel-bio">{student.bio}</p>
-            </div>
-          )}
-
-          {/* Subjects I Teach */}
-          {student.subjectsGoodAt && student.subjectsGoodAt.length > 0 && (
-            <div className="profile-panel-section">
-              <h3 className="profile-panel-section-title">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: 6 }}>
-                  <circle cx="12" cy="12" r="10"/>
-                </svg>
-                Subjects I Teach
-              </h3>
-              <div className="profile-panel-tags">
-                {student.subjectsGoodAt.map(sub => (
-                  <span key={sub} className="profile-tag teaches">{sub}</span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Subjects I Need Help With */}
-          {student.subjectsNeedHelp && student.subjectsNeedHelp.length > 0 && (
-            <div className="profile-panel-section">
-              <h3 className="profile-panel-section-title">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: 6 }}>
-                  <circle cx="12" cy="12" r="10"/>
-                </svg>
-                Subjects I Need Help With
-              </h3>
-              <div className="profile-panel-tags">
-                {student.subjectsNeedHelp.map(sub => (
-                  <span key={sub} className="profile-tag needs">{sub}</span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Location */}
-          {student.location && (
-            <div className="profile-panel-meta">
-              <LocationIcon />
-              <span>{student.location}</span>
             </div>
           )}
 

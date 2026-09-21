@@ -29,9 +29,7 @@ import Home from "./pages/dashboard/Home";
 import Progress from "./pages/dashboard/Progress";
 import ChatPage from "./pages/chat/Chat";
 import DiscoverPage from "./pages/discover/DiscoverPage";
-import MatchRequestsPage from "./pages/match/MatchRequestsPage";
 import SettingsProfile from "./pages/dashboard/settings/Profile";
-import SettingsPeerLearning from "./pages/dashboard/settings/PeerLearning";
 import SettingsLearningProfile from "./pages/dashboard/settings/LearningProfile";
 import SettingsSecurity from "./pages/dashboard/settings/Security";
 import SettingsNotifications from "./pages/dashboard/settings/Notifications";
@@ -84,7 +82,6 @@ function AppRoutes() {
         <Route path="discover"       element={<DiscoverPage />} />
         <Route path="chat"           element={<ChatPage />} />
         <Route path="chat/:convId"   element={<ChatPage />} />
-        <Route path="match-requests" element={<MatchRequestsPage />} />
 
         {/* ── Learn (all learn pages share the LearnLayout sidebar) ── */}
         <Route path="learn" element={<LearnLayout />}>
@@ -113,7 +110,6 @@ function AppRoutes() {
         <Route path="settings">
           <Route index element={<SettingsIndex />} />
           <Route path="profile"       element={<SettingsProfile />} />
-          <Route path="peer-learning" element={<SettingsPeerLearning />} />
           <Route path="learning-profile" element={<SettingsLearningProfile />} />
           <Route path="security"      element={<SettingsSecurity />} />
           <Route path="notifications" element={<SettingsNotifications />} />

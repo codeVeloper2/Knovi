@@ -170,7 +170,7 @@ function DashboardSkeleton({ mobile = false }) {
 
 // ── Mobile Home ──────────────────────────────────────────────────────────────
 
-function MobileHome({ profile, user, connections, learning, learnHome, loading, navigate, onOpenMenu }) {
+function MobileHome({ profile, user, learning, learnHome, loading, navigate, onOpenMenu }) {
   const name = profile?.displayName || user?.displayName || "";
   const firstName = name.split(" ")[0] || "there";
   const photo = profile?.photoURL || user?.photoURL || "";
@@ -180,7 +180,7 @@ function MobileHome({ profile, user, connections, learning, learnHome, loading, 
   const nextXp = nextLevelXp(xp);
   const xpPct = nextXp ? Math.min(100, Math.round((xp / nextXp) * 100)) : 100;
   const rating = profile?.rating ? profile.rating.toFixed(1) : "—";
-  const subjectCount = (profile?.subjectsGoodAt || []).length + (profile?.subjectsNeedHelp || []).length;
+  const sessionCount = profile?.sessionCount || 0;
   const streak = profile?.streak || 0;
 
   const inProgress = learning?.inProgress || [];
@@ -240,8 +240,8 @@ function MobileHome({ profile, user, connections, learning, learnHome, loading, 
           </div>
           <div className="mdash-profile-stat">
             <span className="mdash-profile-stat-ic">📚</span>
-            <span className="mdash-profile-stat-val">{subjectCount || "—"}</span>
-            <span className="mdash-profile-stat-lbl">Subjects</span>
+            <span className="mdash-profile-stat-val">{sessionCount || "—"}</span>
+            <span className="mdash-profile-stat-lbl">Sessions</span>
           </div>
           <div className="mdash-profile-stat">
             <span className="mdash-profile-stat-ic">⭐</span>
@@ -365,50 +365,6 @@ function MobileHome({ profile, user, connections, learning, learnHome, loading, 
         </section>
       )}
 
-      {/* ── Your Matches ── */}
-      <section className="mdash-section">
-        <div className="mdash-section-head">
-          <h2 className="mdash-section-title">Your Matches</h2>
-          <Link to="/app/match-requests" className="mdash-see-all">See all →</Link>
-        </div>
-        {loading ? (
-          <div className="mdash-shimmer-list">
-            <div className="mdash-shimmer-row" /><div className="mdash-shimmer-row" />
-          </div>
-        ) : connections.length === 0 ? (
-          <div className="mdash-empty">
-            <p>No connections yet. Find a peer to get started!</p>
-            <button className="mdash-empty-btn" onClick={() => navigate("/app/discover")}>Find peers</button>
-          </div>
-        ) : (
-          <div className="mdash-match-list">
-            {connections.slice(0, 5).map((conn) => (
-              <div key={conn.partnerId} className="mdash-match-row">
-                <Avatar name={conn.displayName} photo={conn.photoURL} size={44} />
-                <div className="mdash-match-info">
-                  <strong className="mdash-match-name">{conn.displayName}</strong>
-                  <span className="mdash-match-detail">
-                    {[conn.subject, conn.grade].filter(Boolean).join(" · ") || "Peer"}
-                  </span>
-                  {conn.isOnline && (
-                    <span className="mdash-match-online">
-                      <span className="mdash-online-dot" />Online
-                    </span>
-                  )}
-                </div>
-                <button className="mdash-match-chat-btn"
-                  onClick={() => conn.conversationId
-                    ? navigate(`/app/chat/${conn.conversationId}`)
-                    : navigate("/app/chat")}>
-                  <ChatSvg /> Chat
-                </button>
-                <ChevronRight width={14} height={14} className="mdash-match-arrow" />
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
       {/* ── Learning Journey Banner ── */}
       <div className="mdash-journey-banner" onClick={() => navigate("/app/progress")}>
         <div className="mdash-journey-text">
@@ -486,7 +442,7 @@ function MobileHome({ profile, user, connections, learning, learnHome, loading, 
 
 // ── Desktop Home ─────────────────────────────────────────────────────────────
 
-function DesktopHome({ profile, user, connections, learning, learnHome, loading }) {
+function DesktopHome({ profile, user, learning, learnHome, loading }) {
   const navigate = useNavigate();
   const name = profile?.displayName || user?.displayName || "there";
   const firstName = name.split(" ")[0];
@@ -496,9 +452,8 @@ function DesktopHome({ profile, user, connections, learning, learnHome, loading 
   const nextXp = nextLevelXp(xp);
   const xpPct = nextXp ? Math.min(100, Math.round((xp / nextXp) * 100)) : 100;
   const rating = profile?.rating ? profile.rating.toFixed(1) : "—";
-  const subjectCount = (profile?.subjectsGoodAt || []).length + (profile?.subjectsNeedHelp || []).length;
-  const streak = profile?.streak || 0;
   const sessionCount = profile?.sessionCount || 0;
+  const streak = profile?.streak || 0;
 
   const inProgress = learning?.inProgress || [];
   const history = learning?.history || [];
@@ -536,7 +491,7 @@ function DesktopHome({ profile, user, connections, learning, learnHome, loading 
           <div className="stat-ic">🔥</div>
           <div className="stat-info">
             <strong>{streak} Day Streak</strong>
-            <span>{subjectCount} subject{subjectCount !== 1 ? "s" : ""} · {rating} avg rating</span>
+            <span>{sessionCount} session{sessionCount !== 1 ? "s" : ""} · {rating} avg rating</span>
           </div>
           <ChevronRight width={16} height={16} className="stat-arrow" />
         </div>
@@ -591,41 +546,6 @@ function DesktopHome({ profile, user, connections, learning, learnHome, loading 
                 </button>
               );
             })
-          )}
-        </section>
-
-        {/* ── Your Connections ── */}
-        <section className="home-block">
-          <div className="home-block-head">
-            <h2>Your Connections</h2>
-            <Link to="/app/match-requests" className="link-btn">View all</Link>
-          </div>
-          {loading ? (
-            <div className="learn-empty">Loading…</div>
-          ) : connections.length === 0 ? (
-            <div className="learn-empty">No connections yet. Accept a friend request to start chatting.</div>
-          ) : (
-            <ul className="match-list">
-              {connections.slice(0, 5).map((conn) => (
-                <li key={conn.partnerId} className="match-row" style={{ cursor: "pointer" }}
-                  onClick={() => conn.conversationId
-                    ? navigate(`/app/chat/${conn.conversationId}`)
-                    : navigate("/app/chat")}>
-                  <span className="match-av" style={{ background: avatarColor(conn.displayName) }}>
-                    {conn.photoURL
-                      ? <img src={conn.photoURL} alt={conn.displayName} referrerPolicy="no-referrer"
-                          style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover" }} />
-                      : (conn.displayName || "?")[0]}
-                  </span>
-                  <div className="match-info">
-                    <strong>{conn.displayName}</strong>
-                    <span>{[conn.subject, conn.grade].filter(Boolean).join(" · ") || "Peer"}</span>
-                    {conn.isOnline && <span className="match-online">Online now</span>}
-                  </div>
-                  <ChevronRight width={16} height={16} className="match-arrow" />
-                </li>
-              ))}
-            </ul>
           )}
         </section>
 
@@ -705,7 +625,6 @@ export default function Home() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
-  const [connections, setConnections] = useState([]);
   const [learning, setLearning] = useState(null);
   const [learnHome, setLearnHome] = useState(null);
   const [dataLoading, setDataLoading] = useState(true);
@@ -713,13 +632,11 @@ export default function Home() {
   useEffect(() => {
     let active = true;
     async function load() {
-      const [connRes, learningRes, homeRes] = await Promise.allSettled([
-        api.getAcceptedMatchPartners(),
+      const [learningRes, homeRes] = await Promise.allSettled([
         api.getMyLearning(),
         api.getLearnHome(),
       ]);
       if (!active) return;
-      if (connRes.status     === "fulfilled") setConnections(connRes.value || []);
       if (learningRes.status === "fulfilled") setLearning(learningRes.value);
       if (homeRes.status     === "fulfilled") setLearnHome(homeRes.value);
       setDataLoading(false);
@@ -730,7 +647,6 @@ export default function Home() {
 
   const sharedProps = {
     profile, user,
-    connections,
     learning,
     learnHome,
     loading: dataLoading,

@@ -11,7 +11,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from app.api.v1 import ai, auth, chat, learn, match, notifications, profile, progress, users
+from app.api.v1 import ai, auth, chat, learn, notifications, profile, progress, users
 from app.api.v1 import admin_curriculum, curriculum
 from app.api.v1 import ai_learning
 from app.api.v1 import learning_profile
@@ -37,7 +37,6 @@ app.include_router(auth.router,    prefix="/api",        tags=["auth"])
 app.include_router(profile.router, prefix="/api",        tags=["profile"])
 app.include_router(chat.router,    prefix="/api",        tags=["chat"])
 app.include_router(users.router,   prefix="/api/users",  tags=["users"])
-app.include_router(match.router,   prefix="/api/match",  tags=["match"])
 app.include_router(ai.router,      prefix="/api/ai",     tags=["ai"])
 app.include_router(learn.router,   prefix="/api",        tags=["learn"])
 app.include_router(progress.router,       prefix="/api", tags=["progress"])
