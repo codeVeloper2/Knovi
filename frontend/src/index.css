@@ -19642,15 +19642,33 @@ kbd {
   .chatx-shell .cmr { gap: 6px; margin-bottom: 14px; width: 100%; flex-direction: row !important; }
   .chatx-shell .cmr--mine { justify-content: flex-end !important; flex-direction: row !important; padding-right: 4px; }
   .chatx-shell .cmr--theirs { justify-content: flex-start !important; flex-direction: row !important; padding-left: 0; }
-  /* Force bubble to fill its wrapper instead of shrinking to content */
-  .chatx-shell .cb { display: block !important; width: 100% !important; box-sizing: border-box !important; }
+  /* Bubble: inline-block so it shrinks to content but never wider than wrapper */
+  .chatx-shell .cb { display: inline-block !important; width: auto !important; max-width: 100% !important; box-sizing: border-box !important; min-width: 80px !important; }
   /* Received */
-  .chatx-shell .cb { background: var(--navy-panel) !important; border: 1px solid var(--navy-line) !important; color: var(--text) !important; border-radius: 2px 14px 14px 14px !important; padding: 7px 10px 5px !important; box-shadow: 0 1px 3px rgba(0,0,0,.25) !important; font-size: .9rem !important; line-height: 1.45 !important; }
+  .chatx-shell .cb { background: var(--navy-panel) !important; border: 1px solid var(--navy-line) !important; color: var(--text) !important; border-radius: 2px 14px 14px 14px !important; padding: 7px 10px 7px !important; box-shadow: 0 1px 3px rgba(0,0,0,.25) !important; font-size: .9rem !important; line-height: 1.45 !important; }
   /* Sent */
   .chatx-shell .cmr--mine .cb { background: linear-gradient(135deg, #2d3fa8, #1e2f8f) !important; border-color: rgba(91,110,245,.3) !important; border-radius: 14px 2px 14px 14px !important; box-shadow: 0 1px 4px rgba(46,63,168,.3) !important; }
   .chatx-shell .cmr--mine .cb.cb--mine::before { border-top-color: #2d3fa8 !important; }
-  .chatx-shell .cb-text { color: var(--text) !important; }
-  .chatx-shell .cb-meta { margin-top: 2px !important; margin-left: 6px !important; }
+  /* Text: inline so meta floats next to the last line */
+  .chatx-shell .cb-text { display: inline !important; color: var(--text) !important; }
+  /* Meta: float right, pulled to bottom-right of bubble */
+  .chatx-shell .cb-meta {
+    float: right !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 3px !important;
+    margin: 4px 0 0 8px !important;
+    line-height: 1 !important;
+    vertical-align: bottom !important;
+    position: relative !important;
+    bottom: -1px !important;
+  }
+  /* Clearfix so bubble height includes the floated meta */
+  .chatx-shell .cb::after {
+    content: "" !important;
+    display: table !important;
+    clear: both !important;
+  }
   .chatx-shell .cb-time { font-size: .67rem !important; color: var(--text-dim) !important; }
   .chatx-shell .cmr--mine .cb-time { color: rgba(232,237,247,.5) !important; }
 
