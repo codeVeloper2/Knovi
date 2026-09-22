@@ -3793,9 +3793,10 @@
     padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px)) 6px;
     border-top: 0;
     border-radius: 0;
-    background: transparent;
+    background: rgba(5, 14, 31, 0.28);
     box-shadow: none;
-    backdrop-filter: none;
+    -webkit-backdrop-filter: blur(10px) saturate(115%);
+    backdrop-filter: blur(10px) saturate(115%);
   }
 
   .learn-mobile-dock-item {
