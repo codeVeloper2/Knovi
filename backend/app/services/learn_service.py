@@ -312,8 +312,6 @@ async def toggle_saved(
         )).scalar_one_or_none()
         if not message:
             raise HTTPException(404, "AI explanation not found.")
-        if message.message_type in {"system", "welcome", "timer_start", "timer_end", "summary"}:
-            raise HTTPException(400, "This tutor message cannot be saved as an explanation.")
 
     existing = (await session.execute(
         select(SavedContent).where(

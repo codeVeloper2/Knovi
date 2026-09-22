@@ -162,6 +162,25 @@ export default function AILearningRoom() {
     if (!aiWorking) bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages.length, phase, currentQuestion?.id]);
 
+  async function handleSaveExplanation(msg) {
+    const messageId = Number(msg?.id);
+    if (!Number.isInteger(messageId) || messageId <= 0) {
+      setError("This tutor explanation cannot be saved yet.");
+      return;
+    }
+    try {
+      const result = await api.toggleSaved("explanation", messageId);
+      setSavedMessageIds(prev => {
+        const next = new Set(prev);
+        if (result?.saved) next.add(messageId);
+        else next.delete(messageId);
+        return next;
+      });
+    } catch (err) {
+      setError(err?.message || "Couldn't save this explanation.");
+    }
+  }
+
   async function loadSession() {
     setLoading(true);
     setError(null);
@@ -800,7 +819,7 @@ function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave }) 
   return <article className={`ar-message ${ai ? "ar-message-ai" : "ar-message-user"} ${locked ? "ar-message-locked" : ""}`}>
     {ai ? <div className="ar-message-avatar"><TutorAvatar size={34} /></div> : <div className="ar-user-avatar">You</div>}
     <div className="ar-message-column"><div className="ar-message-meta"><span>{ai ? "UPRAD" : "You"}</span>{ai && <span className="ar-meta-dot">·</span>}{ai && <span>{locked ? "Practice lock" : msg.messageType === "reteach" ? "Reteach" : "Tutor"}</span>}<time>{formatClock(msg.createdAt)}</time></div>
-      <div className="ar-message-card">{locked && <div className="ar-locked-label">🔒 Teaching temporarily hidden</div>}{action && <div className="ar-agent-badge"><span>✦</span>{activityLabel(action)}</div>}<RichText content={msg.content} onCopy={onCopy} copiedId={copiedId} />{ai && !locked && msg.messageType === "teaching" || msg.messageType === "reteach" && <button type="button" className={`ar-save-explanation ${isSaved ? "saved" : ""}`} onClick={() => onSave(msg)}>{isSaved ? "✓ Saved explanation" : "🔖 Save explanation"}</button>}{msg.extra?.taskTransition && <div className="ar-transition-actions"><button type="button" onClick={() => onTutorAction("Yes, I’m ready for the next task.")}>Yes, move to next task →</button><button type="button" className="secondary" onClick={() => onTutorAction("No, please explain this task again.")}>Explain it again</button></div>}</div>
+      <div className="ar-message-card">{locked && <div className="ar-locked-label">🔒 Teaching temporarily hidden</div>}{action && <div className="ar-agent-badge"><span>✦</span>{activityLabel(action)}</div>}<RichText content={msg.content} onCopy={onCopy} copiedId={copiedId} />{ai && <button type="button" className={`ar-save-explanation ${isSaved ? "saved" : ""}`} onClick={() => onSave(msg)}>{isSaved ? "✓ Saved explanation" : "🔖 Save explanation"}</button>}{msg.extra?.taskTransition && <div className="ar-transition-actions"><button type="button" onClick={() => onTutorAction("Yes, I’m ready for the next task.")}>Yes, move to next task →</button><button type="button" className="secondary" onClick={() => onTutorAction("No, please explain this task again.")}>Explain it again</button></div>}</div>
     </div>
   </article>;
 }
