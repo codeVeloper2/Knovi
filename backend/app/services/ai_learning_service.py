@@ -295,6 +295,72 @@ async def _add_message(
     return msg
 
 
+async def _learning_plan_state(session: AILearningSession, db: AsyncSession) -> dict:
+    """Recover persisted Learning Plan navigation state from the message stream."""
+    messages = getattr(session, "messages", None)
+    if messages is None:
+        result = await db.execute(select(AISessionMessage).where(AISessionMessage.session_id == session.id).order_by(AISessionMessage.sequence))
+        messages = result.scalars().all()
+    for message in reversed(sorted(messages, key=lambda m: m.sequence)):
+        extra = message.extra or {}
+        state = extra.get("learningPlanState")
+        if isinstance(state, dict):
+            try:
+                current = max(0, int(state.get("currentTaskIndex", 0)))
+            except Exception:
+                current = 0
+            completed = []
+            for value in state.get("completedTaskIndexes", []) or []:
+                try:
+                    completed.append(int(value))
+                except Exception:
+                    continue
+            return {
+                "currentTaskIndex": current,
+                "completedTaskIndexes": sorted(set(completed)),
+                "awaitingNextTask": bool(state.get("awaitingNextTask", False)),
+            }
+    return {"currentTaskIndex": 0, "completedTaskIndexes": [], "awaitingNextTask": False}
+
+
+async def _persist_learning_plan_state(session_id: int, state: dict, db: AsyncSession) -> AISessionMessage:
+    clean = {
+        "currentTaskIndex": max(0, int(state.get("currentTaskIndex", 0))),
+        "completedTaskIndexes": sorted(set(int(x) for x in (state.get("completedTaskIndexes", []) or []))),
+        "awaitingNextTask": bool(state.get("awaitingNextTask", False)),
+    }
+    return await _add_message(
+        session_id, "system", "learning_plan_state", "Learning Plan state saved.", db,
+        extra={"learningPlanState": clean},
+    )
+
+
+def _extract_learning_plan(teaching: Optional[AISessionTeaching]) -> list[dict]:
+    if not teaching:
+        return []
+    try:
+        parsed = parse_json(teaching.raw_content or "{}")
+        plan = parsed.get("learning_tasks") or []
+        return plan if isinstance(plan, list) else []
+    except Exception:
+        return []
+
+
+def _split_response_parts(response_text: str, parts: Any = None) -> list[str]:
+    """Return 1–3 natural AI message chunks without changing the content."""
+    supplied = [str(x).strip() for x in (parts or []) if isinstance(x, str) and x.strip()]
+    if supplied:
+        return supplied[:3]
+    blocks = [b.strip() for b in re.split(r"\n{2,}", response_text or "") if b.strip()]
+    if len(blocks) <= 3:
+        return blocks or [response_text.strip()]
+    # Preserve order while balancing paragraphs into at most three readable chunks.
+    buckets = [[], [], []]
+    for i, block in enumerate(blocks):
+        buckets[min(2, (i * 3) // len(blocks))].append(block)
+    return ["\n\n".join(b).strip() for b in buckets if b]
+
+
 # ── Teaching snapshot helpers ─────────────────────────────────────────────────
 async def _get_current_teaching(session_id: int, db: AsyncSession) -> Optional[AISessionTeaching]:
     result = await db.execute(
@@ -585,9 +651,9 @@ async def get_session(session_id: int, user_id: int, db: AsyncSession) -> dict:
 
     review_answers = []
     question_by_id = {q.id: q for q in session.questions}
-    timer_starts = [
+    task_markers = [
         m for m in all_messages
-        if m.message_type == "timer_start" and (m.extra or {}).get("taskIndex") is not None
+        if m.message_type in ("timer_start", "practice") and (m.extra or {}).get("taskIndex") is not None
     ]
     for question_id, answer_row in latest_answers.items():
         q = question_by_id.get(question_id)
@@ -608,16 +674,17 @@ async def get_session(session_id: int, user_id: int, db: AsyncSession) -> dict:
         }
         # Restore which learning task this answer belonged to without adding
         # another database column. Timer-start metadata is persisted in messages.
-        prior_timers = [
-            m for m in timer_starts
+        prior_markers = [
+            m for m in task_markers
             if m.created_at <= answer_row.created_at
         ]
-        if prior_timers:
-            item["taskIndex"] = (prior_timers[-1].extra or {}).get("taskIndex")
+        if prior_markers:
+            item["taskIndex"] = (prior_markers[-1].extra or {}).get("taskIndex")
         review_answers.append(item)
     data["answers"] = review_answers
     data["teachingAttempts"] = [a.serialize() for a in session.teaching_attempts]
     data["summary"]          = session.summary.serialize() if session.summary else None
+    data["learningPlanState"] = await _learning_plan_state(session, db)
 
     # Active study period info for resume
     active_period = next(
@@ -943,20 +1010,28 @@ Return JSON (all fields required; arrays may be empty []):
     db.add(attempt)
 
     message_content = f"{explanation}\n\n---\n*{study_prompt}*"
-    await _add_message(
-        session_id, "ai", "teaching", message_content, db,
-        extra={
-            "strategy": strategy,
-            "teachingId": teaching.id,
-            "provider": provider,
-            "learningPlan": learning_tasks,
-            "taskIndex": task_index,
-            "taskTitle": selected_task.get("title") if selected_task else None,
-        },
-    )
+    teaching_parts = _split_response_parts(message_content)
+    for part_index, part in enumerate(teaching_parts, 1):
+        await _add_message(
+            session_id, "ai", "teaching", part, db,
+            extra={
+                "strategy": strategy,
+                "teachingId": teaching.id,
+                "provider": provider,
+                "learningPlan": learning_tasks,
+                "taskIndex": task_index,
+                "taskTitle": selected_task.get("title") if selected_task else None,
+                "messagePart": part_index,
+                "messagePartCount": len(teaching_parts),
+            },
+        )
 
     if session.status == "created":
         _set_status(session, "teaching")
+
+    state = await _learning_plan_state(session, db)
+    if not current_plan and task_index is None:
+        await _persist_learning_plan_state(session_id, {"currentTaskIndex": 0, "completedTaskIndexes": [], "awaitingNextTask": False}, db)
 
     await db.commit()
     await db.refresh(teaching)
@@ -965,33 +1040,41 @@ Return JSON (all fields required; arrays may be empty []):
 
 async def respond_to_student(
     session_id: int, user_id: int, content: str, db: AsyncSession
-) -> dict:
+) -> list[dict]:
     session = await _get_session_owned(
         session_id, user_id, db, load_messages=True, load_teaching=True
     )
-    # Allow post-session follow-up questions; only block abandoned sessions
     if session.status == "abandoned":
         raise HTTPException(409, "Session is closed.")
 
     is_post_session = session.status == "completed"
+    state = await _learning_plan_state(session, db)
+    if state.get("awaitingNextTask"):
+        state["awaitingNextTask"] = False
+        await _persist_learning_plan_state(session_id, state, db)
+    current_task_index = state["currentTaskIndex"]
+    current_plan = _extract_learning_plan(next((t for t in session.teaching if t.is_current), None))
+    current_task = current_plan[current_task_index] if 0 <= current_task_index < len(current_plan) else None
 
     await _add_message(session_id, "student", "question", content, db)
     await db.flush()
 
-    # Build recent history (exclude system/timer messages)
     recent_msgs = sorted(session.messages, key=lambda m: m.sequence)[-_CHAT_HISTORY_WINDOW:]
     history_text = "\n".join(
         f"{'Student' if m.role == 'student' else 'Tutor'}: {m.content[:400]}"
         for m in recent_msgs
-        if m.message_type not in ("welcome", "system", "timer_start", "timer_end")
+        if m.message_type not in ("welcome", "system", "timer_start", "timer_end", "learning_plan_state")
     )
 
     current_teaching = await _get_current_teaching(session_id, db)
     teaching_context = ""
     if current_teaching and not is_post_session:
         teaching_context = (
-            f"\nCurrent teaching snapshot (strategy: {current_teaching.strategy}):\n"
-            f"{(current_teaching.explanation or '')[:600]}"
+            f"\nCURRENT TEACHING SNAPSHOT — this is the evidence boundary for the current task:\n"
+            f"{(current_teaching.explanation or '')[:1400]}\n"
+            f"Key points: {', '.join(current_teaching.key_points or [])}\n"
+            f"Examples: {', '.join((current_teaching.examples or [])[:4])}\n"
+            f"Worked examples: {', '.join((current_teaching.worked_examples or [])[:3])}"
         )
 
     subject, topic, concept = await _load_curriculum_chain(
@@ -1000,71 +1083,52 @@ async def respond_to_student(
     _learner_profile_chat = await lp_svc.get_profile(session.user_id, db)
     curriculum_ctx = _build_curriculum_context(subject, topic, concept, session, _learner_profile_chat)
 
+    task_context = ""
+    if current_task and not is_post_session:
+        future = [t.get("title", "") for i, t in enumerate(current_plan) if i > current_task_index]
+        task_context = f"""
+CURRENT LEARNING PLAN TASK
+Task {current_task_index + 1}: {current_task.get('title', 'Current task')}
+Description: {current_task.get('description', '')}
+Focus: {current_task.get('focus', '')}
+Objective IDs: {current_task.get('objectiveIds') or current_task.get('objective_ids') or []}
+Future task titles (do not teach or assess these yet): {future}
+Stay inside the current task unless the learner explicitly asks for prerequisite clarification.
+"""
+
     post_session_directive = ""
     if is_post_session:
         post_session_directive = """
 POST-SESSION FOLLOW-UP RULES:
-- The student has completed the session. They are asking a follow-up question.
-- ALWAYS answer educational questions fully, regardless of subject or topic.
-- After answering, detect whether the question is:
-  a) About the SAME concept as this session -> suggest_new_session: false
-  b) About a DIFFERENT topic in the same or different subject -> suggest_new_session: true
-  c) Non-educational (jokes, homework writing, etc.) -> politely redirect, suggest_new_session: false
-- If suggest_new_session is true, identify the subject and topic the question belongs to,
-  and write a brief session_note (1-2 sentences) describing what the student needs to work on.
-- Be warm and encouraging. This is a learning platform for students.
+- The student has completed the session. Answer educational follow-up questions fully.
+- Do not restart or advance the old Learning Plan from a completed session.
 """
 
-    # Count substantive exchanges so the AI can judge readiness
     teaching_exchange_count = sum(
         1 for m in session.messages
-        if m.role == "student" and m.message_type not in ("welcome", "system")
+        if m.role == "student" and m.message_type not in ("welcome", "system", "timer_start", "timer_end", "learning_plan_state")
     )
 
     system_prompt = (
-        "You are an AI tutor on PeerUP, a peer learning platform for students. "
-        "You always answer educational questions helpfully and warmly. "
-        "Return JSON only — no markdown outside the response field."
+        "You are an expert AI tutor on PeerUP. You are the teacher driving one continuous learning room. "
+        "Return JSON only. Never teach or assess a future Learning Plan task before the current task is complete."
     )
-
-    # Agentic action rules — only applies during active (non-completed) sessions
     agentic_directive = ""
     if not is_post_session:
         agentic_directive = f"""
-AGENTIC PROGRESSION RULES (critical — follow exactly):
-You are the teacher driving this session. You must decide when the student is ready for the quiz.
+AGENTIC PROGRESSION RULES
+Current Learning Plan task index: {current_task_index}
 Current exchange count: {teaching_exchange_count}
-
-action field rules:
-- null         → continue teaching/conversing normally
-- "ask_readiness" → ask the learner whether they are ready for a quick check; do NOT start practice yet
-- "start_quiz" → trigger Practice Mode only after the learner has explicitly confirmed readiness
-- "mark_task_done" → only AFTER a quiz was passed (score ≥ 70); mark current task complete
-- "next_task"  → immediately after mark_task_done to proceed to the next task
-- "complete_session" → all tasks done and passed
-
-When to signal "ask_readiness":
-- The learner has had enough teaching/explanation to reasonably check understanding
-- The learner says they understand, e.g. "I understand", "that makes sense", "I get it", or equivalent
-- The learner is not asking for another explanation at that moment
-
-When to signal "start_quiz":
-- The immediately preceding tutor response asked whether the learner is ready for a quick check
-- The learner explicitly confirms readiness, e.g. "yes", "ready", "let's do it", "sure", or equivalent
-- Never start practice merely because the learner asked a normal educational question
-
-When NOT to signal either action:
-- Student is still asking basic questions or confused
-- The tutor has not established enough understanding to check
-- Session is completed (post-session follow-up)
-
-action_data field:
-- For start_quiz: {{"task_index": current_task_index, "reason": "one sentence why the student is ready"}}
-- For other actions: {{"reason": "brief explanation"}}
-- null when action is null
+- action null: continue naturally.
+- action ask_readiness: ask if the learner is ready for the compulsory quiz.
+- action start_quiz: only after the learner explicitly confirmed readiness to the immediately preceding readiness question.
+- Never mark a task done, advance tasks, or complete the session from ordinary chat. Those transitions are server-controlled after quiz evaluation.
+- If the learner says they understand and is not asking for more help, use ask_readiness.
+- If the learner is confused or asks for another explanation, keep action null.
 """
 
     prompt = f"""{curriculum_ctx}
+{task_context}
 {teaching_context}
 {post_session_directive}
 {agentic_directive}
@@ -1072,27 +1136,22 @@ action_data field:
 RECENT CONVERSATION:
 {history_text}
 
-Student just asked: {content}
+Student just said: {content}
 
 Return JSON:
 {{
-  "response": "Your full tutor response here (markdown supported, be thorough)",
+  "response": "Fallback combined tutor response",
+  "response_parts": ["optional message 1", "optional message 2", "optional message 3"],
   "action": null,
-  "action_data": null,
-  "suggest_new_session": false,
-  "detected_subject": null,
-  "detected_topic": null,
-  "session_note": null
+  "action_data": null
 }}
 
-Rules:
-- response: always required, always educational
-- action: null | "ask_readiness" | "start_quiz" | "mark_task_done" | "next_task" | "complete_session"
-- action_data: object with task_index and reason, or null
-- suggest_new_session: true only if question is from a clearly different topic/subject (post-session only)
-- detected_subject: name of the subject if suggest_new_session is true, else null
-- detected_topic: name of the topic if suggest_new_session is true, else null
-- session_note: 1-2 sentence note for the new session tutor about what the student needs, else null
+Response rules:
+- response_parts is optional but may contain 1–3 natural messages. Use it when a long answer benefits from being split.
+- Never use more than 3 parts.
+- Each part should be a complete natural thought, not a sentence fragment.
+- Keep the current task as the teaching boundary.
+- If a concept is only planned for a future task, do not introduce it as taught knowledge now.
 """
     try:
         raw, provider = await call_with_fallback(
@@ -1104,22 +1163,13 @@ Rules:
         raise HTTPException(502, f"AI service error: {exc}")
 
     response_text = _safe_str(parsed.get("response"), "I'm sorry, I couldn't generate a response right now.")
-    suggest_new_session = bool(parsed.get("suggest_new_session", False))
-    detected_subject   = parsed.get("detected_subject") or None
-    detected_topic     = parsed.get("detected_topic") or None
-    session_note       = parsed.get("session_note") or None
-
-    # Agentic action signal — only valid during active sessions
-    action      = parsed.get("action") or None
+    parts = _split_response_parts(response_text, parsed.get("response_parts"))
+    action = parsed.get("action") or None
     action_data = parsed.get("action_data") or None
-    valid_actions = {"ask_readiness", "start_quiz", "mark_task_done", "next_task", "complete_session"}
+    valid_actions = {"ask_readiness", "start_quiz"}
     if is_post_session or action not in valid_actions:
-        action      = None
-        action_data = None
+        action, action_data = None, None
 
-    # Deterministic readiness gate: the learner must see a readiness question
-    # before Practice Mode can begin. This protects the lifecycle even when a
-    # model returns an over-eager start_quiz action.
     previous_ai = next(
         (m for m in reversed(sorted(session.messages, key=lambda m: m.sequence))
          if m.role == "ai" and m.message_type in ("teaching", "reteach")),
@@ -1129,33 +1179,34 @@ Rules:
     previous_asked_readiness = bool(previous_ai and _READINESS_SIGNAL_RE.search(previous_ai.content or ""))
     if confirmation and previous_asked_readiness:
         action = "start_quiz"
-        action_data = {"task_index": None, "reason": "The learner explicitly confirmed readiness."}
+        action_data = {"task_index": current_task_index, "reason": "The learner explicitly confirmed readiness."}
     elif action == "start_quiz":
         action = "ask_readiness"
-        action_data = {"reason": "The learner needs to explicitly confirm readiness before practice."}
-        response_text = "You’ve covered enough for a quick check. Are you ready to test what you understand?"
+        action_data = {"reason": "The learner must explicitly confirm readiness before practice."}
+        parts = ["You’ve covered enough for this learning-plan task. Are you ready for the compulsory quick check?"]
     elif action is None and _UNDERSTANDING_SIGNAL_RE.search(content or ""):
         action = "ask_readiness"
-        action_data = {"reason": "The learner indicated understanding and can be invited to a quick check."}
-        response_text = "Great. Are you ready for a quick check?"
+        action_data = {"reason": "The learner indicated understanding and can be invited to the compulsory check."}
+        parts = ["Great. Are you ready for the compulsory quick check for this task?"]
 
-    msg = await _add_message(
-        session_id, "ai", "teaching", response_text, db,
-        extra={
+    created = []
+    for idx, part in enumerate(parts, 1):
+        extra = {
             "provider": provider,
             "inResponseTo": content[:100],
-            "suggestNewSession": suggest_new_session,
-            "detectedSubject": detected_subject,
-            "detectedTopic": detected_topic,
-            "sessionNote": session_note,
-            # Agentic fields — read by frontend to drive autonomous progression
-            "action": action,
-            "actionData": action_data,
-        },
-    )
+            "action": action if idx == len(parts) else None,
+            "actionData": action_data if idx == len(parts) else None,
+            "messagePart": idx,
+            "messagePartCount": len(parts),
+            "taskIndex": current_task_index,
+        }
+        msg = await _add_message(session_id, "ai", "teaching", part, db, extra=extra)
+        created.append(msg)
+
     await db.commit()
-    await db.refresh(msg)
-    return msg.serialize()
+    for msg in created:
+        await db.refresh(msg)
+    return [m.serialize() for m in created]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1270,6 +1321,51 @@ async def finish_study_period(
 # RETRIEVAL QUESTIONS
 # ─────────────────────────────────────────────────────────────────────────────
 
+async def _validate_quiz_scope(
+    questions: list[dict],
+    *,
+    task: dict,
+    teaching_summary: str,
+    future_titles: list[str],
+) -> tuple[bool, str]:
+    """Second-pass guard: reject questions that require untaught/future knowledge."""
+    system = (
+        "You are a strict curriculum-scope validator. Return JSON only. "
+        "A question is valid only if its answer can be derived from the supplied teaching snapshot "
+        "and current task. General subject knowledge is not allowed."
+    )
+    prompt = f"""CURRENT TASK
+Title: {task.get('title', '')}
+Description: {task.get('description', '')}
+Focus: {task.get('focus', '')}
+
+FUTURE TASKS (strictly forbidden): {future_titles}
+
+TEACHING SNAPSHOT — the only knowledge source allowed:
+{teaching_summary}
+
+QUESTIONS TO VALIDATE:
+{json.dumps(questions, ensure_ascii=False)}
+
+Return JSON:
+{{
+  "valid": true,
+  "reason": "brief reason"
+}}
+Rules:
+- valid=true only if EVERY question is answerable from the teaching snapshot.
+- If even one question tests a concept that was merely planned, mentioned by the curriculum, or not explicitly taught, valid=false.
+- In particular, do not infer that a related physics/mathematics concept was taught merely because it belongs to the same topic.
+"""
+    try:
+        raw, _ = await call_with_fallback(prompt, system=system, temperature=0.1, json_mode=True)
+        parsed = parse_json(raw)
+        return bool(parsed.get("valid")), _safe_str(parsed.get("reason"), "Quiz scope could not be verified.")
+    except Exception as exc:
+        logger.warning("Quiz scope validation failed: %s", exc)
+        return False, "Quiz scope validation was unavailable."
+
+
 async def generate_retrieval_questions(
     session_id: int, user_id: int, db: AsyncSession, *, count: int = 3, task_index: Optional[int] = None
 ) -> list[dict]:
@@ -1304,29 +1400,35 @@ async def generate_retrieval_questions(
 
     teaching_summary = (
         f"Strategy used: {current_teaching.strategy}\n"
-        f"Explanation (first 800 chars): {(current_teaching.explanation or '')[:800]}\n"
-        f"Key points: {', '.join(current_teaching.key_points or [])}\n"
-        f"Examples covered: {', '.join((current_teaching.examples or [])[:3])}"
+        f"Teaching explanation: {(current_teaching.explanation or '')[:1800]}\n"
+        f"Key points explicitly taught: {', '.join(current_teaching.key_points or [])}\n"
+        f"Examples explicitly taught: {', '.join((current_teaching.examples or [])[:5])}\n"
+        f"Worked examples explicitly taught: {', '.join((current_teaching.worked_examples or [])[:4])}\n"
+        f"Formulas explicitly taught: {', '.join((current_teaching.formulas or [])[:6])}\n"
+        f"Analogies explicitly used: {', '.join((current_teaching.analogies or [])[:4])}"
     )
 
-    task_context = ""
-    if task_index is not None:
-        task_msg_result = await db.execute(
-            select(AISessionMessage)
-            .where(
-                AISessionMessage.session_id == session_id,
-                AISessionMessage.message_type == "teaching",
-            )
-            .order_by(AISessionMessage.sequence.desc())
-            .limit(1)
-        )
-        task_msg = task_msg_result.scalar_one_or_none()
-        extra = task_msg.extra or {} if task_msg else {}
-        task_context = (
-            f"THIS RETRIEVAL CHECK IS FOR LEARNING TASK {task_index + 1}. "
-            f"Task: {extra.get('taskTitle', 'current task')}. "
-            "Test this task specifically and do not assess unrelated material."
-        )
+    state = await _learning_plan_state(session, db)
+    if task_index is None:
+        task_index = state["currentTaskIndex"]
+    plan = _extract_learning_plan(current_teaching)
+    if task_index < 0 or task_index >= len(plan):
+        raise HTTPException(400, "Invalid Learning Plan task.")
+    selected_task = plan[task_index]
+    selected_objectives = selected_task.get("objectiveIds") or selected_task.get("objective_ids") or []
+    covered_objectives = [int(x) for x in (current_teaching.objective_ids or []) if str(x).isdigit()]
+    if selected_objectives and not set(int(x) for x in selected_objectives).issubset(set(covered_objectives)):
+        raise HTTPException(409, "The current Learning Plan task has not been fully taught yet.")
+    future_titles = [t.get("title", "") for t in plan[task_index + 1:]]
+    task_context = f"""
+CURRENT LEARNING PLAN TASK ONLY
+Task {task_index + 1}: {selected_task.get('title', 'Current task')}
+Description: {selected_task.get('description', '')}
+Focus: {selected_task.get('focus', '')}
+Objective IDs: {selected_objectives}
+Future task titles that MUST NOT be assessed yet: {future_titles}
+The quiz must assess only knowledge explicitly present in the CURRENT TEACHING SNAPSHOT below.
+"""
 
     system_prompt = (
         "You are an expert AI tutor generating retrieval practice questions. "
@@ -1344,7 +1446,9 @@ WHAT WAS TAUGHT (ground questions ONLY in this content — do not test knowledge
 STUDENT CONTEXT
 Familiarity: {session.student_familiarity} | Intent: {session.intent}
 
-Generate exactly {count} retrieval questions testing understanding of the teaching above.
+Generate exactly {count} retrieval questions testing only the CURRENT learning-plan task and only what is explicitly taught in the teaching snapshot above.
+Every question must be answerable from the teaching snapshot without relying on outside curriculum knowledge.
+Do not introduce, name, test, or assume any future task or concept that was not explicitly taught in the snapshot.
 Include variety: mix question types. At least one must be short_answer or explanation.
 Do NOT reveal the answer in the question text.
 
@@ -1376,6 +1480,49 @@ For multiple_choice: options must be [{{"label":"A","text":"..."}}, ...] and exp
     if not raw_questions:
         raise HTTPException(502, "AI returned no questions.")
 
+    valid, validation_reason = await _validate_quiz_scope(
+        raw_questions[:count],
+        task=selected_task,
+        teaching_summary=teaching_summary,
+        future_titles=future_titles,
+    )
+    if not valid:
+        # One tightly scoped regeneration pass. The second prompt receives the same
+        # teaching boundary, so the validator cannot silently broaden the curriculum scope.
+        repair_prompt = f"""The previous quiz failed curriculum-scope validation: {validation_reason}
+
+Generate exactly {count} new questions for CURRENT TASK ONLY.
+Use only this teaching snapshot and nothing else:
+{teaching_summary}
+
+Current task: {json.dumps(selected_task, ensure_ascii=False)}
+Future tasks forbidden: {future_titles}
+
+Return the same JSON structure as before. Do not introduce any concept that is not explicitly taught above."""
+        try:
+            raw2, _ = await call_with_fallback(
+                repair_prompt,
+                system="You are a strict retrieval-question generator. Return JSON only.",
+                temperature=0.2,
+                json_mode=True,
+            )
+            parsed2 = parse_json(raw2)
+            repaired = _safe_list(parsed2.get("questions"))
+            valid2, reason2 = await _validate_quiz_scope(
+                repaired[:count],
+                task=selected_task,
+                teaching_summary=teaching_summary,
+                future_titles=future_titles,
+            )
+            if not valid2:
+                raise HTTPException(502, f"Generated quiz failed curriculum-scope validation: {reason2}")
+            raw_questions = repaired
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.error("Quiz regeneration failed: %s", exc)
+            raise HTTPException(502, "The tutor could not create a curriculum-scoped quiz.")
+
     # Determine next sequence number
     seq_result = await db.execute(
         select(AISessionQuestion.sequence)
@@ -1404,6 +1551,10 @@ For multiple_choice: options must be [{{"label":"A","text":"..."}}, ...] and exp
         await db.flush()
         created.append(obj)
 
+    await _add_message(
+        session_id, "system", "practice", "Compulsory quiz started.", db,
+        extra={"practiceStart": True, "taskIndex": task_index, "questionIds": [q.id for q in created]},
+    )
     await db.commit()
     for obj in created:
         await db.refresh(obj)
@@ -1689,20 +1840,20 @@ Scoring guide:
         "provider":             provider,
     }
 
-    # Associate the answer with the learning task that was active when its timer started.
+    # Associate the answer with the exact Learning Plan task that started this quiz.
     task_index = None
     msg_result = await db.execute(
         select(AISessionMessage)
         .where(
             AISessionMessage.session_id == session_id,
-            AISessionMessage.message_type == "timer_start",
+            AISessionMessage.message_type == "practice",
         )
         .order_by(AISessionMessage.sequence.desc())
         .limit(1)
     )
-    latest_timer_message = msg_result.scalar_one_or_none()
-    if latest_timer_message and latest_timer_message.extra:
-        task_index = latest_timer_message.extra.get("taskIndex")
+    latest_practice_message = msg_result.scalar_one_or_none()
+    if latest_practice_message and latest_practice_message.extra:
+        task_index = latest_practice_message.extra.get("taskIndex")
 
     # Persist the practice interaction in the same conversation stream.
     # No second chat/message system is used: the existing learning-session
@@ -1777,54 +1928,96 @@ Scoring guide:
 async def complete_practice_run(
     session_id: int, user_id: int, question_ids: list[int], db: AsyncSession
 ) -> dict:
-    """Close the current practice run without creating a new session.
-
-    All answers have already been persisted/evaluated by submit_answer. This
-    endpoint only advances the session back into normal conversation mode so
-    the frontend can restore the chat and, when needed, request adaptive
-    reteaching as a normal chat response.
-    """
-    session = await _get_session_owned(session_id, user_id, db)
+    """Finish a compulsory quiz and either reteach or wait for next-task confirmation."""
+    session = await _get_session_owned(session_id, user_id, db, load_messages=True, load_teaching=True)
     if session.status != "practice":
         raise HTTPException(409, f"Practice run is not active; session is '{session.status}'.")
-
     ids = {int(qid) for qid in question_ids}
     if not ids:
         raise HTTPException(400, "At least one practice question is required.")
-
-    result = await db.execute(
-        select(AISessionAnswer).where(
-            AISessionAnswer.session_id == session_id,
-            AISessionAnswer.question_id.in_(ids),
-        )
-    )
+    result = await db.execute(select(AISessionAnswer).where(AISessionAnswer.session_id == session_id, AISessionAnswer.question_id.in_(ids)))
     answers = result.scalars().all()
     if {a.question_id for a in answers} != ids:
         raise HTTPException(409, "The practice run contains unanswered questions.")
-
-    needs_reteach = any(
-        bool((a.ai_evaluation or {}).get("needsReteach")) or (a.score is not None and a.score < 70)
-        for a in answers
-    )
-
+    needs_reteach = any(bool((a.ai_evaluation or {}).get("needsReteach")) or (a.score is not None and a.score < 70) for a in answers)
+    state = await _learning_plan_state(session, db)
+    current = state["currentTaskIndex"]
+    plan = _extract_learning_plan(next((t for t in session.teaching if t.is_current), None))
     _set_status(session, "teaching")
-    await _add_message(
-        session_id, "system", "practice",
-        "Practice complete. Your learning conversation is restored.",
-        db,
-        extra={
-            "practiceComplete": True,
-            "questionIds": sorted(ids),
-            "needsReteach": needs_reteach,
-        },
-    )
+    if needs_reteach:
+        await _persist_learning_plan_state(session_id, {**state, "awaitingNextTask": False}, db)
+    else:
+        completed = sorted(set(state["completedTaskIndexes"] + [current]))
+        next_index = current + 1
+        if next_index < len(plan):
+            next_title = plan[next_index].get("title", "the next task")
+            transition = (
+                f"Nice work. You completed the compulsory quiz for **{plan[current].get('title', 'this task')}**. "
+                f"Your learning conversation is restored. Does the explanation make sense, and are you ready to move to **{next_title}**?"
+            )
+        else:
+            transition = (
+                f"Nice work. You completed the compulsory quiz for **{plan[current].get('title', 'this task')}**. "
+                "Your learning conversation is restored. Does the explanation make sense, and are you ready to wrap up this learning session?"
+            )
+        await _persist_learning_plan_state(session_id, {"currentTaskIndex": current, "completedTaskIndexes": completed, "awaitingNextTask": True}, db)
+        await _add_message(session_id, "ai", "teaching", transition, db, extra={
+            "action": "await_next_task_confirmation",
+            "taskIndex": current,
+            "nextTaskIndex": next_index if next_index < len(plan) else None,
+            "needsReteach": False,
+        })
+    await _add_message(session_id, "system", "practice", "Practice complete. Your learning conversation is restored.", db, extra={"practiceComplete": True, "questionIds": sorted(ids), "needsReteach": needs_reteach, "taskIndex": current})
     await db.commit()
     await db.refresh(session)
+    return {**session.serialize(), "needsReteach": needs_reteach, "questionIds": sorted(ids), "taskIndex": current, "awaitingNextTask": not needs_reteach}
+
+
+async def advance_learning_task(session_id: int, user_id: int, db: AsyncSession) -> dict:
+    """Advance only after a passed compulsory quiz and explicitly confirmed transition."""
+    session = await _get_session_owned(session_id, user_id, db, load_messages=True, load_teaching=True, load_attempts=True)
+    state = await _learning_plan_state(session, db)
+    if not state["awaitingNextTask"]:
+        raise HTTPException(409, "The current Learning Plan task is not waiting for advancement.")
+    plan = _extract_learning_plan(next((t for t in session.teaching if t.is_current), None))
+    current = state["currentTaskIndex"]
+    next_index = current + 1
+    if next_index >= len(plan):
+        await _persist_learning_plan_state(session_id, {**state, "awaitingNextTask": False}, db)
+        _set_status(session, "completed")
+        session.completed_at = _now()
+        await db.commit()
+        summary = await generate_session_summary(session_id=session_id, user_id=user_id, db=db)
+        fresh = await _get_session_owned(session_id, user_id, db, load_messages=True, load_summary=True)
+        return {**fresh.serialize(), "completed": True, "summary": summary, "learningPlanState": {**state, "awaitingNextTask": False}}
+    await _persist_learning_plan_state(session_id, {"currentTaskIndex": next_index, "completedTaskIndexes": state["completedTaskIndexes"], "awaitingNextTask": False}, db)
+    await db.commit()
+    teaching = await teach_concept(session_id, user_id, db, task_index=next_index)
+    fresh = await _get_session_owned(session_id, user_id, db, load_messages=True, load_teaching=True)
     return {
-        **session.serialize(),
-        "needsReteach": needs_reteach,
-        "questionIds": sorted(ids),
+        **fresh.serialize(),
+        "teaching": teaching,
+        "learningPlanState": {"currentTaskIndex": next_index, "completedTaskIndexes": state["completedTaskIndexes"], "awaitingNextTask": False},
     }
+
+
+async def record_idle_nudge(session_id: int, user_id: int, db: AsyncSession, level: int = 1) -> dict:
+    session = await _get_session_owned(session_id, user_id, db)
+    if session.status in ("practice", "retrieval", "completed", "abandoned"):
+        raise HTTPException(409, "Idle nudges are not active in this session state.")
+    messages = await _get_session_owned(session_id, user_id, db, load_messages=True)
+    recent = sorted(messages.messages, key=lambda m: m.sequence)[-4:]
+    if any((m.extra or {}).get("idleNudgeLevel") == level for m in recent):
+        return recent[-1].serialize() if recent else {}
+    content = (
+        "I haven't seen your reply yet. Are you still with me? Take your time — you can ask me to explain it differently."
+        if level == 1 else
+        "No rush. If you're stuck, tell me what part isn't clicking and we'll work through it together."
+    )
+    msg = await _add_message(session_id, "ai", "idle_nudge", content, db, extra={"idleNudgeLevel": level})
+    await db.commit()
+    await db.refresh(msg)
+    return msg.serialize()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1979,10 +2172,18 @@ Return JSON (all array fields required; may be empty):
             prev_attempt.outcome = "still_struggling"
 
     message_content = f"{explanation}\n\n---\n*{encouragement}*"
-    await _add_message(
-        session_id, "ai", "reteach", message_content, db,
-        extra={"strategy": new_strategy, "teachingId": teaching.id, "provider": provider},
-    )
+    reteach_parts = _split_response_parts(message_content)
+    for part_index, part in enumerate(reteach_parts, 1):
+        await _add_message(
+            session_id, "ai", "reteach", part, db,
+            extra={
+                "strategy": new_strategy,
+                "teachingId": teaching.id,
+                "provider": provider,
+                "messagePart": part_index,
+                "messagePartCount": len(reteach_parts),
+            },
+        )
 
     # The reteach content is now persisted and becomes the source for the next
     # retrieval check.  This is the critical lifecycle transition:

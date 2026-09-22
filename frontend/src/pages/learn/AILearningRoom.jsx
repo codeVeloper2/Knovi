@@ -55,10 +55,17 @@ export default function AILearningRoom() {
   });
   const [restoreNotice, setRestoreNotice] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
+  const [awaitingNextTask, setAwaitingNextTask] = useState(false);
+  const [voiceName, setVoiceName] = useState("");
+  const [idleNudgeLevel, setIdleNudgeLevel] = useState(0);
 
   const bottomRef = useRef(null);
   const timerRef = useRef(null);
+  const idleTimerRef = useRef(null);
+  const lastActivityRef = useRef(Date.now());
+  const idleSentRef = useRef({ 1: false, 2: false });
   const ttsRef = useRef(false);
+  const voiceRef = useRef(null);
 
   function toggleLeftSidebar() {
     setLeftOpen(prev => {
@@ -81,6 +88,7 @@ export default function AILearningRoom() {
   const topicName = session?.topicName || "";
   const currentQuestion = questions[qIndex] || null;
   const currentTask = learningPlan[currentTaskIndex] || null;
+  const nextTask = learningPlan[currentTaskIndex + 1] || null;
   const completedCount = completedTaskIndexes.length;
   const planProgress = learningPlan.length ? Math.round((completedCount / learningPlan.length) * 100) : 0;
   const teachingLocked = phase === "practice";
@@ -97,12 +105,52 @@ export default function AILearningRoom() {
   }[phase] || "Learning";
 
   useEffect(() => {
+    try {
+      const saved = localStorage.getItem("peerup.learningRoom.ttsEnabled");
+      if (saved === "true") { ttsRef.current = true; setTtsEnabled(true); }
+    } catch {}
+
+    const chooseVoice = () => {
+      const voices = window.speechSynthesis?.getVoices?.() || [];
+      const english = voices.filter(v => /^en(-|_)/i.test(v.lang || ""));
+      const preferred = english.find(v => /natural|neural|aria|jenny|guy|google.*english|microsoft.*(aria|jenny|guy)/i.test(v.name))
+        || english.find(v => /en-(NG|GB|US)/i.test(v.lang || ""))
+        || english[0]
+        || null;
+      voiceRef.current = preferred;
+      setVoiceName(preferred?.name || "System English voice");
+    };
+    chooseVoice();
+    window.speechSynthesis?.addEventListener?.("voiceschanged", chooseVoice);
+
     loadSession();
     return () => {
       clearInterval(timerRef.current);
+      clearInterval(idleTimerRef.current);
       window.speechSynthesis?.cancel();
+      window.speechSynthesis?.removeEventListener?.("voiceschanged", chooseVoice);
     };
   }, [sessionId]);
+
+  useEffect(() => {
+    lastActivityRef.current = Date.now();
+    idleSentRef.current = { 1: false, 2: false };
+    setIdleNudgeLevel(0);
+    clearInterval(idleTimerRef.current);
+    idleTimerRef.current = setInterval(() => {
+      if (aiWorking || !["teaching", "reteaching"].includes(phase) || awaitingNextTask) return;
+      const elapsed = Date.now() - lastActivityRef.current;
+      const level = !idleSentRef.current[1] && elapsed >= 45000 ? 1 : (!idleSentRef.current[2] && elapsed >= 105000 ? 2 : 0);
+      if (!level) return;
+      idleSentRef.current[level] = true;
+      setIdleNudgeLevel(level);
+      api.recordLearningIdleNudge(sessionId, level).then(msg => {
+        setMessages(prev => [...prev, msg]);
+        speakSequence([msg?.content || ""]);
+      }).catch(() => {});
+    }, 5000);
+    return () => clearInterval(idleTimerRef.current);
+  }, [sessionId, phase, aiWorking, awaitingNextTask]);
 
   useEffect(() => {
     if (!aiWorking) bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -145,8 +193,8 @@ export default function AILearningRoom() {
         if (Array.isArray(serverMessages)) msgs = serverMessages;
       } catch {}
       applySession(fresh, msgs);
-      const first = msgs.find(m => m.role === "ai" && m.messageType === "teaching");
-      if (first?.content) speak(first.content);
+      const freshTeaching = msgs.filter(m => m.role === "ai" && m.messageType === "teaching").slice(-3);
+      if (freshTeaching.length) speakSequence(freshTeaching.map(m => m.content));
     } catch (err) {
       setError(err.message || "The AI tutor could not prepare this lesson.");
     } finally {
@@ -167,6 +215,10 @@ export default function AILearningRoom() {
 
     const nextPhase = statusToPhase(sess?.status, safe.some(m => m.messageType === "teaching" || m.messageType === "reteach"));
     setPhase(nextPhase);
+    const planState = sess?.learningPlanState || safe.slice().reverse().map(m => m?.extra?.learningPlanState).find(Boolean) || {};
+    setCurrentTaskIndex(Number.isInteger(Number(planState.currentTaskIndex)) ? Number(planState.currentTaskIndex) : 0);
+    setCompletedTaskIndexes(Array.isArray(planState.completedTaskIndexes) ? planState.completedTaskIndexes.map(Number) : []);
+    setAwaitingNextTask(Boolean(planState.awaitingNextTask));
 
     if (Array.isArray(sess?.answers)) {
       const restored = {};
@@ -192,20 +244,39 @@ export default function AILearningRoom() {
     }
   }
 
-  function speak(text) {
-    if (!ttsRef.current || !text || !window.speechSynthesis) return;
+  function speakSequence(texts) {
+    if (!ttsRef.current || !window.speechSynthesis || !texts?.length) return;
     window.speechSynthesis.cancel();
-    const clean = String(text).replace(/```[\s\S]*?```/g, " code ").replace(/[#*_`~>-]+/g, " ").replace(/\s+/g, " ").trim();
-    const utterance = new SpeechSynthesisUtterance(clean);
-    utterance.rate = 1.02;
-    window.speechSynthesis.speak(utterance);
+    const cleanTexts = texts.map(text => String(text || "").replace(/```[\s\S]*?```/g, " code ").replace(/[#*_`~>-]+/g, " ").replace(/\s+/g, " ").trim()).filter(Boolean);
+    cleanTexts.forEach(text => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.96;
+      utterance.pitch = 1;
+      utterance.volume = 1;
+      if (voiceRef.current) {
+        utterance.voice = voiceRef.current;
+        utterance.lang = voiceRef.current.lang || "en-US";
+      } else {
+        utterance.lang = "en-US";
+      }
+      window.speechSynthesis.speak(utterance);
+    });
   }
+
+  function speak(text) { speakSequence([text]); }
 
   function toggleTts() {
     const next = !ttsEnabled;
     ttsRef.current = next;
     setTtsEnabled(next);
+    try { localStorage.setItem("peerup.learningRoom.ttsEnabled", String(next)); } catch {}
     if (!next) window.speechSynthesis?.cancel();
+  }
+
+  function registerActivity() {
+    lastActivityRef.current = Date.now();
+    idleSentRef.current = { 1: false, 2: false };
+    setIdleNudgeLevel(0);
   }
 
   function addLocalMessage(role, content, extra = {}, messageType = "teaching") {
@@ -224,20 +295,21 @@ export default function AILearningRoom() {
     const content = (raw || msgInput).trim();
     if (!content || aiWorking || !canType) return;
     setMsgInput("");
+    registerActivity();
     setError(null);
     setAiWorking(true);
     // Optimistically show the learner's message; the backend persists the
     // same message in the existing session message stream.
     addLocalMessage("student", content, {}, "question");
     try {
-      const msg = await api.sendStudentMessage(sessionId, content);
-      setMessages(prev => [...prev, { ...msg }]);
-      speak(msg.content || "");
+      const response = await api.sendStudentMessage(sessionId, content);
+      const parts = Array.isArray(response) ? response : [response];
+      setMessages(prev => [...prev, ...parts.filter(Boolean)]);
+      speakSequence(parts.map(msg => msg?.content || ""));
 
-      // The backend's agentic action is the source of truth. The tutor first
-      // asks readiness; only the learner's confirmation starts Practice Mode.
-      if (msg.extra?.action === "start_quiz") {
-        await beginPractice(msg.extra?.actionData?.task_index ?? currentTaskIndex);
+      const last = parts[parts.length - 1];
+      if (last?.extra?.action === "start_quiz") {
+        await beginPractice(last.extra?.actionData?.task_index ?? currentTaskIndex);
       }
     } catch (err) {
       setError(err.message || "The tutor could not respond.");
@@ -349,24 +421,60 @@ export default function AILearningRoom() {
       setQIndex(0);
       setAnswerInput("");
       setRestoreNotice(true);
+      const planState = fresh?.learningPlanState || {};
+      setCompletedTaskIndexes(Array.isArray(planState.completedTaskIndexes) ? planState.completedTaskIndexes.map(Number) : []);
+      setAwaitingNextTask(Boolean(planState.awaitingNextTask));
+      if (Number.isInteger(Number(planState.currentTaskIndex))) setCurrentTaskIndex(Number(planState.currentTaskIndex));
 
       if (result?.needsReteach) {
         await reteachAfterPractice();
       } else {
-        const doneTask = Number.isInteger(currentTaskIndex) ? currentTaskIndex : 0;
-        setCompletedTaskIndexes(prev => [...new Set([...prev, doneTask])]);
-        addLocalMessage(
-          "ai",
-          "✓ Practice complete. Your learning conversation is restored. Nice work — we can keep building from here.",
-          { action: "practice_complete", needsReteach: false },
-          "agent"
-        );
+        const transition = msgs.filter(m => m?.extra?.action === "await_next_task_confirmation").slice(-1)[0];
+        if (transition?.content) speak(transition.content);
       }
     } catch (err) {
       setError(err.message || "Practice could not be completed.");
     } finally {
       setAiWorking(false);
     }
+  }
+
+  async function advanceToNextTask() {
+    if (!awaitingNextTask || aiWorking) return;
+    registerActivity();
+    setAiWorking(true);
+    setError(null);
+    try {
+      const result = await api.advanceLearningTask(sessionId);
+      const fresh = await api.getAISession(sessionId);
+      let msgs = fresh?.messages || [];
+      try {
+        const serverMessages = await api.getSessionMessages(sessionId);
+        if (Array.isArray(serverMessages)) msgs = serverMessages;
+      } catch {}
+      setSession(fresh);
+      setMessages(msgs);
+      setAwaitingNextTask(false);
+      const planState = fresh?.learningPlanState || result?.learningPlanState || {};
+      setCurrentTaskIndex(Number(planState.currentTaskIndex || 0));
+      setCompletedTaskIndexes(Array.isArray(planState.completedTaskIndexes) ? planState.completedTaskIndexes.map(Number) : []);
+      if (result?.completed) {
+        setPhase("summary");
+      } else {
+        setPhase("teaching");
+        const newTeaching = fresh?.teaching?.explanation || msgs.filter(m => m?.messageType === "teaching").slice(-1)[0]?.content;
+        if (newTeaching) speak(newTeaching);
+      }
+    } catch (err) {
+      setError(err.message || "Could not move to the next Learning Plan task.");
+    } finally {
+      setAiWorking(false);
+    }
+  }
+
+  async function askForReteach() {
+    registerActivity();
+    await sendMessage("I'm not ready to move on yet. Please explain the current Learning Plan task again in a different way.");
   }
 
   async function reteachAfterPractice() {
@@ -382,7 +490,8 @@ export default function AILearningRoom() {
       setSession(fresh);
       setMessages(msgs);
       setPhase("teaching");
-      if (t?.explanation) speak(t.explanation);
+      const freshReteach = msgs.filter(m => m.role === "ai" && m.messageType === "reteach").slice(-3);
+      if (freshReteach.length) speakSequence(freshReteach.map(m => m.content));
     } catch (err) {
       setError(err.message || "The tutor could not start adaptive reteaching.");
     }
@@ -456,7 +565,7 @@ export default function AILearningRoom() {
         </div>
         <div className="ar-header-center"><span className="ar-live-dot" /><span>{aiWorking ? "UPRAD is working…" : phaseLabel}</span></div>
         <div className="ar-header-right">
-          <button className={`ar-icon-btn ar-voice ${ttsEnabled ? "active" : ""}`} onClick={toggleTts} title="Tutor voice" aria-label="Toggle tutor voice">{ttsEnabled ? "◖)" : "◖"}</button>
+          <button className={`ar-icon-btn ar-voice ${ttsEnabled ? "active" : ""}`} onClick={toggleTts} title={ttsEnabled ? `Tutor voice on · ${voiceName}` : "Turn tutor voice on"} aria-label="Toggle tutor voice">{ttsEnabled ? "◖)" : "◖"}</button>
           <button className="ar-header-action ar-desktop-toggle" onClick={toggleLeftSidebar}>{leftOpen ? "Hide plan" : "Show plan"}</button>
           <button className="ar-header-action ar-desktop-toggle" onClick={toggleRightSidebar}>{rightOpen ? "Hide tools" : "Show tools"}</button>
           <button className="ar-header-action ar-mobile-only" onClick={() => setMobilePanel("plan")}>Plan</button>
@@ -513,6 +622,16 @@ export default function AILearningRoom() {
             {phase === "preparing" && <PreparingCard />}
             {phase === "studying" && <StudyCard seconds={timerSeconds} task={currentTask} />}
 
+            {awaitingNextTask && phase !== "practice" && (
+              <NextTaskPrompt
+                currentTask={currentTask}
+                nextTask={nextTask}
+                onContinue={advanceToNextTask}
+                onExplainAgain={askForReteach}
+                busy={aiWorking}
+              />
+            )}
+
             {phase === "practice" && currentQuestion && (
               <QuizArtifact
                 question={currentQuestion}
@@ -539,7 +658,7 @@ export default function AILearningRoom() {
               <div className="ar-composer-icon"><TutorAvatar size={30} /></div>
               <textarea
                 value={msgInput}
-                onChange={e => setMsgInput(e.target.value)}
+                onChange={e => { registerActivity(); setMsgInput(e.target.value); }}
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                 disabled={!canType}
                 rows={1}
@@ -615,8 +734,24 @@ function MessageCard({ msg, onCopy, copiedId }) {
   </article>;
 }
 
+function NextTaskPrompt({ currentTask, nextTask, onContinue, onExplainAgain, busy }) {
+  const finalTask = !nextTask;
+  return <section className="ar-next-task-card" aria-live="polite">
+    <div className="ar-next-task-icon">✓</div>
+    <div className="ar-next-task-copy">
+      <span className="ar-eyebrow">TASK COMPLETE</span>
+      <h3>{taskTitle(currentTask)} is complete</h3>
+      <p>{finalTask ? "Your compulsory quiz is complete. Does the explanation make sense, and are you ready to wrap up?" : `Your compulsory quiz is complete. Ready to move to ${taskTitle(nextTask)}?`}</p>
+      <div className="ar-next-task-actions">
+        <button type="button" className="ar-next-task-secondary" onClick={onExplainAgain} disabled={busy}>Explain it again</button>
+        <button type="button" className="ar-next-task-primary" onClick={onContinue} disabled={busy}>{finalTask ? "Wrap up session →" : "Yes, continue →"}</button>
+      </div>
+    </div>
+  </section>;
+}
+
 function PracticeBanner() {
-  return <div className="ar-practice-banner" role="status"><span className="ar-practice-banner-icon">🔒</span><div><strong>PRACTICE MODE</strong><span>Teaching content is temporarily hidden. Show what you understand without looking back.</span></div></div>;
+  return <div className="ar-practice-banner" role="status"><span className="ar-practice-banner-icon">🔒</span><div><strong>COMPULSORY QUIZ</strong><span>Your teaching content is temporarily locked. Show what you understand without looking back.</span></div></div>;
 }
 
 function AgentThinking() { return <div className="ar-thinking"><div className="ar-thinking-avatar"><TutorAvatar size={30} /></div><div className="ar-thinking-body"><div className="ar-thinking-title">UPRAD is working</div><div className="ar-thinking-steps"><span className="active">Understanding your response</span><span>Choosing the next teaching move</span><span>Updating your learning path</span></div><div className="ar-thinking-dots"><i /><i /><i /></div></div></div>; }
@@ -628,11 +763,11 @@ function QuizArtifact({ question, index, total, answer, setAnswer, onSubmit, sub
   const options = Array.isArray(question.options) ? question.options : [];
   const mc = question.questionType === "multiple_choice" && options.length;
   return <section className="ar-quiz-artifact ar-practice-card">
-    <div className="ar-artifact-head"><div><span className="ar-eyebrow">PRACTICE · QUESTION {index + 1}</span><h2>Show what you understand</h2></div><span className="ar-quiz-count">{index + 1}/{total}</span></div>
+    <div className="ar-artifact-head"><div><span className="ar-eyebrow">COMPULSORY QUIZ · QUESTION {index + 1}</span><h2>Show what you understand</h2></div><span className="ar-quiz-count">{index + 1}/{total}</span></div>
     <div className="ar-quiz-progress">{Array.from({ length: total }, (_, i) => <i key={i} className={i < index ? "done" : i === index ? "current" : ""} />)}</div>
     <div className="ar-quiz-question">{question.question}</div>
     {mc ? <div className="ar-options">{options.map((opt, i) => { const value = typeof opt === "string" ? opt : (opt.value ?? opt.label ?? opt.text); const text = typeof opt === "string" ? opt : (opt.text ?? opt.label ?? opt.value); return <button key={`${question.id}-${i}`} className={`ar-option ${answer === value ? "selected" : ""}`} onClick={() => setAnswer(value)} disabled={submitting}><span>{String.fromCharCode(65 + i)}</span><b>{text}</b></button>; })}</div> : <textarea className="ar-answer-box" rows={5} value={answer} onChange={e => setAnswer(e.target.value)} placeholder="Explain your answer in your own words…" disabled={submitting} />}
-    <div className="ar-quiz-foot"><span>One question at a time. Your answer is saved to this learning session.</span><button onClick={onSubmit} disabled={!answer.trim() || submitting}>{submitting ? "Evaluating…" : index + 1 === total ? "Finish practice" : "Submit answer →"}</button></div>
+    <div className="ar-quiz-foot"><span>One question at a time. This quiz must be completed before you can move to the next Learning Plan task.</span><button onClick={onSubmit} disabled={!answer.trim() || submitting}>{submitting ? "Evaluating…" : index + 1 === total ? "Finish quiz" : "Submit answer →"}</button></div>
     {Object.keys(results).length > 0 && <div className="ar-quiz-note">{Object.keys(results).length} response{Object.keys(results).length > 1 ? "s" : ""} recorded in this run.</div>}
   </section>;
 }
