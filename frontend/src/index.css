@@ -19645,7 +19645,7 @@ kbd {
   /* Bubble: inline-block so it shrinks to content but never wider than wrapper */
   .chatx-shell .cb { display: inline-block !important; width: auto !important; max-width: 100% !important; box-sizing: border-box !important; min-width: 80px !important; }
   /* Received */
-  .chatx-shell .cb { background: var(--navy-panel) !important; border: 1px solid var(--navy-line) !important; color: var(--text) !important; border-radius: 2px 14px 14px 14px !important; padding: 7px 10px 7px !important; box-shadow: 0 1px 3px rgba(0,0,0,.25) !important; font-size: .9rem !important; line-height: 1.45 !important; }
+  .chatx-shell .cb { background: var(--navy-panel) !important; border: 1px solid var(--navy-line) !important; color: var(--text) !important; border-radius: 2px 14px 14px 14px !important; padding: 7px 10px 7px !important; box-shadow: 0 1px 3px rgba(0,0,0,.25) !important; font-size: .9rem !important; line-height: 1.45 !important; touch-action: none !important; user-select: none !important; -webkit-user-select: none !important; }
   /* Sent */
   .chatx-shell .cmr--mine .cb { background: linear-gradient(135deg, #2d3fa8, #1e2f8f) !important; border-color: rgba(91,110,245,.3) !important; border-radius: 14px 2px 14px 14px !important; box-shadow: 0 1px 4px rgba(46,63,168,.3) !important; }
   .chatx-shell .cmr--mine .cb.cb--mine::before { border-top-color: #2d3fa8 !important; }

@@ -440,6 +440,7 @@ function MessageBubble({ msg, myId, partnerName, partnerUrl, onDelete, onReport,
   const repliedRef = useRef(false);
 
   function onTouchStart(e) {
+    e.preventDefault(); // suppress native long-press / text-select / browser context menu
     clearTimeout(longPressTimer.current);
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
