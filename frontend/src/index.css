@@ -19495,14 +19495,18 @@ kbd {
   .chatx-shell {
     grid-template-columns: 1fr;
     position: fixed;
-    top: 56px;   /* below the 56px mobile top bar */
+    top: 56px;   /* below the 56px mobile top bar (list view) */
     left: 0;
     right: 0;
-    bottom: 0;   /* no bottom nav — fill to screen edge */
+    bottom: 0;
     height: auto;
     margin: 0;
     background: var(--navy-900);
     z-index: 10;
+  }
+  /* When inside a chat room, topbar is hidden — fill from top: 0 */
+  body.chat-active-mobile .chatx-shell {
+    top: 0 !important;
   }
   .chatx-shell .chatx-sidebar { width: 100%; }
   .chatx-shell > .cr, .chatx-shell .cr { display: none; width: 100%; }
@@ -19525,11 +19529,13 @@ kbd {
   .chatx-shell .chatx-search input { font-size: .875rem; color: var(--text); }
   .chatx-shell .chatx-search input::placeholder { color: var(--text-dim); }
 
-  /* Tabs — compact, left-aligned, WhatsApp style */
-  .chatx-shell .chatx-tabs { margin: 0; padding: 0 16px; border-bottom: 1px solid var(--navy-line); gap: 24px; justify-content: flex-start; }
-  .chatx-shell .chatx-tabs button { border: none; background: transparent; border-radius: 0; color: var(--text-dim); font-size: .8rem; font-weight: 600; letter-spacing: .04em; padding: 10px 0; border-bottom: 2px solid transparent; flex: none; width: auto; }
-  .chatx-shell .chatx-tabs button.active { color: var(--blue-bright); border-bottom-color: var(--blue-bright); background: transparent; }
-  .chatx-shell .chatx-tabs button span { background: var(--blue-bright); color: #fff; border-radius: 999px; padding: 1px 5px; font-size: .65rem; margin-left: 4px; }
+  /* Tabs — pill/badge style */
+  .chatx-shell .chatx-tabs { margin: 10px 16px; padding: 0; border-bottom: none; gap: 8px; justify-content: flex-start; }
+  .chatx-shell .chatx-tabs button { border: 1px solid var(--navy-line); background: rgba(255,255,255,.04); border-radius: 999px; color: var(--text-dim); font-size: .78rem; font-weight: 600; letter-spacing: .02em; padding: 6px 14px; flex: none; width: auto; border-bottom: none; transition: .15s ease; }
+  .chatx-shell .chatx-tabs button:hover { background: rgba(255,255,255,.08); color: var(--text); }
+  .chatx-shell .chatx-tabs button.active { color: #fff; background: var(--blue-bright); border-color: var(--blue-bright); }
+  .chatx-shell .chatx-tabs button span { background: rgba(255,255,255,.25); color: #fff; border-radius: 999px; padding: 1px 6px; font-size: .65rem; margin-left: 5px; }
+  .chatx-shell .chatx-tabs button.active span { background: rgba(255,255,255,.3); }
   .chatx-shell .chatx-tabs .chatx-filter-btn { display: none; }
 
   /* Conversation rows */
@@ -19556,7 +19562,7 @@ kbd {
     flex-direction: column !important;
     height: 100% !important;
     width: 100% !important;
-    overflow: hidden !important;
+    overflow: visible !important;
   }
   .chatx-shell .cr-messages {
     flex: 1 !important;
@@ -19609,6 +19615,7 @@ kbd {
   .chatx-shell .cb { background: var(--navy-panel) !important; border: 1px solid var(--navy-line) !important; color: var(--text) !important; border-radius: 2px 14px 14px 14px !important; padding: 7px 10px 5px !important; box-shadow: 0 1px 3px rgba(0,0,0,.25) !important; font-size: .9rem !important; line-height: 1.45 !important; }
   /* Sent */
   .chatx-shell .cmr--mine .cb { background: linear-gradient(135deg, #2d3fa8, #1e2f8f) !important; border-color: rgba(91,110,245,.3) !important; border-radius: 14px 2px 14px 14px !important; box-shadow: 0 1px 4px rgba(46,63,168,.3) !important; }
+  .chatx-shell .cmr--mine .cb.cb--mine::before { border-top-color: #2d3fa8 !important; }
   .chatx-shell .cb-text { color: var(--text) !important; }
   .chatx-shell .cb-meta { margin-top: 2px !important; margin-left: 6px !important; }
   .chatx-shell .cb-time { font-size: .67rem !important; color: var(--text-dim) !important; }
