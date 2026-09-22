@@ -4533,3 +4533,54 @@
     top: -4px;
   }
 }
+
+
+/* Learn 3.3 — keep the promo robot visible inside its own artwork viewport. */
+.learn-home-highlights .learn-robot-card-art {
+  position: relative;
+  width: 190px;
+  min-width: 190px;
+  height: 116px;
+  overflow: hidden;
+}
+
+.learn-home-highlights .learn-robot-card-art .learn-hero-robot {
+  position: absolute;
+  left: -18px !important;
+  right: auto !important;
+  top: -2px !important;
+  width: 280px;
+  height: 188px;
+  transform: scale(.58) !important;
+  transform-origin: top left !important;
+}
+
+.learn-home-highlights .learn-robot-card-art .hero-robot-bubble {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  .learn-home-highlights .learn-robot-card-art {
+    width: 160px;
+    min-width: 160px;
+  }
+
+  .learn-home-highlights .learn-robot-card-art .learn-hero-robot {
+    left: -24px !important;
+    transform: scale(.52) !important;
+  }
+}
+
+@media (max-width: 820px) {
+  .learn-home-highlights .learn-robot-card-art {
+    width: 94px;
+    min-width: 94px;
+    height: 96px;
+  }
+
+  .learn-home-highlights .learn-robot-card-art .learn-hero-robot {
+    left: -20px !important;
+    top: 0 !important;
+    transform: scale(.47) !important;
+  }
+}
