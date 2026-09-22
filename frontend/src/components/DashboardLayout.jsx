@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
@@ -8,7 +8,7 @@ import ShortcutsModal from "./ShortcutsModal";
 import ConfirmDialog from "./ConfirmDialog";
 import NotificationsBell from "./NotificationsPanel";
 import MobileTopBar from "./MobileTopBar";
-import MobileBottomNav from "./MobileBottomNav";
+import MobileHamburgerMenu from "./MobileHamburgerMenu";
 import MobileFabMenu from "./MobileFabMenu";
 import {
   HomeIcon, DiscoverIcon, ChatIcon, ChallengeIcon, LearnIcon,
@@ -16,25 +16,21 @@ import {
   ChevronRight, ProfileIcon, SecurityIcon, BellIcon,
 } from "./DashIcons";
 
-// ── Nav configuration ─────────────────────────────────────────────────────────
+// ── Nav configuration ──────────────────────────────────────────────────────────
 
 const MAIN_NAV = [
-  { to: "/app",          label: "Home",      Icon: HomeIcon,      end: true },
-  { to: "/app/discover", label: "Discover",  Icon: DiscoverIcon },
-  { to: "/app/chat",     label: "Chat",      Icon: ChatIcon },
+  { to: "/app",           label: "Home",      Icon: HomeIcon,      end: true },
+  { to: "/app/discover",  label: "Discover",  Icon: DiscoverIcon },
+  { to: "/app/chat",      label: "Chat",      Icon: ChatIcon },
   { to: "/app/challenge", label: "Challenge", Icon: ChallengeIcon },
-  { to: "/app/learn",    label: "Learn",     Icon: LearnIcon },
-  { to: "/app/progress", label: "Progress",  Icon: ProgressIcon },
+  { to: "/app/learn",     label: "Learn",     Icon: LearnIcon },
+  { to: "/app/progress",  label: "Progress",  Icon: ProgressIcon },
 ];
 
-// Desktop nav adds Settings at the bottom
 const DESKTOP_MAIN_NAV = [
   ...MAIN_NAV,
   { to: "/app/settings", label: "Settings", Icon: SettingsIcon },
 ];
-
-// Mobile nav (Settings handled by its own dropdown)
-const MOBILE_MAIN_NAV = MAIN_NAV;
 
 const SETTINGS_NAV = [
   { to: "/app/settings",                  label: "Settings",         Icon: SettingsIcon, end: true },
@@ -48,15 +44,10 @@ const STORAGE_KEY = "peerup_sidebar_collapsed";
 
 function ChevronDown({ open }) {
   return (
-    <svg
-      width="14" height="14" viewBox="0 0 24 24" fill="none"
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
       stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"
-      style={{
-        marginLeft: "auto", flexShrink: 0,
-        transition: "transform 0.2s",
-        transform: open ? "rotate(180deg)" : "rotate(0deg)",
-      }}
-    >
+      style={{ marginLeft: "auto", flexShrink: 0, transition: "transform 0.2s",
+        transform: open ? "rotate(180deg)" : "rotate(0deg)" }}>
       <path d="m6 9 6 6 6-6"/>
     </svg>
   );
@@ -67,36 +58,66 @@ export default function DashboardLayout() {
   const navigate  = useNavigate();
   const location  = useLocation();
 
-  const [collapsed,          setCollapsed]          = useState(() => localStorage.getItem(STORAGE_KEY) === "1");
-  const [mobileOpen,         setMobileOpen]         = useState(false);
-  const [scOpen,             setScOpen]             = useState(false);
-  const [logoutOpen,         setLogoutOpen]         = useState(false);
-  const [loggingOut,         setLoggingOut]         = useState(false);
-  const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
+  const [collapsed,            setCollapsed]            = useState(() => localStorage.getItem(STORAGE_KEY) === "1");
+  const [drawerOpen,           setDrawerOpen]           = useState(false);
+  const [scOpen,               setScOpen]               = useState(false);
+  const [logoutOpen,           setLogoutOpen]           = useState(false);
+  const [loggingOut,           setLoggingOut]           = useState(false);
   const [desktopSettingsHover, setDesktopSettingsHover] = useState(false);
   const settingsLeaveTimer = useRef(null);
 
   function openSettings()  { clearTimeout(settingsLeaveTimer.current); setDesktopSettingsHover(true);  }
   function closeSettings() { settingsLeaveTimer.current = setTimeout(() => setDesktopSettingsHover(false), 120); }
 
-  const inSettings = location.pathname.startsWith("/app/settings");
-  const isLearn = location.pathname.startsWith("/app/learn");
-  const isChat = location.pathname.startsWith("/app/chat");
+  const inSettings     = location.pathname.startsWith("/app/settings");
+  const isLearn        = location.pathname.startsWith("/app/learn");
+  const isChat         = location.pathname.startsWith("/app/chat");
   const isAISessionRoom = location.pathname.startsWith("/app/learn/ai/session/");
 
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 820);
   useEffect(() => {
-    function onResize() { setIsMobile(window.innerWidth <= 768); }
+    function onResize() { setIsMobile(window.innerWidth <= 820); }
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // Desktop: subnav swap only for Settings
-  const desktopNav = SETTINGS_NAV; // used when inSettings
-  const mobileNav  = MOBILE_MAIN_NAV;
+  // ── Swipe-from-left-edge gesture to open drawer ──────────────────────────────
+  const edgeTouchStart = useRef(null);
+  useEffect(() => {
+    if (!isMobile) return;
+
+    function onTouchStart(e) {
+      const x = e.touches[0].clientX;
+      // Only trigger if touch starts within 24px of the left edge
+      if (x <= 24) {
+        edgeTouchStart.current = { x, y: e.touches[0].clientY };
+      } else {
+        edgeTouchStart.current = null;
+      }
+    }
+
+    function onTouchEnd(e) {
+      if (!edgeTouchStart.current || drawerOpen) return;
+      const dx = e.changedTouches[0].clientX - edgeTouchStart.current.x;
+      const dy = Math.abs(e.changedTouches[0].clientY - edgeTouchStart.current.y);
+      // Swipe right at least 60px, mostly horizontal → open drawer
+      if (dx > 60 && dy < 80) setDrawerOpen(true);
+      edgeTouchStart.current = null;
+    }
+
+    document.addEventListener("touchstart", onTouchStart, { passive: true });
+    document.addEventListener("touchend",   onTouchEnd,   { passive: true });
+    return () => {
+      document.removeEventListener("touchstart", onTouchStart);
+      document.removeEventListener("touchend",   onTouchEnd);
+    };
+  }, [isMobile, drawerOpen]);
+
+  const toggleDrawer = useCallback(() => setDrawerOpen(v => !v), []);
+  const closeDrawer  = useCallback(() => setDrawerOpen(false),   []);
 
   useEffect(() => {
-    const handler = () => setMobileOpen(true);
+    const handler = () => setDrawerOpen(true);
     window.addEventListener("peerup:open-nav", handler);
     return () => window.removeEventListener("peerup:open-nav", handler);
   }, []);
@@ -117,7 +138,7 @@ export default function DashboardLayout() {
     { combo: "?",     run: () => setScOpen(true), allowInInputs: false },
   ]);
 
-  const name    = profile?.displayName || user?.displayName || "peer";
+  const name = profile?.displayName || user?.displayName || "peer";
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -126,17 +147,14 @@ export default function DashboardLayout() {
   }
 
   function NavItem({ to, label, Icon, end, inSettingsNav }) {
-    const sc    = inSettingsNav ? SETTINGS_SHORTCUTS[to] : NAV_SHORTCUTS[to];
+    const sc = inSettingsNav ? SETTINGS_SHORTCUTS[to] : NAV_SHORTCUTS[to];
     return (
-      <NavLink
-        to={to} end={end}
+      <NavLink to={to} end={end}
         className={({ isActive }) => `dash-link ${isActive ? "active" : ""}`}
-        onClick={() => setMobileOpen(false)}
+        onClick={() => setDrawerOpen(false)}
         title={label}
       >
-        <span className="dash-link-icon-wrap">
-          <Icon />
-        </span>
+        <span className="dash-link-icon-wrap"><Icon /></span>
         <span className="dash-link-label">{label}</span>
         {sc && (
           <span className="dash-kbd">
@@ -147,136 +165,77 @@ export default function DashboardLayout() {
     );
   }
 
-  // ── Settings dropdown (desktop hover version) ──
-  function DesktopSettingsDropdown() {
-    return (
-      <div 
-        className="dash-dropdown-container"
-        onMouseEnter={() => setDesktopSettingsHover(true)}
-        onMouseLeave={() => setDesktopSettingsHover(false)}
-      >
-        <NavLink
-          to="/app/settings"
-          className={({ isActive }) => `dash-link ${isActive ? "active" : ""}`}
-          title="Settings"
-        >
-          <span className="dash-link-icon-wrap"><SettingsIcon /></span>
-          <span className="dash-link-label">Settings</span>
-          {!collapsed && <ChevronDown open={desktopSettingsHover} />}
-        </NavLink>
-        {desktopSettingsHover && !collapsed && (
-          <div className="dash-settings-dropdown">
-            {SETTINGS_NAV.filter(s => s.to !== "/app/settings").map(({ to, label, Icon, end }) => (
-              <NavLink
-                key={to} to={to} end={end}
-                className={({ isActive }) => `dash-link dash-sub-link ${isActive ? "active" : ""}`}
-                onClick={() => setDesktopSettingsHover(false)}
-                title={label}
-              >
-                <span className="dash-link-icon-wrap"><Icon /></span>
-                <span className="dash-link-label">{label}</span>
-              </NavLink>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
     <div className={`dash ${isMobile ? "dash--mobile" : "dash--desktop"} ${isLearn ? "dash--learn" : ""}`}>
-      {/* ── Mobile Navigation (shown only on mobile) ── */}
+
+      {/* ── Mobile ── */}
       {isMobile && (
         <>
-          <MobileTopBar />
-          {!isAISessionRoom && <MobileBottomNav />}
+          <MobileTopBar drawerOpen={drawerOpen} onHamburger={toggleDrawer} />
+
+          <MobileHamburgerMenu
+            open={drawerOpen}
+            onClose={closeDrawer}
+            onLogout={() => setLogoutOpen(true)}
+          />
+
           {!isAISessionRoom && <MobileFabMenu />}
         </>
       )}
 
-      {/* ── Desktop Top Navigation Bar (shown only on desktop) ── */}
+      {/* ── Desktop ── */}
       {!isMobile && (
-        <>
-          <header className="desktop-topbar">
-            {/* Logo */}
-            <div className="desktop-topbar-brand">
-              <LogoMark size={26} />
-              <span className="desktop-topbar-name">Peer<span className="logo-accent">Up</span></span>
-            </div>
+        <header className="desktop-topbar">
+          <div className="desktop-topbar-brand">
+            <LogoMark size={26} />
+            <span className="desktop-topbar-name">Peer<span className="logo-accent">Up</span></span>
+          </div>
 
-            {/* Main Navigation */}
-            <nav className="desktop-topbar-nav">
-              {DESKTOP_MAIN_NAV
-                .filter(({ to }) => to !== "/app/settings")
-                .map(({ to, label, Icon, end }) => {
-                                return (
-                    <NavLink
-                      key={to}
-                      to={to}
-                      end={end}
-                      className={({ isActive }) => `desktop-nav-item${isActive ? " active" : ""}`}
-                      title={label}
-                    >
-                      <div className="desktop-nav-icon-wrap">
-                        <Icon />
-                      </div>
-                      <span>{label}</span>
-                    </NavLink>
-                  );
-                })}
-            </nav>
-
-            {/* Right Side — Bell + Settings dropdown + Avatar (no search here) */}
-            <div className="desktop-topbar-right">
-              <NotificationsBell className="desktop-topbar-bell notif-bell-btn" />
-
-              {/* Settings Dropdown */}
-              <div
-                className="desktop-nav-dropdown"
-                onMouseEnter={openSettings}
-                onMouseLeave={closeSettings}
-              >
-                <NavLink
-                  to="/app/settings"
+          <nav className="desktop-topbar-nav">
+            {DESKTOP_MAIN_NAV
+              .filter(({ to }) => to !== "/app/settings")
+              .map(({ to, label, Icon, end }) => (
+                <NavLink key={to} to={to} end={end}
                   className={({ isActive }) => `desktop-nav-item${isActive ? " active" : ""}`}
-                  title="Settings"
-                >
-                  <SettingsIcon />
-                  <span>Settings</span>
-                  <ChevronDown open={desktopSettingsHover} />
+                  title={label}>
+                  <div className="desktop-nav-icon-wrap"><Icon /></div>
+                  <span>{label}</span>
                 </NavLink>
-                {desktopSettingsHover && (
-                  <div className="desktop-nav-dropdown-menu">
-                    {SETTINGS_NAV.filter(s => s.to !== "/app/settings").map(({ to, label, Icon }) => (
-                      <NavLink
-                        key={to}
-                        to={to}
-                        className={({ isActive }) => `desktop-nav-dropdown-item${isActive ? " active" : ""}`}
-                        onClick={() => setDesktopSettingsHover(false)}
-                      >
-                        <Icon />
-                        <span>{label}</span>
-                      </NavLink>
-                    ))}
-                    <button
-                      type="button"
-                      className="desktop-nav-dropdown-item logout-item"
-                      onClick={() => {
-                        setDesktopSettingsHover(false);
-                        setLogoutOpen(true);
-                      }}
-                    >
-                      <LogoutIcon />
-                      <span>Logout</span>
-                    </button>
-                  </div>
-                )}
-              </div>
+              ))}
+          </nav>
 
+          <div className="desktop-topbar-right">
+            <NotificationsBell className="desktop-topbar-bell notif-bell-btn" />
+
+            <div className="desktop-nav-dropdown"
+              onMouseEnter={openSettings}
+              onMouseLeave={closeSettings}>
+              <NavLink to="/app/settings"
+                className={({ isActive }) => `desktop-nav-item${isActive ? " active" : ""}`}
+                title="Settings">
+                <SettingsIcon />
+                <span>Settings</span>
+                <ChevronDown open={desktopSettingsHover} />
+              </NavLink>
+              {desktopSettingsHover && (
+                <div className="desktop-nav-dropdown-menu">
+                  {SETTINGS_NAV.filter(s => s.to !== "/app/settings").map(({ to, label, Icon }) => (
+                    <NavLink key={to} to={to}
+                      className={({ isActive }) => `desktop-nav-dropdown-item${isActive ? " active" : ""}`}
+                      onClick={() => setDesktopSettingsHover(false)}>
+                      <Icon /><span>{label}</span>
+                    </NavLink>
+                  ))}
+                  <button type="button"
+                    className="desktop-nav-dropdown-item logout-item"
+                    onClick={() => { setDesktopSettingsHover(false); setLogoutOpen(true); }}>
+                    <LogoutIcon /><span>Logout</span>
+                  </button>
+                </div>
+              )}
             </div>
-          </header>
-
-        </>
+          </div>
+        </header>
       )}
 
       {/* ── Main Content ── */}
