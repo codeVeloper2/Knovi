@@ -103,8 +103,8 @@ _VALID_TRANSITIONS: dict[str, set[str]] = {
     "teaching":   {"studying", "retrieval", "reteaching", "abandoned"},
     "studying":   {"retrieval", "abandoned"},
     "retrieval":  {"reteaching", "practice", "completed", "abandoned"},
-    "reteaching": {"studying", "retrieval", "practice", "completed", "abandoned"},
-    "practice":   {"retrieval", "completed", "abandoned"},
+    "reteaching": {"studying", "retrieval", "practice", "teaching", "completed", "abandoned"},
+    "practice":   {"teaching", "retrieval", "completed", "abandoned"},
     "completed":  set(),
     "abandoned":  set(),
     "paused":     {"teaching", "studying", "retrieval", "reteaching", "practice", "abandoned"},
@@ -131,6 +131,19 @@ _UNCERTAINTY_RESPONSE_RE = re.compile(
     re.IGNORECASE,
 )
 
+_READINESS_CONFIRMATION_RE = re.compile(
+    r"^(?:yes|yeah|yep|sure|ready|i(?:'|\s*)m ready|let['’]?s do it|go ahead|okay|ok|absolutely|sounds good)[.!\s]*$",
+    re.IGNORECASE,
+)
+_READINESS_SIGNAL_RE = re.compile(
+    r"\b(?:ready for a quick check|ready for a quick practice|quick check|ready to test|check your understanding)\b",
+    re.IGNORECASE,
+)
+_UNDERSTANDING_SIGNAL_RE = re.compile(
+    r"\b(?:i (?:now )?(?:understand|get it)|that makes sense|i get it|got it|i understand now)\b",
+    re.IGNORECASE,
+)
+
 
 def _is_uncertainty_response(answer: str) -> bool:
     normalized = re.sub(r"\s+", " ", (answer or "").strip())
@@ -138,15 +151,23 @@ def _is_uncertainty_response(answer: str) -> bool:
 
 
 def _filter_protected_messages(messages: list) -> list:
-    """Return only learner-safe messages while retrieval/practice is active.
+    """Return the full conversation with teaching content safely locked.
 
-    Teaching snapshots and their chat messages remain persisted server-side.
-    This helper only controls what the learner-facing API is allowed to return.
+    Practice is a protected state: the learner must not be able to read the
+    original teaching text, but the conversation itself must remain intact.
+    We therefore replace teaching/reteach content with a persisted-state
+    placeholder rather than removing the messages.
     """
-    return [
-        m.serialize() for m in sorted(messages, key=lambda item: item.sequence)
-        if m.message_type not in ("teaching", "reteach")
-    ]
+    result = []
+    for message in sorted(messages, key=lambda item: item.sequence):
+        if message.message_type in ("teaching", "reteach"):
+            data = message.serialize()
+            data["content"] = "🔒 Currently in practice mode.\nTeaching content will reopen after practice mode."
+            data["extra"] = {**(data.get("extra") or {}), "locked": True, "originalMessageId": message.id}
+            result.append(data)
+        else:
+            result.append(message.serialize())
+    return result
 
 
 def _now() -> datetime:
@@ -178,13 +199,18 @@ def _begin_adaptive_reteach(session: AILearningSession) -> None:
 
 
 def _finish_adaptive_reteach(session: AILearningSession) -> None:
-    """Move a completed reteach snapshot into the next retrieval stage."""
+    """Return to normal conversation after adaptive reteaching.
+
+    Reteaching is conversation content, not a quiz screen. The next practice
+    cycle starts only after the tutor asks readiness again and the learner
+    confirms.
+    """
     if session.status != "reteaching":
         raise HTTPException(
             409,
             f"Cannot finish reteaching: session is '{session.status}'."
         )
-    _set_status(session, "retrieval")
+    _set_status(session, "teaching")
 
 
 def _safe_list(v: Any) -> list:
@@ -1011,21 +1037,25 @@ Current exchange count: {teaching_exchange_count}
 
 action field rules:
 - null         → continue teaching/conversing normally
-- "start_quiz" → trigger the quiz now (no button, you decide)
+- "ask_readiness" → ask the learner whether they are ready for a quick check; do NOT start practice yet
+- "start_quiz" → trigger Practice Mode only after the learner has explicitly confirmed readiness
 - "mark_task_done" → only AFTER a quiz was passed (score ≥ 70); mark current task complete
 - "next_task"  → immediately after mark_task_done to proceed to the next task
 - "complete_session" → all tasks done and passed
 
-When to signal "start_quiz":
-- Student has had at least 2 substantive exchanges on this task/concept
-- Student has demonstrated understanding (correct answers, good questions, applied the idea)
-- Student is NOT still confused, asking basic definitions, or showing misconceptions
-- Student asks to be quizzed ("quiz me", "test me", "I'm ready")
-- If the student shows strong understanding even on exchange 1, you may signal earlier
+When to signal "ask_readiness":
+- The learner has had enough teaching/explanation to reasonably check understanding
+- The learner says they understand, e.g. "I understand", "that makes sense", "I get it", or equivalent
+- The learner is not asking for another explanation at that moment
 
-When NOT to signal "start_quiz":
+When to signal "start_quiz":
+- The immediately preceding tutor response asked whether the learner is ready for a quick check
+- The learner explicitly confirms readiness, e.g. "yes", "ready", "let's do it", "sure", or equivalent
+- Never start practice merely because the learner asked a normal educational question
+
+When NOT to signal either action:
 - Student is still asking basic questions or confused
-- Student has had fewer than 2 exchanges and shows no strong understanding signal
+- The tutor has not established enough understanding to check
 - Session is completed (post-session follow-up)
 
 action_data field:
@@ -1057,7 +1087,7 @@ Return JSON:
 
 Rules:
 - response: always required, always educational
-- action: null | "start_quiz" | "mark_task_done" | "next_task" | "complete_session"
+- action: null | "ask_readiness" | "start_quiz" | "mark_task_done" | "next_task" | "complete_session"
 - action_data: object with task_index and reason, or null
 - suggest_new_session: true only if question is from a clearly different topic/subject (post-session only)
 - detected_subject: name of the subject if suggest_new_session is true, else null
@@ -1082,10 +1112,32 @@ Rules:
     # Agentic action signal — only valid during active sessions
     action      = parsed.get("action") or None
     action_data = parsed.get("action_data") or None
-    valid_actions = {"start_quiz", "mark_task_done", "next_task", "complete_session"}
+    valid_actions = {"ask_readiness", "start_quiz", "mark_task_done", "next_task", "complete_session"}
     if is_post_session or action not in valid_actions:
         action      = None
         action_data = None
+
+    # Deterministic readiness gate: the learner must see a readiness question
+    # before Practice Mode can begin. This protects the lifecycle even when a
+    # model returns an over-eager start_quiz action.
+    previous_ai = next(
+        (m for m in reversed(sorted(session.messages, key=lambda m: m.sequence))
+         if m.role == "ai" and m.message_type in ("teaching", "reteach")),
+        None,
+    )
+    confirmation = bool(_READINESS_CONFIRMATION_RE.fullmatch(content.strip()))
+    previous_asked_readiness = bool(previous_ai and _READINESS_SIGNAL_RE.search(previous_ai.content or ""))
+    if confirmation and previous_asked_readiness:
+        action = "start_quiz"
+        action_data = {"task_index": None, "reason": "The learner explicitly confirmed readiness."}
+    elif action == "start_quiz":
+        action = "ask_readiness"
+        action_data = {"reason": "The learner needs to explicitly confirm readiness before practice."}
+        response_text = "You’ve covered enough for a quick check. Are you ready to test what you understand?"
+    elif action is None and _UNDERSTANDING_SIGNAL_RE.search(content or ""):
+        action = "ask_readiness"
+        action_data = {"reason": "The learner indicated understanding and can be invited to a quick check."}
+        response_text = "Great. Are you ready for a quick check?"
 
     msg = await _add_message(
         session_id, "ai", "teaching", response_text, db,
@@ -1235,6 +1287,12 @@ async def generate_retrieval_questions(
     # Use the state machine here rather than assigning the status directly.
     if session.status in ("teaching", "reteaching"):
         _set_status(session, "retrieval")
+
+    # Once questions are generated the room is immediately in Practice Mode.
+    # The existing retrieval/question architecture remains the source of truth;
+    # this only makes the persisted session state match the Learning Room UX.
+    if session.status == "retrieval":
+        _set_status(session, "practice")
 
     current_teaching = await _get_current_teaching(session_id, db)
     if not current_teaching:
@@ -1646,6 +1704,16 @@ Scoring guide:
     if latest_timer_message and latest_timer_message.extra:
         task_index = latest_timer_message.extra.get("taskIndex")
 
+    # Persist the practice interaction in the same conversation stream.
+    # No second chat/message system is used: the existing learning-session
+    # messages are the canonical history for both teaching and practice.
+    await _add_message(
+        session_id, "student", "answer",
+        f"**Practice question:** {question.question}\n\n**Answer:** {student_answer}",
+        db,
+        extra={"questionId": question_id, "answerId": answer.id, "practice": True},
+    )
+
     # Feedback message
     correctness_label = "Correct!" if answer.is_correct else ("Close." if understanding == "partial" else "Not quite.")
     score_display     = f"{answer.score}/100" if answer.score is not None else "–"
@@ -1704,6 +1772,59 @@ Scoring guide:
         "taskIndex":           task_index,
     }
     return result
+
+
+async def complete_practice_run(
+    session_id: int, user_id: int, question_ids: list[int], db: AsyncSession
+) -> dict:
+    """Close the current practice run without creating a new session.
+
+    All answers have already been persisted/evaluated by submit_answer. This
+    endpoint only advances the session back into normal conversation mode so
+    the frontend can restore the chat and, when needed, request adaptive
+    reteaching as a normal chat response.
+    """
+    session = await _get_session_owned(session_id, user_id, db)
+    if session.status != "practice":
+        raise HTTPException(409, f"Practice run is not active; session is '{session.status}'.")
+
+    ids = {int(qid) for qid in question_ids}
+    if not ids:
+        raise HTTPException(400, "At least one practice question is required.")
+
+    result = await db.execute(
+        select(AISessionAnswer).where(
+            AISessionAnswer.session_id == session_id,
+            AISessionAnswer.question_id.in_(ids),
+        )
+    )
+    answers = result.scalars().all()
+    if {a.question_id for a in answers} != ids:
+        raise HTTPException(409, "The practice run contains unanswered questions.")
+
+    needs_reteach = any(
+        bool((a.ai_evaluation or {}).get("needsReteach")) or (a.score is not None and a.score < 70)
+        for a in answers
+    )
+
+    _set_status(session, "teaching")
+    await _add_message(
+        session_id, "system", "practice",
+        "Practice complete. Your learning conversation is restored.",
+        db,
+        extra={
+            "practiceComplete": True,
+            "questionIds": sorted(ids),
+            "needsReteach": needs_reteach,
+        },
+    )
+    await db.commit()
+    await db.refresh(session)
+    return {
+        **session.serialize(),
+        "needsReteach": needs_reteach,
+        "questionIds": sorted(ids),
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────

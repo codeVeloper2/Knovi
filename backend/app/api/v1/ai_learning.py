@@ -252,6 +252,19 @@ async def generate_questions(
 # Answer submission
 # ---------------------------------------------------------------------------
 
+@router.post("/learning/sessions/{session_id}/practice/complete", response_model=dict)
+async def complete_practice_run(
+    session_id: int,
+    question_ids: list[int],
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Finish the active practice run and restore normal conversation mode."""
+    return await svc.complete_practice_run(
+        session_id=session_id, user_id=user.id, question_ids=question_ids, db=db
+    )
+
+
 @router.post("/learning/sessions/{session_id}/answers", response_model=AnswerOut)
 async def submit_answer(
     session_id: int,

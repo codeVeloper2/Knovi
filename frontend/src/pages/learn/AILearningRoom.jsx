@@ -1,15 +1,11 @@
 /**
- * AILearningRoom — Agentic Education Workspace
+ * AI Learning Room — one continuous conversation.
  *
- * A focused learning environment inspired by modern agentic workspaces:
- * - the AI teaches conversationally
- * - the left rail is the live learning plan/task list
- * - the center is a rich, markdown-aware tutor conversation
- * - the right rail is the learner workspace (current task, actions, progress)
- * - quiz/retrieval is a first-class structured artifact
- * - mobile collapses the rails into drawers without losing functionality
+ * The existing learning-session backend remains the source of truth for
+ * messages, teaching snapshots, retrieval questions, answers and evaluation.
+ * Practice is only a temporary protected state inside that conversation.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import * as api from "../../api";
 import { TutorAvatar } from "./AISessionSetup";
@@ -20,9 +16,9 @@ function statusToPhase(status, hasMessages) {
     case "created": return "preparing";
     case "teaching": return hasMessages ? "teaching" : "preparing";
     case "studying": return "studying";
-    case "retrieval": return "retrieval";
-    case "reteaching": return "reteaching";
+    case "retrieval":
     case "practice": return "practice";
+    case "reteaching": return "reteaching";
     case "completed": return "summary";
     case "abandoned": return "abandoned";
     default: return "teaching";
@@ -40,58 +36,44 @@ export default function AILearningRoom() {
   const [error, setError] = useState(null);
   const [aiWorking, setAiWorking] = useState(false);
 
-  const [teaching, setTeaching] = useState(null);
   const [learningPlan, setLearningPlan] = useState([]);
   const [currentTaskIndex, setCurrentTaskIndex] = useState(0);
   const [completedTaskIndexes, setCompletedTaskIndexes] = useState([]);
-
   const [questions, setQuestions] = useState([]);
   const [qIndex, setQIndex] = useState(0);
   const [answerInput, setAnswerInput] = useState("");
   const [checkResults, setCheckResults] = useState({});
   const [submitting, setSubmitting] = useState(false);
-
-  const [studyPeriod, setStudyPeriod] = useState(null);
-  const [timerSeconds, setTimerSeconds] = useState(0);
-  const timerRef = useRef(null);
-
-  const [summary, setSummary] = useState(null);
-  const [showSummary, setShowSummary] = useState(false);
   const [msgInput, setMsgInput] = useState("");
   const [ttsEnabled, setTtsEnabled] = useState(false);
   const [mobilePanel, setMobilePanel] = useState(null);
-  const [showActions, setShowActions] = useState(false);
-  const [activity, setActivity] = useState([]);
+  const [leftOpen, setLeftOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(true);
+  const [restoreNotice, setRestoreNotice] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
 
   const bottomRef = useRef(null);
-  const inputRef = useRef(null);
+  const timerRef = useRef(null);
   const ttsRef = useRef(false);
 
   const conceptName = session?.conceptName || "Learning session";
   const subjectName = session?.subjectName || "AI Learning";
   const topicName = session?.topicName || "";
+  const currentQuestion = questions[qIndex] || null;
   const currentTask = learningPlan[currentTaskIndex] || null;
   const completedCount = completedTaskIndexes.length;
-  const planProgress = learningPlan.length
-    ? Math.round((completedCount / learningPlan.length) * 100)
-    : 0;
-
-  const canType =
-    ["teaching", "reteaching", "summary"].includes(phase) && !aiWorking;
-
+  const planProgress = learningPlan.length ? Math.round((completedCount / learningPlan.length) * 100) : 0;
+  const teachingLocked = phase === "practice";
+  const canType = ["teaching", "reteaching", "summary"].includes(phase) && !aiWorking;
   const answeredCount = Object.keys(checkResults).length;
-  const currentQuestion = questions[qIndex];
-  const teachingHidden = phase === "retrieval" || phase === "practice";
 
   const phaseLabel = {
     preparing: "Preparing lesson",
-    teaching: "Teaching",
-    reteaching: "Reteaching",
-    studying: "Study mode",
-    retrieval: "Quick check",
-    practice: "Practice",
-    summary: "Session complete",
+    teaching: "Learning together",
+    reteaching: "Learning together",
+    studying: "Learning together",
+    practice: "Practice mode",
+    summary: "Learning complete",
   }[phase] || "Learning";
 
   useEffect(() => {
@@ -107,18 +89,10 @@ export default function AILearningRoom() {
   }, [messages.length, phase, currentQuestion?.id]);
 
   useEffect(() => {
-    if (!messages.length) return;
-    const nextActivity = messages
-      .filter(m => m?.extra?.action || m?.extra?.suggestNewSession)
-      .slice(-8)
-      .map((m, i) => ({
-        id: `${m.id || "local"}-${i}`,
-        action: m.extra?.action,
-        text: activityText(m.extra?.action),
-        time: m.createdAt,
-      }));
-    setActivity(nextActivity);
-  }, [messages]);
+    if (!restoreNotice) return;
+    const t = setTimeout(() => setRestoreNotice(false), 4200);
+    return () => clearTimeout(t);
+  }, [restoreNotice]);
 
   async function loadSession() {
     setLoading(true);
@@ -127,12 +101,11 @@ export default function AILearningRoom() {
       const sess = await api.getAISession(sessionId);
       let msgs = Array.isArray(sess?.messages) ? sess.messages : [];
       try {
-        const fetched = await api.getSessionMessages(sessionId);
-        if (Array.isArray(fetched)) msgs = fetched;
+        const serverMessages = await api.getSessionMessages(sessionId);
+        if (Array.isArray(serverMessages)) msgs = serverMessages;
       } catch {}
-
       applySession(sess, msgs);
-      if (sess.status === "created") await prepareSession(sess);
+      if (sess.status === "created") await prepareSession();
     } catch (err) {
       setError(err.message || "Could not open this learning room.");
     } finally {
@@ -140,16 +113,16 @@ export default function AILearningRoom() {
     }
   }
 
-  async function prepareSession(sess) {
+  async function prepareSession() {
     setAiWorking(true);
     setPhase("preparing");
     try {
       await api.prepareAISession(sessionId);
       const fresh = await api.getAISession(sessionId);
-      let msgs = Array.isArray(fresh?.messages) ? fresh.messages : [];
+      let msgs = fresh?.messages || [];
       try {
-        const fetched = await api.getSessionMessages(sessionId);
-        if (Array.isArray(fetched)) msgs = fetched;
+        const serverMessages = await api.getSessionMessages(sessionId);
+        if (Array.isArray(serverMessages)) msgs = serverMessages;
       } catch {}
       applySession(fresh, msgs);
       const first = msgs.find(m => m.role === "ai" && m.messageType === "teaching");
@@ -166,18 +139,14 @@ export default function AILearningRoom() {
     const safe = Array.isArray(msgs) ? msgs : [];
     setMessages(safe);
 
-    const plan =
-      sess?.teaching?.learningPlan ||
-      safe.slice().reverse().map(m => m?.extra?.learningPlan).find(p => Array.isArray(p) && p.length) ||
-      [];
+    const plan = sess?.teaching?.learningPlan || safe.slice().reverse().map(m => m?.extra?.learningPlan).find(p => Array.isArray(p) && p.length) || [];
     if (Array.isArray(plan)) setLearningPlan(plan);
 
     const timerMsg = safe.filter(m => m?.messageType === "timer_start" && m?.extra?.taskIndex != null).slice(-1)[0];
     if (timerMsg?.extra?.taskIndex != null) setCurrentTaskIndex(Number(timerMsg.extra.taskIndex));
 
-    setPhase(statusToPhase(sess?.status, safe.some(m => m.messageType === "teaching" || m.messageType === "reteach")));
-    if (sess?.teaching) setTeaching(sess.teaching);
-    if (sess?.summary) setSummary(sess.summary);
+    const nextPhase = statusToPhase(sess?.status, safe.some(m => m.messageType === "teaching" || m.messageType === "reteach"));
+    setPhase(nextPhase);
 
     if (Array.isArray(sess?.answers)) {
       const restored = {};
@@ -190,25 +159,23 @@ export default function AILearningRoom() {
       if (done.length) setCompletedTaskIndexes([...new Set(done)]);
     }
 
-    if (["retrieval", "practice", "summary"].includes(statusToPhase(sess?.status, true)) && sess?.questions?.length) {
+    if (["practice", "summary"].includes(nextPhase) && sess?.questions?.length) {
       const qs = sess.questions;
       setQuestions(qs);
       const answered = new Set((sess.answers || []).map(a => Number(a.questionId)));
       const next = qs.findIndex(q => !answered.has(Number(q.id)));
       setQIndex(next === -1 ? Math.max(0, qs.length - 1) : next);
-    }
-
-    if (sess?.activeStudyPeriod && sess.status === "studying") {
-      const remaining = Number(sess.activeStudyPeriod.remainingSeconds || 0);
-      setStudyPeriod(sess.activeStudyPeriod);
-      if (remaining > 0) startTimer(remaining, sess.activeStudyPeriod.id);
+    } else if (nextPhase !== "practice") {
+      setQuestions([]);
+      setQIndex(0);
+      setAnswerInput("");
     }
   }
 
   function speak(text) {
     if (!ttsRef.current || !text || !window.speechSynthesis) return;
     window.speechSynthesis.cancel();
-    const clean = text.replace(/```[\s\S]*?```/g, " code ").replace(/[#*_`~>-]+/g, " ").replace(/\s+/g, " ").trim();
+    const clean = String(text).replace(/```[\s\S]*?```/g, " code ").replace(/[#*_`~>-]+/g, " ").replace(/\s+/g, " ").trim();
     const utterance = new SpeechSynthesisUtterance(clean);
     utterance.rate = 1.02;
     window.speechSynthesis.speak(utterance);
@@ -233,52 +200,24 @@ export default function AILearningRoom() {
     }]);
   }
 
-  async function startTask(task, index) {
-    if (!task || aiWorking) return;
-    setAiWorking(true);
-    setError(null);
-    setCurrentTaskIndex(index);
-    setAnswerInput("");
-    setQuestions([]);
-    try {
-      const t = await api.teachConcept(sessionId, index);
-      setTeaching(t);
-      if (Array.isArray(t?.learningPlan) && t.learningPlan.length) setLearningPlan(t.learningPlan);
-      if (t?.explanation) {
-        addLocalMessage("ai", t.explanation, { strategy: t.strategy, taskIndex: index }, "teaching");
-        speak(t.explanation);
-      }
-      const fresh = await api.getAISession(sessionId);
-      setSession(fresh);
-      setPhase("teaching");
-    } catch (err) {
-      setError(err.message || "Could not start this learning task.");
-    } finally {
-      setAiWorking(false);
-    }
-  }
-
   async function sendMessage(raw) {
     const content = (raw || msgInput).trim();
     if (!content || aiWorking || !canType) return;
     setMsgInput("");
     setError(null);
-    addLocalMessage("student", content, {}, "question");
-
-    if (isQuizRequest(content)) {
-      await generateQuiz();
-      return;
-    }
-
     setAiWorking(true);
+    // Optimistically show the learner's message; the backend persists the
+    // same message in the existing session message stream.
+    addLocalMessage("student", content, {}, "question");
     try {
       const msg = await api.sendStudentMessage(sessionId, content);
-      setMessages(prev => [...prev, msg]);
+      setMessages(prev => [...prev, { ...msg }]);
       speak(msg.content || "");
 
-      const action = msg.extra?.action;
-      if (action === "start_quiz") {
-        await generateQuiz(msg.extra?.actionData?.task_index ?? currentTaskIndex);
+      // The backend's agentic action is the source of truth. The tutor first
+      // asks readiness; only the learner's confirmation starts Practice Mode.
+      if (msg.extra?.action === "start_quiz") {
+        await beginPractice(msg.extra?.actionData?.task_index ?? currentTaskIndex);
       }
     } catch (err) {
       setError(err.message || "The tutor could not respond.");
@@ -287,28 +226,32 @@ export default function AILearningRoom() {
     }
   }
 
-  async function generateQuiz(taskIndex = currentTaskIndex) {
+  async function beginPractice(taskIndex = currentTaskIndex) {
     setAiWorking(true);
     setError(null);
     try {
       const qs = await api.generateRetrievalQuestions(sessionId, 3, taskIndex);
       const arr = Array.isArray(qs) ? qs : (qs?.questions || []);
-      // Lock the learner-facing conversation before retrieval becomes active.
-      // Do not merely cover teaching with CSS: remove teaching/reteach content
-      // from the client render state for the protected cycle. The persisted
-      // messages remain on the server for evaluation, reteaching and summary.
-      setMessages(prev => prev.filter(m => !["teaching", "reteach"].includes(m.messageType)));
+      if (!arr.length) throw new Error("The tutor could not prepare a practice check.");
+
+      // Rehydrate the existing conversation from the server. In protected
+      // practice state the backend replaces only teaching content with lock
+      // placeholders; user messages remain visible.
+      const fresh = await api.getAISession(sessionId);
+      let msgs = fresh?.messages || [];
+      try {
+        const serverMessages = await api.getSessionMessages(sessionId);
+        if (Array.isArray(serverMessages)) msgs = serverMessages;
+      } catch {}
+
+      setSession(fresh);
+      setMessages(msgs);
       setQuestions(arr);
       setQIndex(0);
       setAnswerInput("");
-      setPhase("retrieval");
-      setSession(prev => ({ ...prev, status: "retrieval" }));
-      addLocalMessage("ai", "I’ve generated a focused quick check for this task. Answer one question at a time; I’ll adapt what happens next.", {
-        action: "start_quiz",
-        actionData: { task_index: taskIndex },
-      }, "agent");
+      setPhase("practice");
     } catch (err) {
-      setError(err.message || "Could not generate the quick check.");
+      setError(err.message || "Could not start practice mode.");
     } finally {
       setAiWorking(false);
     }
@@ -330,7 +273,15 @@ export default function AILearningRoom() {
         options: currentQuestion.options || null,
       };
       setCheckResults(prev => ({ ...prev, [currentQuestion.id]: result }));
-      addLocalMessage("student", formatAnswerForChat(currentQuestion, answer), { questionId: currentQuestion.id }, "answer");
+
+      // These entries are persisted by the backend through the existing
+      // ai_session_messages stream. Add them immediately for a continuous UI.
+      addLocalMessage(
+        "student",
+        `**Question ${currentQuestion.sequence || qIndex + 1}:** ${currentQuestion.question}\n\n**Answer:** ${answer}`,
+        { questionId: currentQuestion.id, practice: true },
+        "answer"
+      );
       addLocalMessage(
         "ai",
         evaluation.feedback || (evaluation.understanding === "strong" ? "Good understanding. Let’s keep going." : "Let’s slow down and rebuild the idea from a different angle."),
@@ -343,31 +294,14 @@ export default function AILearningRoom() {
         "feedback"
       );
 
-      if (evaluation.needsReteach) {
-        await reteach(evaluation.misconception);
-        // The new teaching snapshot is persisted before this call, so the next
-        // retrieval is generated from the reteach rather than the old explanation.
-        await generateQuiz(currentTaskIndex);
+      const next = qIndex + 1;
+      setAnswerInput("");
+      if (next < questions.length) {
+        setQIndex(next);
         return;
       }
 
-      const next = qIndex + 1;
-      if (next < questions.length) {
-        setAnswerInput("");
-        setQIndex(next);
-      } else {
-        setCompletedTaskIndexes(prev => [...new Set([...prev, currentTaskIndex])]);
-        const nextTask = currentTaskIndex + 1;
-        if (learningPlan[nextTask]) {
-          addLocalMessage("ai", `Nice work. Task ${currentTaskIndex + 1} is complete. I’m moving us to **${taskTitle(learningPlan[nextTask])}** next.`, {
-            action: "next_task",
-            actionData: { task_index: nextTask },
-          }, "agent");
-          await startTask(learningPlan[nextTask], nextTask);
-        } else {
-          await completeSession();
-        }
-      }
+      await finishPracticeRun();
     } catch (err) {
       setError(err.message || "Could not evaluate that answer.");
     } finally {
@@ -375,54 +309,76 @@ export default function AILearningRoom() {
     }
   }
 
-  async function reteach(reason) {
+  async function finishPracticeRun() {
     setAiWorking(true);
     try {
-      const t = await api.generateAdaptiveReteach(sessionId, reason || "Student needs a different explanation.");
-      setTeaching(t);
-      setPhase("reteaching");
-      if (t?.explanation) {
-        addLocalMessage("ai", t.explanation, { strategy: t.strategy, action: "reteach" }, "reteach");
-        speak(t.explanation);
+      const result = await api.completePracticeRun(sessionId, questions.map(q => q.id));
+
+      // Practice has ended. Restore the canonical conversation before doing
+      // anything adaptive. This is deliberately not a page/session reload.
+      const fresh = await api.getAISession(sessionId);
+      let msgs = fresh?.messages || [];
+      try {
+        const serverMessages = await api.getSessionMessages(sessionId);
+        if (Array.isArray(serverMessages)) msgs = serverMessages;
+      } catch {}
+      setSession(fresh);
+      setMessages(msgs);
+      setPhase("teaching");
+      setQuestions([]);
+      setQIndex(0);
+      setAnswerInput("");
+      setRestoreNotice(true);
+
+      if (result?.needsReteach) {
+        await reteachAfterPractice();
+      } else {
+        const doneTask = Number.isInteger(currentTaskIndex) ? currentTaskIndex : 0;
+        setCompletedTaskIndexes(prev => [...new Set([...prev, doneTask])]);
+        addLocalMessage(
+          "ai",
+          "✓ Practice complete. Your learning conversation is restored. Nice work — we can keep building from here.",
+          { action: "practice_complete", needsReteach: false },
+          "agent"
+        );
       }
     } catch (err) {
-      setError(err.message || "Could not generate a fresh explanation.");
+      setError(err.message || "Practice could not be completed.");
     } finally {
       setAiWorking(false);
     }
   }
 
-  async function completeSession() {
-    setAiWorking(true);
+  async function reteachAfterPractice() {
     try {
-      const s = await api.generateSessionSummary(sessionId);
+      const reason = Object.values(checkResults).filter(r => r?.needsReteach).map(r => r?.misconception).filter(Boolean).slice(-2).join("; ") || "The practice run showed partial understanding.";
+      const t = await api.generateAdaptiveReteach(sessionId, reason);
       const fresh = await api.getAISession(sessionId);
-      let msgs = Array.isArray(fresh?.messages) ? fresh.messages : [];
+      let msgs = fresh?.messages || [];
       try {
-        const fetched = await api.getSessionMessages(sessionId);
-        if (Array.isArray(fetched)) msgs = fetched;
+        const serverMessages = await api.getSessionMessages(sessionId);
+        if (Array.isArray(serverMessages)) msgs = serverMessages;
       } catch {}
-      setSummary(s || fresh?.summary || null);
       setSession(fresh);
       setMessages(msgs);
-      setPhase("summary");
-      addLocalMessage("ai", "Session complete. I’ve turned your work into a compact review you can come back to.", { action: "complete_session" }, "agent");
+      setPhase("teaching");
+      if (t?.explanation) speak(t.explanation);
     } catch (err) {
-      setError(err.message || "Could not generate your session summary.");
-    } finally {
-      setAiWorking(false);
+      setError(err.message || "The tutor could not start adaptive reteaching.");
     }
   }
 
   async function startStudyMode() {
+    setError(null);
     setAiWorking(true);
     try {
+      // Existing study architecture is retained as an optional tool, not the
+      // primary Learning Room flow.
       const period = await api.startStudyPeriod(sessionId, 300, currentTaskIndex);
-      setStudyPeriod(period);
-      setTimerSeconds(period.durationSeconds);
-      setPhase("studying");
       setSession(prev => ({ ...prev, status: "studying" }));
-      startTimer(period.durationSeconds, period.id);
+      setPhase("studying");
+      setTimerSeconds(Number(period.durationSeconds || 300));
+      runTimer(Number(period.durationSeconds || 300), period.id);
     } catch (err) {
       setError(err.message || "Could not start study mode.");
     } finally {
@@ -430,29 +386,20 @@ export default function AILearningRoom() {
     }
   }
 
-  function startTimer(seconds, periodId) {
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  function runTimer(seconds, periodId) {
     clearInterval(timerRef.current);
     setTimerSeconds(seconds);
     timerRef.current = setInterval(() => {
       setTimerSeconds(prev => {
         if (prev <= 1) {
           clearInterval(timerRef.current);
-          finishStudy(periodId);
+          api.finishStudyPeriod(sessionId, periodId).then(() => beginPractice(currentTaskIndex)).catch(err => setError(err.message || "Study mode could not finish."));
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
-  }
-
-  async function finishStudy(periodId) {
-    clearInterval(timerRef.current);
-    try {
-      await api.finishStudyPeriod(sessionId, periodId);
-      await generateQuiz(currentTaskIndex);
-    } catch (err) {
-      setError(err.message || "Study mode could not transition to the quick check.");
-    }
   }
 
   async function endSession() {
@@ -465,37 +412,11 @@ export default function AILearningRoom() {
     }
   }
 
-  async function practiceAgain() {
-    if (!session) return;
-    setAiWorking(true);
-    try {
-      const next = await api.createAISession({
-        subjectId: session.subjectId,
-        topicId: session.topicId,
-        conceptId: session.conceptId,
-        familiarity: session.studentFamiliarity || "new",
-        intent: "teach_me",
-        studentNote: session.studentNote || null,
-      });
-      await api.prepareAISession(next.id);
-      navigate(`/app/learn/ai/session/${next.id}`);
-    } catch (err) {
-      setError(err.message || "Could not start another session.");
-      setAiWorking(false);
-    }
-  }
-
-  function isQuizRequest(text) {
-    return /\b(quiz me|test me|give me (a )?quiz|quick check|test my knowledge)\b/i.test(text || "");
-  }
-
   const quickActions = [
     ["example", "Show an example", "Give me a concrete example of this."],
     ["simpler", "Make it simpler", "Explain this in a simpler way without losing the important idea."],
     ["why", "Why does this work?", "Why does this work this way?"],
     ["apply", "Apply it", "Give me a real-world application of this idea."],
-    ["quiz", "Quiz me", "Quiz me on what we just covered."],
-    ["recap", "Recap", "Give me a concise recap of the key ideas so far."],
   ];
 
   if (loading) return <RoomSkeleton />;
@@ -513,82 +434,45 @@ export default function AILearningRoom() {
             <div className="ar-header-sub">{subjectName}{topicName ? ` · ${topicName}` : ""}</div>
           </div>
         </div>
-        <div className="ar-header-center">
-          <span className="ar-live-dot" />
-          <span>{aiWorking ? "UPRAD is working…" : phaseLabel}</span>
-        </div>
+        <div className="ar-header-center"><span className="ar-live-dot" /><span>{aiWorking ? "UPRAD is working…" : phaseLabel}</span></div>
         <div className="ar-header-right">
           <button className={`ar-icon-btn ar-voice ${ttsEnabled ? "active" : ""}`} onClick={toggleTts} title="Tutor voice" aria-label="Toggle tutor voice">{ttsEnabled ? "◖)" : "◖"}</button>
-          <button className="ar-header-action" onClick={() => setMobilePanel("plan")}>Plan</button>
-          <button className="ar-header-action" onClick={() => setMobilePanel("tools")}>Tools</button>
+          <button className="ar-header-action ar-desktop-toggle" onClick={() => setLeftOpen(v => !v)}>{leftOpen ? "Hide plan" : "Show plan"}</button>
+          <button className="ar-header-action ar-desktop-toggle" onClick={() => setRightOpen(v => !v)}>{rightOpen ? "Hide tools" : "Show tools"}</button>
+          <button className="ar-header-action ar-mobile-only" onClick={() => setMobilePanel("plan")}>Plan</button>
+          <button className="ar-header-action ar-mobile-only" onClick={() => setMobilePanel("tools")}>Tools</button>
           <button className="ar-end" onClick={endSession}>End</button>
         </div>
       </header>
 
-      <div className="ar-layout">
-        <aside className={`ar-sidebar ar-plan-sidebar ${mobilePanel === "plan" ? "ar-mobile-open" : ""}`}>
-          <SidebarPlan
-            plan={learningPlan}
-            current={currentTaskIndex}
-            completed={completedTaskIndexes}
-            progress={planProgress}
-            onClose={() => setMobilePanel(null)}
-          />
-        </aside>
+      <div className={`ar-layout ${leftOpen ? "ar-left-open" : "ar-left-collapsed"} ${rightOpen ? "ar-right-open" : "ar-right-collapsed"}`}>
+        {leftOpen && (
+          <aside className={`ar-sidebar ar-plan-sidebar ${mobilePanel === "plan" ? "ar-mobile-open" : ""}`}>
+            <SidebarPlan plan={learningPlan} current={currentTaskIndex} completed={completedTaskIndexes} progress={planProgress} onClose={() => setMobilePanel(null)} />
+          </aside>
+        )}
 
         <main className="ar-main">
           <div className="ar-context-strip">
-            <div>
-              <span className="ar-eyebrow">LEARNING ROOM</span>
-              <strong>{phaseLabel}</strong>
-            </div>
-            <div className="ar-context-progress">
-              <span>{completedCount}/{learningPlan.length || 0} tasks</span>
-              <div><i style={{ width: `${planProgress}%` }} /></div>
-            </div>
+            <div><span className="ar-eyebrow">LEARNING ROOM</span><strong>{phaseLabel}</strong></div>
+            <div className="ar-context-progress"><span>{learningPlan.length ? `${completedCount}/${learningPlan.length} steps` : "Continuous conversation"}</span><div><i style={{ width: `${planProgress}%` }} /></div></div>
           </div>
 
+          {teachingLocked && <PracticeBanner />}
           {error && <div className="ar-error"><span>!</span>{error}<button onClick={() => setError(null)}>×</button></div>}
 
           <section className="ar-conversation" aria-live="polite">
             {messages
               .filter(m => !["welcome", "system", "timer_start", "timer_end", "summary"].includes(m.messageType))
-              .filter(m => !teachingHidden || !["teaching", "reteach"].includes(m.messageType))
               .map((msg, index) => (
-                <MessageCard
-                  key={msg.id || index}
-                  msg={msg}
-                  onCopy={setCopiedId}
-                  copiedId={copiedId}
-                />
+                <MessageCard key={msg.id || index} msg={msg} onCopy={setCopiedId} copiedId={copiedId} />
               ))}
 
             {aiWorking && <AgentThinking phase={phase} />}
-
             {phase === "preparing" && <PreparingCard />}
-            {phase === "teaching" && !aiWorking && learningPlan.length > 0 && (
-              <AgentCheckpoint
-                task={currentTask}
-                taskIndex={currentTaskIndex}
-                onQuiz={() => generateQuiz(currentTaskIndex)}
-                onStudy={startStudyMode}
-                disabled={aiWorking}
-              />
-            )}
+            {phase === "studying" && <StudyCard seconds={timerSeconds} task={currentTask} />}
 
-            {teachingHidden && (
-              <RetrievalLockBanner phase={phase} />
-            )}
-
-            {phase === "studying" && (
-              <StudyCard
-                seconds={timerSeconds}
-                total={studyPeriod?.durationSeconds || 300}
-                task={currentTask}
-              />
-            )}
-
-            {["retrieval", "practice"].includes(phase) && currentQuestion && (
+            {phase === "practice" && currentQuestion && (
               <QuizArtifact
                 question={currentQuestion}
                 index={qIndex}
@@ -600,478 +484,121 @@ export default function AILearningRoom() {
                 results={checkResults}
               />
             )}
-
-            {phase === "summary" && summary && (
-              <SummaryArtifact
-                summary={summary}
-                conceptName={conceptName}
-                onPractice={practiceAgain}
-                onBack={() => navigate("/app/learn/ai")}
-                onOpen={() => setShowSummary(true)}
-              />
-            )}
-
             <div ref={bottomRef} />
           </section>
 
           <div className="ar-composer-wrap">
-            <div className="ar-command-row">
-              <span className="ar-command-label">Ask the tutor</span>
-              {quickActions.slice(0, 4).map(([key, label, prompt]) => (
-                <button key={key} className="ar-command-chip" disabled={!canType} onClick={() => sendMessage(prompt)}>{label}</button>
-              ))}
-              <button className="ar-command-chip ar-command-chip--accent" disabled={!canType} onClick={() => generateQuiz(currentTaskIndex)}>Generate quiz</button>
-            </div>
+            {phase !== "practice" && (
+              <div className="ar-command-row">
+                <span className="ar-command-label">Talk to your tutor</span>
+                {quickActions.map(([key, label, prompt]) => <button key={key} className="ar-command-chip" disabled={!canType} onClick={() => sendMessage(prompt)}>{label}</button>)}
+              </div>
+            )}
             <form className="ar-composer" onSubmit={e => { e.preventDefault(); sendMessage(); }}>
               <div className="ar-composer-icon"><TutorAvatar size={30} /></div>
               <textarea
-                ref={inputRef}
                 value={msgInput}
                 onChange={e => setMsgInput(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                  }
-                }}
+                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                 disabled={!canType}
                 rows={1}
-                placeholder={
-                  phase === "retrieval" || phase === "practice" ? "Answer the quick check above…" :
-                  phase === "studying" ? "Study mode is active — focus on the current task…" :
-                  "Ask UPRAD anything about this topic…"
-                }
+                placeholder={phase === "practice" ? "Practice mode is active — answer the question above…" : "Talk to UPRAD about what you're learning…"}
               />
               <button className="ar-send" type="submit" disabled={!msgInput.trim() || !canType}>↑</button>
             </form>
-            <div className="ar-composer-foot">
-              <span>Enter to send · Shift + Enter for a new line</span>
-              <span>UPRAD adapts the lesson as you learn</span>
-            </div>
+            <div className="ar-composer-foot"><span>Enter to send · Shift + Enter for a new line</span><span>The conversation is your Learning Room</span></div>
           </div>
         </main>
 
-        <aside className={`ar-sidebar ar-work-sidebar ${mobilePanel === "tools" ? "ar-mobile-open" : ""}`}>
-          <WorkspacePanel
-            session={session}
-            task={currentTask}
-            phase={phase}
-            progress={planProgress}
-            familiarity={session?.studentFamiliarity}
-            intent={session?.intent}
-            activity={activity}
-            answeredCount={answeredCount}
-            questionCount={questions.length}
-            onQuiz={() => generateQuiz(currentTaskIndex)}
-            onStudy={startStudyMode}
-            onClose={() => setMobilePanel(null)}
-          />
-        </aside>
+        {rightOpen && (
+          <aside className={`ar-sidebar ar-work-sidebar ${mobilePanel === "tools" ? "ar-mobile-open" : ""}`}>
+            <WorkspacePanel session={session} task={currentTask} phase={phase} progress={planProgress} familiarity={session?.studentFamiliarity} intent={session?.intent} answeredCount={answeredCount} questionCount={questions.length} onStudy={startStudyMode} onClose={() => setMobilePanel(null)} />
+          </aside>
+        )}
       </div>
 
       {mobilePanel && <button className="ar-mobile-backdrop" onClick={() => setMobilePanel(null)} aria-label="Close panel" />}
-      {showSummary && summary && (
-        <SummaryModal summary={summary} conceptName={conceptName} onClose={() => setShowSummary(false)} onPractice={practiceAgain} onBack={() => navigate("/app/learn/ai")} />
-      )}
+      {restoreNotice && <div className="ar-toast" role="status"><strong>✓ Practice complete</strong><span>Your learning conversation has been restored.</span></div>}
     </div>
   );
 }
 
 function SidebarPlan({ plan, current, completed, progress, onClose }) {
-  return (
-    <div className="ar-panel-inner">
-      <div className="ar-panel-head">
-        <div><span className="ar-eyebrow">YOUR MISSION</span><h2>Learning plan</h2></div>
-        <button className="ar-mobile-close" onClick={onClose}>×</button>
-      </div>
-      <div className="ar-plan-progress">
-        <div className="ar-plan-ring" style={{"--p": `${progress * 3.6}deg`}}><span>{progress}%</span></div>
-        <div><strong>{completed.length} of {plan.length || 0} complete</strong><small>UPRAD will guide you through each step.</small></div>
-      </div>
-      <div className="ar-task-list">
-        {plan.length ? plan.map((task, index) => {
-          const done = completed.includes(index);
-          const active = current === index && !done;
-          return (
-            <div
-              key={index}
-              className={`ar-task ${done ? "done" : ""} ${active ? "active" : ""}`}
-              aria-current={active ? "step" : undefined}
-            >
-              <span className="ar-task-number">{done ? "✓" : index + 1}</span>
-              <span className="ar-task-copy">
-                <b>{taskTitle(task)}</b>
-                <small>{taskDescription(task)}</small>
-                <em>{done ? "Completed" : active ? "Current focus" : taskMeta(task)}</em>
-              </span>
-            </div>
-          );
-        }) : (
-          <div className="ar-empty-plan"><span>✦</span><p>Your tutor is building a plan around this concept.</p></div>
-        )}
-      </div>
-      <div className="ar-plan-note">
-        <span>✦</span>
-        <p><b>Continuous tutor</b> uses this roadmap as context. You stay in one learning room while UPRAD chooses the next teaching move.</p>
-      </div>
-    </div>
-  );
+  return <div className="ar-panel-inner">
+    <div className="ar-panel-head"><div><span className="ar-eyebrow">ROADMAP</span><h2>Learning plan</h2></div><button className="ar-mobile-close" onClick={onClose}>×</button></div>
+    <div className="ar-plan-progress"><div className="ar-plan-ring" style={{ "--p": `${progress * 3.6}deg` }}><span>{progress}%</span></div><div><strong>{completed.length} of {plan.length || 0} complete</strong><small>The roadmap is context. UPRAD drives the conversation.</small></div></div>
+    <div className="ar-task-list">{plan.length ? plan.map((task, index) => <div key={index} className={`ar-task ${completed.includes(index) ? "done" : current === index ? "active" : ""}`}><span className="ar-task-number">{completed.includes(index) ? "✓" : index + 1}</span><span className="ar-task-copy"><b>{taskTitle(task)}</b><small>{taskDescription(task)}</small><em>{completed.includes(index) ? "Completed" : current === index ? "Current focus" : taskMeta(task)}</em></span></div>) : <div className="ar-empty-plan"><span>✦</span><p>Your tutor is building the learning context.</p></div>}</div>
+  </div>;
 }
 
-function WorkspacePanel({ session, task, phase, progress, familiarity, intent, activity, answeredCount, questionCount, onQuiz, onStudy, onClose }) {
-  return (
-    <div className="ar-panel-inner">
-      <div className="ar-panel-head">
-        <div><span className="ar-eyebrow">WORKSPACE</span><h2>Session tools</h2></div>
-        <button className="ar-mobile-close" onClick={onClose}>×</button>
-      </div>
-
-      <div className="ar-current-card">
-        <span className="ar-current-kicker">NOW LEARNING</span>
-        <h3>{taskTitle(task) || session?.conceptName || "Building your lesson"}</h3>
-        <p>{taskDescription(task) || "The tutor will keep the lesson focused and adaptive."}</p>
-        <div className="ar-context-facts">
-          {familiarity && <span>Starting point: {formatFamiliarity(familiarity)}</span>}
-          {intent && <span>Goal: {formatIntent(intent)}</span>}
-        </div>
-        <span className={`ar-phase-pill ar-phase-${phase}`}>{phase.replace("_", " ")}</span>
-      </div>
-
-      <div className="ar-tool-grid">
-        <button onClick={onQuiz} disabled={["retrieval", "practice", "summary"].includes(phase)}>
-          <span>✦</span><b>Generate quiz</b><small>Test what stuck</small>
-        </button>
-        <button onClick={onStudy} disabled={phase !== "teaching" && phase !== "reteaching"}>
-          <span>◷</span><b>Study mode</b><small>Focused 5 min</small>
-        </button>
-      </div>
-
-      <div className="ar-stats-card">
-        <div><b>{progress}%</b><span>Plan progress</span></div>
-        <div><b>{answeredCount}</b><span>Checks answered</span></div>
-        <div><b>{questionCount}</b><span>Questions in run</span></div>
-      </div>
-
-      <div className="ar-activity">
-        <div className="ar-subhead"><span>AGENT ACTIVITY</span><small>Live</small></div>
-        {activity.length ? activity.slice().reverse().map(item => (
-          <div className="ar-activity-item" key={item.id}>
-            <span>✓</span>
-            <div><b>{activityLabel(item.action)}</b><small>{formatClock(item.time)}</small></div>
-          </div>
-        )) : (
-          <div className="ar-activity-empty">The tutor's actions will appear here as the lesson evolves.</div>
-        )}
-      </div>
-
-      <div className="ar-tool-tip">
-        <b>Think out loud.</b>
-        <span>Ask for examples, analogies, counterexamples, practice, or a simpler explanation. UPRAD uses your responses to adapt.</span>
-      </div>
-    </div>
-  );
+function WorkspacePanel({ session, task, phase, progress, familiarity, intent, answeredCount, questionCount, onStudy, onClose }) {
+  return <div className="ar-panel-inner">
+    <div className="ar-panel-head"><div><span className="ar-eyebrow">WORKSPACE</span><h2>Session tools</h2></div><button className="ar-mobile-close" onClick={onClose}>×</button></div>
+    <div className="ar-current-card"><span className="ar-current-kicker">NOW LEARNING</span><h3>{taskTitle(task) || session?.conceptName || "Building your lesson"}</h3><p>{taskDescription(task) || "Talk with UPRAD. It will decide when you are ready for a check."}</p><div className="ar-context-facts">{familiarity && <span>Starting point: {formatFamiliarity(familiarity)}</span>}{intent && <span>Goal: {formatIntent(intent)}</span>}</div><span className={`ar-phase-pill ar-phase-${phase}`}>{phase.replace("_", " ")}</span></div>
+    <div className="ar-stats-card"><div><b>{progress}%</b><span>Roadmap progress</span></div><div><b>{answeredCount}</b><span>Checks answered</span></div><div><b>{questionCount}</b><span>Current run</span></div></div>
+    {(phase === "teaching" || phase === "reteaching") && <button className="ar-study-tool" onClick={onStudy}><span>◷</span><b>Optional study timer</b><small>Focus for 5 minutes before continuing the conversation.</small></button>}
+    <div className="ar-tool-tip"><b>Stay in the conversation.</b><span>Ask for examples, simpler explanations, applications, or anything that helps the idea click. UPRAD decides when to check your understanding.</span></div>
+  </div>;
 }
 
 function MessageCard({ msg, onCopy, copiedId }) {
   const ai = msg.role === "ai";
+  const locked = ai && msg.extra?.locked;
   const action = msg.extra?.action;
-  const id = msg.id;
-  return (
-    <article className={`ar-message ${ai ? "ar-message-ai" : "ar-message-user"}`}>
-      {ai ? <div className="ar-message-avatar"><TutorAvatar size={34} /></div> : <div className="ar-user-avatar">You</div>}
-      <div className="ar-message-column">
-        <div className="ar-message-meta">
-          <span>{ai ? "UPRAD" : "You"}</span>
-          {ai && <span className="ar-meta-dot">·</span>}
-          {ai && <span>{msg.messageType === "reteach" ? "Reteach" : msg.messageType === "agent" ? "Agent action" : "Tutor"}</span>}
-          <time>{formatClock(msg.createdAt)}</time>
-        </div>
-        <div className="ar-message-card">
-          {action && <div className="ar-agent-badge"><span>✦</span>{activityLabel(action)}</div>}
-          <RichText content={msg.content} onCopy={onCopy} copiedId={copiedId} />
-        </div>
-      </div>
-    </article>
-  );
+  return <article className={`ar-message ${ai ? "ar-message-ai" : "ar-message-user"} ${locked ? "ar-message-locked" : ""}`}>
+    {ai ? <div className="ar-message-avatar"><TutorAvatar size={34} /></div> : <div className="ar-user-avatar">You</div>}
+    <div className="ar-message-column"><div className="ar-message-meta"><span>{ai ? "UPRAD" : "You"}</span>{ai && <span className="ar-meta-dot">·</span>}{ai && <span>{locked ? "Practice lock" : msg.messageType === "reteach" ? "Reteach" : "Tutor"}</span>}<time>{formatClock(msg.createdAt)}</time></div>
+      <div className="ar-message-card">{locked && <div className="ar-locked-label">🔒 Teaching temporarily hidden</div>}{action && <div className="ar-agent-badge"><span>✦</span>{activityLabel(action)}</div>}<RichText content={msg.content} onCopy={onCopy} copiedId={copiedId} /></div>
+    </div>
+  </article>;
 }
 
-function AgentThinking({ phase }) {
-  return (
-    <div className="ar-thinking">
-      <div className="ar-thinking-avatar"><TutorAvatar size={30} /></div>
-      <div className="ar-thinking-body">
-        <div className="ar-thinking-title">UPRAD is working</div>
-        <div className="ar-thinking-steps">
-          <span className="active">Understanding your response</span>
-          <span>Choosing the next teaching move</span>
-          <span>{phase === "retrieval" ? "Preparing your quick check" : "Updating your learning path"}</span>
-        </div>
-        <div className="ar-thinking-dots"><i /><i /><i /></div>
-      </div>
-    </div>
-  );
+function PracticeBanner() {
+  return <div className="ar-practice-banner" role="status"><span className="ar-practice-banner-icon">🔒</span><div><strong>PRACTICE MODE</strong><span>Teaching content is temporarily hidden. Show what you understand without looking back.</span></div></div>;
 }
 
-function AgentCheckpoint({ task, taskIndex, onQuiz, onStudy, disabled }) {
-  return (
-    <div className="ar-agent-checkpoint">
-      <div className="ar-agent-checkpoint-icon">✦</div>
-      <div className="ar-agent-checkpoint-copy">
-        <span className="ar-eyebrow">AGENT CHECKPOINT · STEP {taskIndex + 1}</span>
-        <h3>{taskTitle(task) || "Keep exploring the concept"}</h3>
-        <p>Ask questions until the idea feels clear. When UPRAD sees enough evidence of understanding, it can generate a quick check automatically.</p>
-        <div className="ar-checkpoint-actions">
-          <button onClick={onQuiz} disabled={disabled}>Generate quiz now</button>
-          <button onClick={onStudy} disabled={disabled}>Open study mode</button>
-        </div>
-      </div>
-    </div>
-  );
-}
+function AgentThinking() { return <div className="ar-thinking"><div className="ar-thinking-avatar"><TutorAvatar size={30} /></div><div className="ar-thinking-body"><div className="ar-thinking-title">UPRAD is working</div><div className="ar-thinking-steps"><span className="active">Understanding your response</span><span>Choosing the next teaching move</span><span>Updating your learning path</span></div><div className="ar-thinking-dots"><i /><i /><i /></div></div></div>; }
+function PreparingCard() { return <div className="ar-preparing-card"><div className="ar-preparing-orb">✦</div><div><span className="ar-eyebrow">BUILDING YOUR LESSON</span><h3>UPRAD is assembling the right starting point</h3><p>It is combining the concept, your starting level, and the learning goal into a focused conversation.</p><div className="ar-loading-line"><i /><i /><i /></div></div></div>; }
 
-function StudyCard({ seconds, total, task }) {
-  const pct = total ? Math.max(0, Math.min(100, Math.round((seconds / total) * 100))) : 0;
-  return (
-    <div className="ar-study-card">
-      <div className="ar-study-orbit"><span>{formatTime(seconds)}</span><small>{seconds > 0 ? "Focus" : "Finishing…"}</small></div>
-      <div className="ar-study-copy">
-        <span className="ar-eyebrow">FOCUSED STUDY MODE</span>
-        <h3>{taskTitle(task) || "Study the current concept"}</h3>
-        <p>Review the explanation, work through the examples, and make your own notes. The recall check unlocks when the study period ends.</p>
-        <div className="ar-study-track"><i style={{ width: `${pct}%` }} /></div>
-        <span className="ar-study-server-note">Server-timed focus period · the session state survives refresh.</span>
-      </div>
-    </div>
-  );
-}
-
-function RetrievalLockBanner({ phase }) {
-  return (
-    <div className="ar-retrieval-lock" role="status" aria-live="polite">
-      <span className="ar-retrieval-lock-icon" aria-hidden="true">🔒</span>
-      <div>
-        <strong>Teaching content hidden during {phase === "practice" ? "practice" : "quick check"}</strong>
-        <span>Answer from what you understand. Your tutor will review the explanation after you submit.</span>
-      </div>
-    </div>
-  );
-}
+function StudyCard({ seconds, task }) { return <div className="ar-study-card"><div className="ar-study-orbit"><span>{formatTime(seconds)}</span><small>Focus</small></div><div className="ar-study-copy"><span className="ar-eyebrow">OPTIONAL STUDY MODE</span><h3>{taskTitle(task) || "Study the current idea"}</h3><p>Review what UPRAD taught, then return to the conversation. The timer is server-backed and survives refresh.</p></div></div>; }
 
 function QuizArtifact({ question, index, total, answer, setAnswer, onSubmit, submitting, results }) {
   const options = Array.isArray(question.options) ? question.options : [];
   const mc = question.questionType === "multiple_choice" && options.length;
-  return (
-    <section className="ar-quiz-artifact">
-      <div className="ar-artifact-head">
-        <div><span className="ar-eyebrow">UPRAD GENERATED · QUICK CHECK</span><h2>Show me what you know</h2></div>
-        <span className="ar-quiz-count">{index + 1}/{total}</span>
-      </div>
-      <div className="ar-quiz-progress">{Array.from({ length: total }, (_, i) => <i key={i} className={i < index ? "done" : i === index ? "current" : ""} />)}</div>
-      <div className="ar-quiz-question">{question.question}</div>
-      {mc ? (
-        <div className="ar-options">
-          {options.map((opt, i) => {
-            const value = typeof opt === "string" ? opt : (opt.value ?? opt.label ?? opt.text);
-            const text = typeof opt === "string" ? opt : (opt.text ?? opt.label ?? opt.value);
-            const selected = answer === value;
-            return (
-              <button key={`${question.id}-${i}`} className={`ar-option ${selected ? "selected" : ""}`} onClick={() => setAnswer(value)} disabled={submitting}>
-                <span>{String.fromCharCode(65 + i)}</span><b>{text}</b>{selected && <em>Selected</em>}
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        <textarea className="ar-answer-box" rows={5} value={answer} onChange={e => setAnswer(e.target.value)} placeholder="Explain your answer in your own words…" disabled={submitting} />
-      )}
-      <div className="ar-quiz-foot">
-        <span>Answer from understanding, not memory of the wording.</span>
-        <button onClick={onSubmit} disabled={!answer.trim() || submitting}>{submitting ? "Evaluating…" : index + 1 === total ? "Finish check" : "Check answer →"}</button>
-      </div>
-      {Object.keys(results).length > 0 && <div className="ar-quiz-note">{Object.keys(results).length} response{Object.keys(results).length > 1 ? "s" : ""} recorded in this run.</div>}
-    </section>
-  );
-}
-
-function SummaryArtifact({ summary, conceptName, onPractice, onBack, onOpen }) {
-  return (
-    <section className="ar-summary-artifact">
-      <div className="ar-summary-icon">✓</div>
-      <span className="ar-eyebrow">MISSION COMPLETE</span>
-      <h2>{conceptName}</h2>
-      {summary.overallScore != null && <div className="ar-score"><b>{summary.overallScore}</b><span>/100</span></div>}
-      <p>{summary.summaryText || "Your session has been completed. Review your strengths and next steps below."}</p>
-      <div className="ar-summary-grid">
-        <SummaryList title="Understood well" items={summary.strengths} empty="Your tutor is still building your strengths profile." />
-        <SummaryList title="Keep practicing" items={summary.areasForPractice} empty="No major practice gaps were recorded." />
-      </div>
-      {summary.recommendedNext && <div className="ar-next-step"><b>Next move</b><span>{summary.recommendedNext}</span></div>}
-      <div className="ar-summary-actions">
-        <button onClick={onOpen}>Open full summary</button>
-        <button onClick={onPractice}>Practice again</button>
-        <button className="ghost" onClick={onBack}>Back to AI Learning</button>
-      </div>
-    </section>
-  );
-}
-
-function SummaryList({ title, items = [], empty }) {
-  return <div className="ar-summary-list"><h3>{title}</h3>{items?.length ? <ul>{items.map((item, i) => <li key={i}>{item}</li>)}</ul> : <p>{empty}</p>}</div>;
-}
-
-function SummaryModal({ summary, conceptName, onClose, onPractice, onBack }) {
-  return (
-    <div className="ar-modal-layer">
-      <button className="ar-modal-backdrop" onClick={onClose} aria-label="Close summary" />
-      <section className="ar-modal">
-        <div className="ar-modal-head"><div><span className="ar-eyebrow">SESSION REVIEW</span><h2>{conceptName}</h2></div><button onClick={onClose}>×</button></div>
-        {summary.overallScore != null && <div className="ar-modal-score"><b>{summary.overallScore}</b><span>/100</span><small>{summary.questionsCorrect || 0} of {summary.questionsAnswered || 0} correct</small></div>}
-        <SummaryList title="What you learned" items={summary.keyIdeas || []} empty={summary.summaryText || "No key ideas were returned."} />
-        <SummaryList title="Strengths" items={summary.strengths} empty="Keep practicing to build a stronger mastery signal." />
-        <SummaryList title="Practice next" items={summary.areasForPractice} empty="No major practice gaps recorded." />
-        {summary.recommendedNext && <div className="ar-next-step"><b>Recommended next step</b><span>{summary.recommendedNext}</span></div>}
-        <div className="ar-summary-actions"><button onClick={onPractice}>Start another session</button><button className="ghost" onClick={onBack}>Back to AI Learning</button></div>
-      </section>
-    </div>
-  );
-}
-
-function PreparingCard() {
-  return <div className="ar-preparing-card"><div className="ar-preparing-orb">✦</div><div><span className="ar-eyebrow">BUILDING YOUR LESSON</span><h3>UPRAD is assembling the right starting point</h3><p>It is combining the concept, your starting level, and the learning goal into a focused path.</p><div className="ar-loading-line"><i /><i /><i /></div></div></div>;
+  return <section className="ar-quiz-artifact ar-practice-card">
+    <div className="ar-artifact-head"><div><span className="ar-eyebrow">PRACTICE · QUESTION {index + 1}</span><h2>Show what you understand</h2></div><span className="ar-quiz-count">{index + 1}/{total}</span></div>
+    <div className="ar-quiz-progress">{Array.from({ length: total }, (_, i) => <i key={i} className={i < index ? "done" : i === index ? "current" : ""} />)}</div>
+    <div className="ar-quiz-question">{question.question}</div>
+    {mc ? <div className="ar-options">{options.map((opt, i) => { const value = typeof opt === "string" ? opt : (opt.value ?? opt.label ?? opt.text); const text = typeof opt === "string" ? opt : (opt.text ?? opt.label ?? opt.value); return <button key={`${question.id}-${i}`} className={`ar-option ${answer === value ? "selected" : ""}`} onClick={() => setAnswer(value)} disabled={submitting}><span>{String.fromCharCode(65 + i)}</span><b>{text}</b></button>; })}</div> : <textarea className="ar-answer-box" rows={5} value={answer} onChange={e => setAnswer(e.target.value)} placeholder="Explain your answer in your own words…" disabled={submitting} />}
+    <div className="ar-quiz-foot"><span>One question at a time. Your answer is saved to this learning session.</span><button onClick={onSubmit} disabled={!answer.trim() || submitting}>{submitting ? "Evaluating…" : index + 1 === total ? "Finish practice" : "Submit answer →"}</button></div>
+    {Object.keys(results).length > 0 && <div className="ar-quiz-note">{Object.keys(results).length} response{Object.keys(results).length > 1 ? "s" : ""} recorded in this run.</div>}
+  </section>;
 }
 
 function RichText({ content, onCopy, copiedId }) {
   if (!content) return null;
   const normalized = String(content).replace(/\r\n/g, "\n").trim();
-  const blocks = normalized.split(/\n{2,}/);
-  return (
-    <div className="ar-rich">
-      {blocks.map((block, i) => {
-        const trimmed = block.trim();
-        if (!trimmed) return null;
-
-        const fence = trimmed.match(/^```([^\n]*)\n([\s\S]*?)```$/);
-        if (fence) {
-          const id = `code-${i}-${trimmed.length}`;
-          return (
-            <div className="ar-code-wrap" key={i}>
-              <div className="ar-code-head"><span>{fence[1] || "code"}</span><button onClick={() => copyText(fence[2], id, onCopy)}> {copiedId === id ? "Copied" : "Copy"} </button></div>
-              <pre><code>{fence[2]}</code></pre>
-            </div>
-          );
-        }
-
-        const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
-        if (heading) {
-          const Tag = heading[1].length === 1 ? "h2" : heading[1].length === 2 ? "h3" : "h4";
-          return <Tag key={i}>{inlineMarkdown(heading[2])}</Tag>;
-        }
-
-        const lines = trimmed.split("\n");
-        if (lines.every(l => /^[-*]\s+/.test(l.trim()))) {
-          return <ul key={i}>{lines.map((line, j) => <li key={j}>{inlineMarkdown(line.trim().replace(/^[-*]\s+/, ""))}</li>)}</ul>;
-        }
-        if (lines.every(l => /^\d+\.\s+/.test(l.trim()))) {
-          return <ol key={i}>{lines.map((line, j) => <li key={j}>{inlineMarkdown(line.trim().replace(/^\d+\.\s+/, ""))}</li>)}</ol>;
-        }
-        if (lines.every(l => /^>\s?/.test(l.trim()))) {
-          return <blockquote key={i}>{lines.map((line, j) => <p key={j}>{inlineMarkdown(line.replace(/^>\s?/, ""))}</p>)}</blockquote>;
-        }
-
-        if (lines.length >= 2 && lines.every(l => l.includes("|"))) {
-          const rows = lines.filter(Boolean).map(l => l.split("|").map(c => c.trim()).filter(Boolean));
-          if (rows.length >= 2) return <div className="ar-table-wrap" key={i}><table><thead><tr>{rows[0].map((c,j)=><th key={j}>{inlineMarkdown(c)}</th>)}</tr></thead><tbody>{rows.slice(1).map((row,j)=><tr key={j}>{rows[0].map((_,k)=><td key={k}>{inlineMarkdown(row[k] || "")}</td>)}</tr>)}</tbody></table></div>;
-        }
-
-        return <p key={i}>{inlineMarkdown(trimmed)}</p>;
-      })}
-    </div>
-  );
+  return <div className="ar-rich">{normalized.split(/\n{2,}/).map((block, i) => {
+    const trimmed = block.trim(); if (!trimmed) return null;
+    const fence = trimmed.match(/^```([^\n]*)\n([\s\S]*?)```$/);
+    if (fence) { const id = `code-${i}-${trimmed.length}`; return <div className="ar-code-wrap" key={i}><div className="ar-code-head"><span>{fence[1] || "code"}</span><button onClick={() => copyText(fence[2], id, onCopy)}>{copiedId === id ? "Copied" : "Copy"}</button></div><pre><code>{fence[2]}</code></pre></div>; }
+    const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) { const Tag = heading[1].length === 1 ? "h2" : heading[1].length === 2 ? "h3" : "h4"; return <Tag key={i}>{inlineMarkdown(heading[2])}</Tag>; }
+    const lines = trimmed.split("\n");
+    if (lines.every(l => /^[-*]\s+/.test(l.trim()))) return <ul key={i}>{lines.map((line,j)=><li key={j}>{inlineMarkdown(line.trim().replace(/^[-*]\s+/,""))}</li>)}</ul>;
+    if (lines.every(l => /^\d+\.\s+/.test(l.trim()))) return <ol key={i}>{lines.map((line,j)=><li key={j}>{inlineMarkdown(line.trim().replace(/^\d+\.\s+/,""))}</li>)}</ol>;
+    return <p key={i}>{inlineMarkdown(trimmed)}</p>;
+  })}</div>;
 }
-
-function inlineMarkdown(text) {
-  const safe = String(text);
-  const parts = safe.split(/(\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|`[^`]+`|\[[^\]]+\]\([^)]+\))/g);
-  return parts.map((part, i) => {
-    if ((part.startsWith("**") && part.endsWith("**")) || (part.startsWith("__") && part.endsWith("__"))) return <strong key={i}>{part.slice(2,-2)}</strong>;
-    if ((part.startsWith("*") && part.endsWith("*")) || (part.startsWith("_") && part.endsWith("_"))) return <em key={i}>{part.slice(1,-1)}</em>;
-    if (part.startsWith("`") && part.endsWith("`")) return <code key={i}>{part.slice(1,-1)}</code>;
-    const link = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-    if (link) {
-      const href = /^(https?:\/\/|mailto:)/i.test(link[2]) ? link[2] : "#";
-      return <a key={i} href={href} target={href === "#" ? undefined : "_blank"} rel="noreferrer">{link[1]}</a>;
-    }
-    return part;
-  });
-}
-
-async function copyText(text, id, onCopy) {
-  try { await navigator.clipboard?.writeText(text); onCopy(id); setTimeout(() => onCopy(null), 1300); } catch {}
-}
-
-function formatFamiliarity(value) {
-  return ({
-    new: "new to this",
-    seen_before: "seen it before",
-    know_basics: "basics understood",
-    know_well: "confident with it",
-    need_help: "specific help needed",
-  })[value] || value;
-}
-function formatIntent(value) {
-  return ({
-    teach_me: "learn the concept",
-    explain_simply: "simple explanation",
-    give_examples: "learn through examples",
-    go_deeper: "go deeper",
-    already_know: "probe existing understanding",
-    quiz_me: "diagnostic first",
-    broaden: "broaden the context",
-    custom: "custom goal",
-  })[value] || value;
-}
-
-function taskTitle(task) {
-  if (!task) return "";
-  return task.title || task.name || task.concept || task.task || `Learning step`;
-}
-function taskDescription(task) {
-  if (!task) return "";
-  return task.description || task.objective || task.goal || task.summary || "Build understanding and apply the idea.";
-}
-function taskMeta(task) {
-  if (!task) return "";
-  return task.estimatedMinutes ? `${task.estimatedMinutes} min` : task.type || "Guided learning";
-}
-function activityText(action) {
-  return ({
-    start_quiz: "Generated a quick check",
-    mark_task_done: "Marked the task complete",
-    next_task: "Moved to the next task",
-    complete_session: "Completed the learning mission",
-    reteach: "Started an adaptive reteach",
-  })[action] || "Took an agent action";
-}
-function activityLabel(action) {
-  return activityText(action);
-}
-function formatClock(value) {
-  if (!value) return "";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-function formatTime(seconds) {
-  const m = Math.floor(Number(seconds || 0) / 60);
-  const s = Math.max(0, Number(seconds || 0) % 60);
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
-function formatAnswerForChat(question, answer) {
-  return `**Answer submitted**\n\n${answer}`;
-}
-
-function RoomSkeleton() {
-  return <div className="ar-room ar-loading"><header className="ar-header"><div className="ar-skeleton ar-sk-circle" /><div className="ar-skeleton ar-sk-title" /></header><div className="ar-loading-layout"><div className="ar-skeleton ar-sk-side" /><div className="ar-sk-chat">{[70, 50, 82, 42].map((w,i)=><div key={i} className="ar-skeleton ar-sk-bubble" style={{width:`${w}%`}} />)}</div><div className="ar-skeleton ar-sk-side" /></div></div>;
-}
-function ErrorRoom({ message, onBack }) {
-  return <div className="ar-room ar-error-room"><div className="ar-error-card"><span>!</span><h2>Learning room unavailable</h2><p>{message}</p><button onClick={onBack}>Back to AI Learning</button></div></div>;
-}
+function inlineMarkdown(text) { const safe = String(text); return safe.split(/(\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|`[^`]+`)/g).map((part,i)=>{ if ((part.startsWith("**")&&part.endsWith("**"))||(part.startsWith("__")&&part.endsWith("__"))) return <strong key={i}>{part.slice(2,-2)}</strong>; if ((part.startsWith("*")&&part.endsWith("*"))||(part.startsWith("_")&&part.endsWith("_"))) return <em key={i}>{part.slice(1,-1)}</em>; if(part.startsWith("`")&&part.endsWith("`")) return <code key={i}>{part.slice(1,-1)}</code>; return part; }); }
+async function copyText(text,id,onCopy){try{await navigator.clipboard?.writeText(text);onCopy(id);setTimeout(()=>onCopy(null),1300);}catch{}}
+function formatFamiliarity(v){return({new:"new to this",seen_before:"seen it before",know_basics:"basics understood",know_well:"confident with it",need_help:"specific help needed"})[v]||v;}
+function formatIntent(v){return({teach_me:"learn the concept",explain_simply:"simple explanation",give_examples:"learn through examples",go_deeper:"go deeper",already_know:"probe existing understanding",quiz_me:"diagnostic first",broaden:"broaden the context",custom:"custom goal"})[v]||v;}
+function taskTitle(task){return task?.title||task?.name||task?.concept||task?.task||"Learning step";}
+function taskDescription(task){return task?.description||task?.objective||task?.goal||task?.summary||"Build understanding and apply the idea.";}
+function taskMeta(task){return task?.estimatedMinutes?`${task.estimatedMinutes} min`:task?.recommended_minutes?`${task.recommended_minutes} min`:task?.type||"Guided learning";}
+function activityLabel(action){return({practice_complete:"Practice complete"})[action]||"Tutor action";}
+function formatClock(value){if(!value)return"";const d=new Date(value);return Number.isNaN(d.getTime())?"":d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});}
+function formatTime(seconds){const m=Math.floor(Number(seconds||0)/60);const s=Math.max(0,Number(seconds||0)%60);return`${m}:${String(s).padStart(2,"0")}`;}
+function RoomSkeleton(){return <div className="ar-room ar-loading"><header className="ar-header"><div className="ar-skeleton ar-sk-circle"/><div className="ar-skeleton ar-sk-title"/></header><div className="ar-loading-layout"><div className="ar-skeleton ar-sk-side"/><div className="ar-sk-chat">{[70,50,82,42].map((w,i)=><div key={i} className="ar-skeleton ar-sk-bubble" style={{width:`${w}%`}}/>)}</div><div className="ar-skeleton ar-sk-side"/></div></div>;}
+function ErrorRoom({message,onBack}){return <div className="ar-room ar-error-room"><div className="ar-error-card"><span>!</span><h2>Learning room unavailable</h2><p>{message}</p><button onClick={onBack}>Back to AI Learning</button></div></div>;}

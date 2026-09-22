@@ -611,6 +611,10 @@ export function submitAnswer(sessionId, questionId, studentAnswer, responseTimeS
   });
 }
 
+export function completePracticeRun(sessionId, questionIds) {
+  return post(`/api/learning/sessions/${sessionId}/practice/complete`, questionIds);
+}
+
 export function requestReteach(sessionId, reason = null) {
   return post(`/api/learning/sessions/${sessionId}/reteach`, { reason });
 }
