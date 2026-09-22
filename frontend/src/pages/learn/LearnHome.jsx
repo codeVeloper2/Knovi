@@ -305,6 +305,30 @@ export default function LearnHome() {
         </form>
       </div>
 
+      <div className="learn-home-highlights">
+        <section className="learn-panel learn-robot-card">
+          <div className="learn-robot-card-art"><RobotArt /></div>
+          <div>
+            <h3>Small steps.<br />Big progress.</h3>
+            <p>Keep learning, one concept at a time.</p>
+          </div>
+          <div className="learn-growth-arrow">↗</div>
+        </section>
+
+        <button
+          type="button"
+          className="learn-focus-card"
+          onClick={() => focusSession ? navigate(`/app/learn/ai/session/${focusSession.id}`) : navigate("/app/learn")}
+        >
+          <span className="learn-focus-icon"><QuickIcon type="target" /></span>
+          <span>
+            <strong>Today's Focus</strong>
+            <small>{focusSubject ? `${focusSubject.name}${focusTopic ? ` · ${focusTopic}` : ""}` : "Pick a subject to begin"}</small>
+          </span>
+          <Arrow />
+        </button>
+      </div>
+
       <div className="learn-home-grid">
         <section className="learn-subject-area">
           <div className="learn-section-head">
@@ -358,30 +382,6 @@ export default function LearnHome() {
             </div>
           )}
         </section>
-
-        <aside className="learn-right-rail">
-          <section className="learn-panel learn-robot-card">
-            <div className="learn-robot-card-art"><RobotArt /></div>
-            <div>
-              <h3>Small steps.<br />Big progress.</h3>
-              <p>Keep learning, one concept at a time.</p>
-            </div>
-            <div className="learn-growth-arrow">↗</div>
-          </section>
-
-          <button
-            type="button"
-            className="learn-focus-card"
-            onClick={() => focusSession ? navigate(`/app/learn/ai/session/${focusSession.id}`) : navigate("/app/learn")}
-          >
-            <span className="learn-focus-icon"><QuickIcon type="target" /></span>
-            <span>
-              <strong>Today's Focus</strong>
-              <small>{focusSubject ? `${focusSubject.name}${focusTopic ? ` · ${focusTopic}` : ""}` : "Pick a subject to begin"}</small>
-            </span>
-            <Arrow />
-          </button>
-        </aside>
       </div>
     </div>
   );

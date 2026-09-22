@@ -64,7 +64,7 @@ function normalizeTopics(value) {
 
 export default function LearningPathPage() {
   const navigate = useNavigate();
-  const [subjects, setSubjects] = useState([]);
+  const [subjectGroups, setSubjectGroups] = useState([]);
   const [topicsBySubject, setTopicsBySubject] = useState({});
   const [sessions, setSessions] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -81,24 +81,66 @@ export default function LearningPathPage() {
       if (!alive) return;
       const list = normalizeSubjects(subjectResult);
       const sessionList = Array.isArray(sessionResult) ? sessionResult : (sessionResult?.items || []);
-      setSubjects(list);
       setSessions(sessionList);
+
+      // The curriculum stores one Subject row per class level (SSS1/SSS2/SSS3).
+      // The learning path should present one subject card and combine all of its
+      // class-level content instead of showing duplicate subject cards.
+      const grouped = new Map();
+      list.forEach(subject => {
+        const key = String(subject.name || "").trim().toLowerCase();
+        if (!key) return;
+        const existing = grouped.get(key);
+        if (existing) existing.variants.push(subject);
+        else grouped.set(key, { ...subject, variants: [subject] });
+      });
+      const groups = Array.from(grouped.values()).sort((a, b) =>
+        String(a.name || "").localeCompare(String(b.name || ""))
+      );
+      setSubjectGroups(groups);
+
       const pairs = await Promise.all(list.map(async subject => {
-        try { return [subject.id, normalizeTopics(await api.getTopics(subject.id))]; }
-        catch { return [subject.id, []]; }
+        try {
+          const topics = normalizeTopics(await api.getTopics(subject.id));
+          return [subject.id, topics.map(topic => ({
+            ...topic,
+            sourceSubjectId: subject.id,
+            sourceClassLevel: subject.classLevel || "",
+          }))];
+        } catch {
+          return [subject.id, []];
+        }
       }));
       if (!alive) return;
       const map = Object.fromEntries(pairs);
       setTopicsBySubject(map);
-      const preferred = list.find(s => String(s.name).toLowerCase() === "physics") || list.find(s => map[s.id]?.length) || list[0];
-      if (preferred) setSelectedId(preferred.id);
+
+      const preferredGroup =
+        groups.find(s => String(s.name).toLowerCase() === "physics") ||
+        groups.find(s => s.variants.some(v => map[v.id]?.length)) ||
+        groups[0];
+
+      if (preferredGroup) setSelectedId(preferredGroup.id);
     }).catch(() => alive && setError("We couldn't load your learning path."))
       .finally(() => alive && setLoading(false));
     return () => { alive = false; };
   }, []);
 
-  const selectedSubject = useMemo(() => subjects.find(s => Number(s.id) === Number(selectedId)) || null, [subjects, selectedId]);
-  const rawTopics = selectedSubject ? (topicsBySubject[selectedSubject.id] || []) : [];
+  const selectedSubject = useMemo(
+    () => subjectGroups.find(s => Number(s.id) === Number(selectedId)) || null,
+    [subjectGroups, selectedId]
+  );
+
+  const selectedVariants = selectedSubject?.variants || [];
+  const rawTopics = useMemo(() => (
+    selectedVariants
+      .flatMap(subject => topicsBySubject[subject.id] || [])
+      .sort((a, b) => {
+        const levelA = String(a.sourceClassLevel || "");
+        const levelB = String(b.sourceClassLevel || "");
+        return levelA.localeCompare(levelB) || String(a.name || "").localeCompare(String(b.name || ""));
+      })
+  ), [selectedVariants, topicsBySubject]);
 
   const topicStates = useMemo(() => {
     let activeFound = false;
@@ -141,7 +183,7 @@ export default function LearningPathPage() {
   const openTopic = topic => {
     if (!selectedSubject || topic.status === "locked") return;
     if (topic.activeSession?.id) navigate(`/app/learn/ai/session/${topic.activeSession.id}`);
-    else navigate(`/app/learn/ai/subject/${selectedSubject.id}/topic/${topic.id}`);
+    else navigate(`/app/learn/ai/subject/${topic.sourceSubjectId || selectedSubject.id}/topic/${topic.id}`);
   };
 
   if (loading) return (
@@ -175,13 +217,29 @@ export default function LearningPathPage() {
       <section className="lp2-subjects">
         <div className="lp2-section-label"><span>1</span><div><strong>Choose a subject</strong><small>Switch your roadmap</small></div></div>
         <div className="lp2-subject-scroller">
-          {subjects.map((subject, index) => (
-            <button key={subject.id} type="button" className={`lp2-subject-card${Number(selectedId) === Number(subject.id) ? " active" : ""}`} onClick={() => { setSelectedId(subject.id); setFilter("all"); }}>
-              <SubjectBadge subject={subject} index={index} />
-              <span><strong>{subject.name}</strong><small>{(topicsBySubject[subject.id] || []).length} topics</small></span>
-              {Number(selectedId) === Number(subject.id) && <b>✓</b>}
-            </button>
-          ))}
+          {subjectGroups.map((subject, index) => {
+            const levels = [...new Set(subject.variants.map(v => v.classLevel).filter(Boolean))]
+              .map(level => String(level).replace(/^SSS/i, "SS"));
+            const topicTotal = subject.variants.reduce(
+              (sum, variant) => sum + (topicsBySubject[variant.id] || []).length,
+              0
+            );
+            return (
+              <button
+                key={subject.id}
+                type="button"
+                className={`lp2-subject-card${Number(selectedId) === Number(subject.id) ? " active" : ""}`}
+                onClick={() => { setSelectedId(subject.id); setFilter("all"); }}
+              >
+                <SubjectBadge subject={subject} index={index} />
+                <span>
+                  <strong>{subject.name}</strong>
+                  <small>{topicTotal} topics · {levels.join(" · ") || "All classes"}</small>
+                </span>
+                {Number(selectedId) === Number(subject.id) && <b>✓</b>}
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -225,6 +283,7 @@ export default function LearningPathPage() {
                     <span className="lp2-status-pill">{statusText(topic.status)}</span>
                   </div>
                   <div className="lp2-step-meta">
+                    {topic.sourceClassLevel && <span>{String(topic.sourceClassLevel).replace(/^SSS/i, "SS")}</span>}
                     <span>{topic.conceptCount || 0} concepts</span>
                     {topic.completedSessions > 0 && <span>{topic.completedSessions} session{topic.completedSessions === 1 ? "" : "s"} completed</span>}
                     {topic.status === "locked" && <span>Finish the previous step</span>}
