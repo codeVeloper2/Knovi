@@ -21,6 +21,7 @@ from __future__ import annotations
 import logging
 import json
 import re
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -143,6 +144,10 @@ _UNDERSTANDING_SIGNAL_RE = re.compile(
     r"\b(?:i (?:now )?(?:understand|get it)|that makes sense|i get it|got it|i understand now)\b",
     re.IGNORECASE,
 )
+_TRANSITION_DECLINE_RE = re.compile(
+    r"^(?:no|nope|not yet|not really|explain (?:it|that) again|please explain (?:it|that) again|i(?: still)? don['’]?t (?:get|understand) (?:it|that)|i need (?:more|another) explanation)[.!\s]*$",
+    re.IGNORECASE,
+)
 
 
 def _is_uncertainty_response(answer: str) -> bool:
@@ -227,20 +232,47 @@ def _safe_int(v: Any, lo: int = 0, hi: int = 100) -> Optional[int]:
     return None
 
 
-def _current_task_index_from_messages(messages: list) -> int:
-    """Recover the persisted Learning Plan task currently being taught.
-
-    The Learning Room must survive refreshes without a separate client-only
-    task cursor. Teaching/timer/practice metadata is persisted in the existing
-    message stream, so the server can recover the current task deterministically.
-    """
-    for message in sorted(messages or [], key=lambda item: item.sequence, reverse=True):
+def _derive_learning_state(messages: list) -> dict:
+    ordered = sorted(messages or [], key=lambda item: item.sequence)
+    completed: set[int] = set()
+    current = 0
+    last_task_marker_seq = -1
+    latest_transition = None
+    latest_student_seq = -1
+    latest_ai_seq = -1
+    for message in ordered:
+        if message.role == "student":
+            latest_student_seq = max(latest_student_seq, message.sequence)
+        if message.role == "ai":
+            latest_ai_seq = max(latest_ai_seq, message.sequence)
         extra = message.extra or {}
-        for key in ("taskIndex", "task_index"):
-            value = extra.get(key)
-            if isinstance(value, int) and value >= 0:
-                return value
-    return 0
+        if message.role == "ai" and extra.get("taskCompleted") is True:
+            try: completed.add(int(extra.get("taskIndex")))
+            except (TypeError, ValueError): pass
+        marker = extra.get("currentTaskIndex")
+        if marker is None and message.message_type in ("teaching", "reteach", "timer_start"):
+            marker = extra.get("taskIndex")
+        if isinstance(marker, int) and marker >= 0 and message.sequence >= last_task_marker_seq:
+            current = marker
+            last_task_marker_seq = message.sequence
+        if message.role == "ai" and extra.get("taskTransition") is True:
+            latest_transition = (message.sequence, extra)
+    waiting = bool(latest_transition and latest_transition[0] > latest_student_seq)
+    next_index = None
+    if waiting:
+        try: next_index = int((latest_transition[1] or {}).get("nextTaskIndex"))
+        except (TypeError, ValueError): next_index = None
+    return {
+        "currentTaskIndex": current,
+        "completedTaskIndexes": sorted(completed),
+        "waitingForTaskTransition": waiting,
+        "nextTaskIndex": next_index,
+        "latestAiSequence": latest_ai_seq,
+    }
+
+
+def _current_task_index_from_messages(messages: list) -> int:
+    return int(_derive_learning_state(messages).get("currentTaskIndex", 0))
 
 
 # ── Session ownership loader ──────────────────────────────────────────────────
@@ -309,6 +341,82 @@ async def _add_message(
     db.add(msg)
     await db.flush()
     return msg
+
+
+def _split_ai_response(content: str, *, max_chunks: int = 3, threshold: int = 520) -> list[str]:
+    """Split long tutor responses into up to three natural chat messages.
+
+    Short responses remain one message. Long responses prefer paragraph boundaries,
+    then sentence boundaries, and finally hard chunks only as a last resort.
+    """
+    text = (content or "").strip()
+    if len(text) <= threshold or max_chunks <= 1:
+        return [text] if text else []
+
+    paragraphs = [p.strip() for p in re.split(r"\n{2,}", text) if p.strip()]
+    if len(paragraphs) <= max_chunks:
+        return paragraphs
+
+    # Greedily group paragraphs into balanced chunks.
+    chunks: list[str] = []
+    current = ""
+    for p in paragraphs:
+        candidate = f"{current}\n\n{p}" if current else p
+        if current and len(candidate) > max(threshold, len(text) // max_chunks + 180) and len(chunks) < max_chunks - 1:
+            chunks.append(current.strip())
+            current = p
+        else:
+            current = candidate
+    if current:
+        chunks.append(current.strip())
+
+    if len(chunks) <= max_chunks:
+        return chunks
+
+    # Sentence fallback for unusually dense prose.
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
+    if len(sentences) >= 2:
+        buckets = ["" for _ in range(max_chunks)]
+        lengths = [0] * max_chunks
+        for sentence in sentences:
+            idx = min(range(max_chunks), key=lambda i: lengths[i])
+            buckets[idx] = f"{buckets[idx]} {sentence}".strip()
+            lengths[idx] += len(sentence)
+        return [b for b in buckets if b]
+
+    # Final bounded hard split.
+    size = max(1, len(text) // max_chunks)
+    return [text[i:i + size].strip() for i in range(0, len(text), size)][:max_chunks]
+
+
+async def _add_ai_response(
+    session_id: int,
+    message_type: str,
+    content: str,
+    db: AsyncSession,
+    *,
+    extra: Optional[dict] = None,
+) -> list[AISessionMessage]:
+    """Persist a tutor response as 1–3 separate AI chat messages."""
+    chunks = _split_ai_response(content) or [""]
+    group_id = str(uuid.uuid4())
+    created: list[AISessionMessage] = []
+    base_extra = dict(extra or {})
+    for index, chunk in enumerate(chunks):
+        chunk_extra = {
+            **base_extra,
+            "responseGroupId": group_id,
+            "responseChunkIndex": index,
+            "responseChunkCount": len(chunks),
+        }
+        # Actions belong to the final chunk so the frontend never fires an
+        # action before the tutor has finished delivering its response.
+        if index < len(chunks) - 1:
+            chunk_extra.pop("action", None)
+            chunk_extra.pop("actionData", None)
+        msg = await _add_message(session_id, "ai", message_type, chunk, db, extra=chunk_extra)
+        created.append(msg)
+    return created
 
 
 # ── Teaching snapshot helpers ─────────────────────────────────────────────────
@@ -585,6 +693,7 @@ async def get_session(session_id: int, user_id: int, db: AsyncSession) -> dict:
         data["messages"] = _filter_protected_messages(all_messages)
     else:
         data["messages"] = [m.serialize() for m in all_messages]
+    data["learningState"] = _derive_learning_state(all_messages)
 
     data["questions"]        = [q.serialize() for q in session.questions]
 
@@ -959,14 +1068,15 @@ Return JSON (all fields required; arrays may be empty []):
     db.add(attempt)
 
     message_content = f"{explanation}\n\n---\n*{study_prompt}*"
-    await _add_message(
-        session_id, "ai", "teaching", message_content, db,
+    await _add_ai_response(
+        session_id, "teaching", message_content, db,
         extra={
             "strategy": strategy,
             "teachingId": teaching.id,
             "provider": provider,
             "learningPlan": learning_tasks,
             "taskIndex": task_index,
+            "currentTaskIndex": task_index if task_index is not None else _current_task_index_from_messages(session.messages),
             "taskTitle": selected_task.get("title") if selected_task else None,
         },
     )
@@ -1159,6 +1269,10 @@ Rules:
         action = "next_task"
         action_data = {"task_index": next_task_index, "reason": "The learner confirmed they are ready for the next Learning Plan task."}
         response_text = "Great — let’s move to the next part."
+    elif _TRANSITION_DECLINE_RE.fullmatch(content.strip()) and previous_task_transition:
+        action = "reteach_task"
+        action_data = {"task_index": current_task_index, "reason": "The learner asked for the current task to be explained again before moving on."}
+        response_text = "Absolutely. We’ll stay on this task and I’ll explain it another way before we move on."
     elif confirmation and previous_asked_readiness:
         action = "start_quiz"
         action_data = {"task_index": current_task_index, "reason": "The learner explicitly confirmed readiness."}
@@ -1171,19 +1285,49 @@ Rules:
         action_data = {"reason": "The learner indicated understanding and can be invited to a quick check."}
         response_text = "Great. Are you ready for a quick check?"
 
+    response_extra = {
+        "provider": provider,
+        "inResponseTo": content[:100],
+        "suggestNewSession": suggest_new_session,
+        "detectedSubject": detected_subject,
+        "detectedTopic": detected_topic,
+        "sessionNote": session_note,
+        "action": action,
+        "actionData": action_data,
+        "currentTaskIndex": int(action_data.get("task_index")) if action == "next_task" and isinstance(action_data, dict) and str(action_data.get("task_index", "")).isdigit() else current_task_index,
+    }
+    created = await _add_ai_response(session_id, "teaching", response_text, db, extra=response_extra)
+    await db.commit()
+    for msg in created:
+        await db.refresh(msg)
+    return created[-1].serialize()
+
+
+async def create_idle_nudge(session_id: int, user_id: int, db: AsyncSession, nudge_number: int) -> dict:
+    session = await _get_session_owned(session_id, user_id, db, load_messages=True)
+    if session.status not in ("teaching", "reteaching"):
+        raise HTTPException(409, "Idle nudges are only available during active teaching.")
+    if nudge_number not in (1, 2):
+        raise HTTPException(400, "Only two idle nudges are allowed per idle period.")
+    ordered = sorted(session.messages, key=lambda m: m.sequence)
+    latest_ai = next((m for m in reversed(ordered) if m.role == "ai"), None)
+    latest_student = next((m for m in reversed(ordered) if m.role == "student"), None)
+    if not latest_ai or (latest_student and latest_student.sequence >= latest_ai.sequence):
+        raise HTTPException(409, "The learner has already replied.")
+    already = [m for m in ordered if m.role == "ai" and (m.extra or {}).get("idleNudgeNumber") == nudge_number]
+    if already:
+        return already[-1].serialize()
+    task_index = _current_task_index_from_messages(ordered)
+    content = (
+        "I haven’t seen your reply yet. Are you still with me? Take your time — "
+        "you can ask me to explain it differently if something isn’t clicking."
+        if nudge_number == 1 else
+        "No rush. I’m still here with you. If this part feels unclear, tell me what’s confusing "
+        "and I’ll approach it from another angle."
+    )
     msg = await _add_message(
-        session_id, "ai", "teaching", response_text, db,
-        extra={
-            "provider": provider,
-            "inResponseTo": content[:100],
-            "suggestNewSession": suggest_new_session,
-            "detectedSubject": detected_subject,
-            "detectedTopic": detected_topic,
-            "sessionNote": session_note,
-            # Agentic fields — read by frontend to drive autonomous progression
-            "action": action,
-            "actionData": action_data,
-        },
+        session_id, "ai", "idle_nudge", content, db,
+        extra={"idleNudgeNumber": nudge_number, "currentTaskIndex": task_index, "taskIndex": task_index},
     )
     await db.commit()
     await db.refresh(msg)
@@ -1334,49 +1478,59 @@ async def generate_retrieval_questions(
         session.subject_id, session.topic_id, session.concept_id, db
     )
 
+    # The quiz is scoped to the current Learning Plan task, not the whole concept.
+    plan: list[dict] = []
+    for teaching in session.teaching:
+        try:
+            candidate = parse_json(teaching.raw_content or "{}").get("learning_tasks")
+            if isinstance(candidate, list) and candidate:
+                plan = candidate
+                break
+        except Exception:
+            pass
+    if task_index is None:
+        task_index = _current_task_index_from_messages(session.messages)
+    if task_index < 0 or task_index >= len(plan):
+        raise HTTPException(400, "Invalid Learning Plan task for this practice run.")
+    selected_task = plan[task_index]
+    allowed_objectives = selected_task.get("objectiveIds") or selected_task.get("objective_ids") or []
+    allowed_objectives = [int(x) for x in allowed_objectives if str(x).isdigit()]
+    current_teaching = current_teaching or await _get_current_teaching(session_id, db)
     teaching_summary = (
-        f"Strategy used: {current_teaching.strategy}\n"
-        f"Explanation (first 800 chars): {(current_teaching.explanation or '')[:800]}\n"
+        f"Task {task_index + 1}: {selected_task.get('title', 'Current task')}\n"
+        f"Task description: {selected_task.get('description', '')}\n"
+        f"Task focus: {selected_task.get('focus', '')}\n"
+        f"Task objective IDs: {allowed_objectives}\n"
+        f"Teaching explanation:\n{current_teaching.explanation or ''}\n"
         f"Key points: {', '.join(current_teaching.key_points or [])}\n"
-        f"Examples covered: {', '.join((current_teaching.examples or [])[:3])}"
+        f"Examples covered: {', '.join((current_teaching.examples or [])[:5])}\n"
+        f"Worked examples: {', '.join((current_teaching.worked_examples or [])[:3])}"
     )
-
-    task_context = ""
-    if task_index is not None:
-        task_msg_result = await db.execute(
-            select(AISessionMessage)
-            .where(
-                AISessionMessage.session_id == session_id,
-                AISessionMessage.message_type == "teaching",
-            )
-            .order_by(AISessionMessage.sequence.desc())
-            .limit(1)
-        )
-        task_msg = task_msg_result.scalar_one_or_none()
-        extra = task_msg.extra or {} if task_msg else {}
-        task_context = (
-            f"THIS RETRIEVAL CHECK IS FOR LEARNING TASK {task_index + 1}. "
-            f"Task: {extra.get('taskTitle', 'current task')}. "
-            "Test this task specifically and do not assess unrelated material."
-        )
+    future_tasks = "\n".join(
+        f"- Task {i + 1}: {t.get('title', '')} — {t.get('description', '')}"
+        for i, t in enumerate(plan) if i != task_index
+    ) or "(none)"
 
     system_prompt = (
-        "You are an expert AI tutor generating retrieval practice questions. "
-        "Questions must test understanding of what was actually taught, not generic knowledge. "
-        "Return JSON only."
+        "You are an expert AI tutor generating a compulsory retrieval quiz. "
+        "The quiz is strictly scoped to the CURRENT Learning Plan task. "
+        "Do not test future tasks or generic curriculum knowledge. Return JSON only."
     )
     prompt = f"""CURRICULUM CONTEXT
 Subject: {subject.name} | Topic: {topic.name} | Concept: {concept.name}
 
-WHAT WAS TAUGHT (ground questions ONLY in this content — do not test knowledge not covered):
+CURRENT LEARNING PLAN TASK — THE ONLY ASSESSMENT SCOPE
 {teaching_summary}
 
-{task_context}
+FUTURE/OTHER TASKS — FORBIDDEN IN THIS QUIZ
+{future_tasks}
 
-STUDENT CONTEXT
-Familiarity: {session.student_familiarity} | Intent: {session.intent}
+Generate exactly {count} retrieval questions that test ONLY what the current task actually taught.
+A fact may be used only if it appears in the current task teaching content above or is a direct
+reasoning application of that content. Do NOT introduce terminology, procedures, formulas, or
+applications that belong to another task. In particular, merely appearing in the broader concept
+or curriculum does not make a fact testable here.
 
-Generate exactly {count} retrieval questions testing understanding of the teaching above.
 Include variety: mix question types. At least one must be short_answer or explanation.
 Do NOT reveal the answer in the question text.
 
@@ -1393,16 +1547,55 @@ Return JSON:
   ]
 }}
 
-For multiple_choice: options must be [{{"label":"A","text":"..."}}, ...] and expected_answer MUST be exactly the correct option label (for example "A"). All others: null.
+For multiple_choice: options must be [{{"label":"A","text":"..."}}, ...] and expected_answer MUST be exactly the correct option label.
 """
     try:
         raw, _ = await call_with_fallback(
-            prompt, system=system_prompt, temperature=0.6, json_mode=True
+            prompt, system=system_prompt, temperature=0.45, json_mode=True
         )
         parsed = parse_json(raw)
     except Exception as exc:
         logger.error("Question generation failed: %s", exc)
         raise HTTPException(502, f"AI service error: {exc}")
+
+    # Second-pass scope gate: reject any generated question that tests content
+    # outside the current task. This prevents future-task leakage such as
+    # dimensional analysis appearing in a base-quantities quiz.
+    raw_questions = _safe_list(parsed.get("questions"))
+    if not raw_questions:
+        raise HTTPException(502, "AI returned no questions.")
+    try:
+        verify_prompt = f"""You are a strict curriculum assessment validator.
+CURRENT TASK MATERIAL:
+{teaching_summary}
+
+FORBIDDEN OTHER TASKS:
+{future_tasks}
+
+QUESTIONS TO VALIDATE:
+{json.dumps(raw_questions, ensure_ascii=False)}
+
+For each question, return whether it can be answered correctly using ONLY the current task material
+and direct reasoning from it. If a question introduces a concept not taught in the current task, mark false.
+Return JSON only: {{"valid": true|false, "invalid_indexes": [0,1], "reason": "brief reason"}}
+"""
+        verify_raw, _ = await call_with_fallback(
+            verify_prompt,
+            system="You are a strict assessment-scope checker. Reject future-task or untaught knowledge.",
+            temperature=0.1,
+            json_mode=True,
+        )
+        verification = parse_json(verify_raw)
+        if not bool(verification.get("valid", False)):
+            # Regenerate once with an even stricter warning.
+            raw2, _ = await call_with_fallback(
+                prompt + "\nIMPORTANT: Previous questions leaked future-task knowledge. Regenerate and keep every question strictly inside the current task.",
+                system=system_prompt, temperature=0.25, json_mode=True
+            )
+            parsed = parse_json(raw2)
+            raw_questions = _safe_list(parsed.get("questions"))
+    except Exception as exc:
+        logger.warning("Quiz scope validation failed; keeping primary generation result: %s", exc)
 
     raw_questions = _safe_list(parsed.get("questions"))
     if not raw_questions:
@@ -1893,6 +2086,7 @@ async def complete_practice_run(
             "practiceComplete": True,
             "taskCompleted": False,
             "taskIndex": task_index,
+            "currentTaskIndex": task_index,
             "questionIds": sorted(ids),
             "needsReteach": True,
         }
@@ -1906,6 +2100,7 @@ async def complete_practice_run(
             "practiceComplete": True,
             "taskCompleted": True,
             "taskIndex": task_index,
+            "currentTaskIndex": task_index,
             "nextTaskIndex": next_task_index,
             "taskTransition": True,
             "questionIds": sorted(ids),
@@ -1921,6 +2116,7 @@ async def complete_practice_run(
             "practiceComplete": True,
             "taskCompleted": True,
             "taskIndex": task_index,
+            "currentTaskIndex": task_index,
             "finalTask": True,
             "questionIds": sorted(ids),
             "needsReteach": False,
@@ -2095,9 +2291,15 @@ Return JSON (all array fields required; may be empty):
             prev_attempt.outcome = "still_struggling"
 
     message_content = f"{explanation}\n\n---\n*{encouragement}*"
-    await _add_message(
-        session_id, "ai", "reteach", message_content, db,
-        extra={"strategy": new_strategy, "teachingId": teaching.id, "provider": provider},
+    await _add_ai_response(
+        session_id, "reteach", message_content, db,
+        extra={
+            "strategy": new_strategy,
+            "teachingId": teaching.id,
+            "provider": provider,
+            "taskIndex": _current_task_index_from_messages(session.messages),
+            "currentTaskIndex": _current_task_index_from_messages(session.messages),
+        },
     )
 
     # The reteach content is now persisted and becomes the source for the next

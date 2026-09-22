@@ -171,6 +171,19 @@ async def teach_concept(
     )
 
 
+@router.post("/learning/sessions/{session_id}/idle-nudge", response_model=MessageOut)
+async def idle_nudge(
+    session_id: int,
+    nudge_number: int = Query(default=1, ge=1, le=2),
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Persist a gentle tutor nudge when the learner has been idle."""
+    return await svc.create_idle_nudge(
+        session_id=session_id, user_id=user.id, db=db, nudge_number=nudge_number
+    )
+
+
 @router.post("/learning/sessions/{session_id}/message", response_model=MessageOut)
 async def student_message(
     session_id: int,

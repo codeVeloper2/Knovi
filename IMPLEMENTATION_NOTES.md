@@ -1,21 +1,19 @@
-# PeerUP Learning Room implementation
+# PeerUP Learning Room — corrected implementation
 
-Implemented in `peerUP-main`:
+Implemented in this repo:
 
-1. Compulsory quiz is scoped to the current Learning Plan task and current teaching snapshot.
-2. Future Learning Plan tasks are explicitly excluded from current-task quiz generation.
-3. Current Learning Plan state (current task, completed tasks, transition waiting) persists through existing session-message metadata; no DB migration required.
-4. After a passed compulsory quiz, the tutor restores the conversation and asks whether the learner is ready to move to the next task.
-5. The learner can choose to continue or ask for the current task to be explained again.
-6. Advancing to the next task is server-controlled and teaches that task before it becomes active.
-7. Final-task advancement generates the existing session summary and completes the session.
-8. AI chat responses can be returned/persisted as 1–3 natural message chunks.
-9. Long teaching and reteaching messages are also split into at most 3 persisted messages.
-10. Tutor read-aloud toggle uses browser speech synthesis, remembers the preference, and selects the best available English natural/Google/Microsoft-style voice when available.
-11. Idle tutor nudges are persisted: first after ~45s, second after ~105s, then stop.
-12. Idle nudges do not run during quizzes, study timer, completed sessions, or while the tutor is working/awaiting task transition.
+1. **Compulsory quiz scope is current-task only.** Quiz generation uses the selected Learning Plan task, its objective IDs, and the persisted teaching snapshot. Future Learning Plan tasks are explicitly listed as forbidden assessment scope.
+2. **Quiz scope second-pass validator.** Generated questions are independently checked by an assessment-scope validator; if a question leaks future/untaught material, the quiz is regenerated with a stricter scope.
+3. **Task completion is server-persistent.** Learning state is derived from canonical session messages and returned as `learningState` (`currentTaskIndex`, completed task indexes, transition state). Refresh no longer resets completed tasks.
+4. **Task transition is explicit.** After a passed compulsory quiz, UPRAD asks whether the explanation makes sense and whether the learner is ready for the next Learning Plan task. The UI provides explicit buttons for moving forward or asking for another explanation.
+5. **Transition recovery is server-safe.** The next-task cursor is persisted when the learner confirms. If the browser closes before the next teaching request completes, the room can recover and teach the persisted current task on refresh.
+6. **Practice completion is an AI/Tutor message.** The learner never appears as the sender of the practice-complete transition message.
+7. **AI responses can be split into up to 3 natural chat messages.** Long responses prefer paragraph/sentence boundaries. The frontend reveals split chunks sequentially rather than dumping all bubbles simultaneously. Each chunk is persisted.
+8. **Tutor voice toggle is visible.** The Learning Room has a clear `Tutor voice: On/Off` control. Speech uses browser TTS, prefers Microsoft/Google/natural English voices when available, uses a tutor-friendly rate, queues split messages, and does not replay old messages after refresh.
+9. **Idle tutor nudges.** If the learner has not replied for about 45 seconds, UPRAD sends a gentle nudge. A second nudge follows after about 60 more seconds. It then stops. Nudges are persisted as AI messages and do not run during practice or while the AI is working.
+10. **Reteach transition.** If the learner declines the next-task transition, the tutor stays on the current task and invokes adaptive reteaching rather than advancing.
+11. **No new database migration is required.** Existing session-message JSON metadata stores the learning-room cursor and transition state.
 
 Validation:
-- Python backend source passed `python -m compileall -q backend/app`.
-- Frontend dependency installation/build could not be completed in the container because `npm ci` exceeded the execution timeout.
-- Full backend runtime tests remain blocked in this environment by the repository's existing missing `firebase_admin` dependency.
+- Backend `python -m compileall -q backend/app` passes.
+- Frontend `npm ci` could not complete in this environment because dependency installation exceeded the execution timeout, so the Vite production build still needs to be run in the user's normal development environment.

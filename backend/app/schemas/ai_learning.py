@@ -71,6 +71,7 @@ class SessionOut(BaseModel):
     messages:  Optional[list] = None
     teaching:  Optional[dict] = None
     summary:   Optional[dict] = None
+    learningState: Optional[dict] = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────

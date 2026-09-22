@@ -59,6 +59,11 @@ export default function AILearningRoom() {
   const bottomRef = useRef(null);
   const timerRef = useRef(null);
   const ttsRef = useRef(false);
+  const idleTimerRef = useRef(null);
+  const idleNudgeRef = useRef(0);
+  const spokenGroupsRef = useRef(new Set());
+  const lastActivitySeqRef = useRef(null);
+  const revealTimersRef = useRef([]);
 
   function toggleLeftSidebar() {
     setLeftOpen(prev => {
@@ -97,9 +102,43 @@ export default function AILearningRoom() {
   }[phase] || "Learning";
 
   useEffect(() => {
+    clearTimeout(idleTimerRef.current);
+    if (!session || aiWorking || !["teaching", "reteaching"].includes(phase) || mobilePanel === "plan" || mobilePanel === "tools") return;
+    const ordered = [...messages].sort((a,b) => Number(a.sequence || 0) - Number(b.sequence || 0));
+    const latest = ordered[ordered.length - 1];
+    if (!latest || latest.role !== "ai" || ["practice", "feedback"].includes(latest.messageType)) return;
+    const latestSeq = Number(latest.sequence || 0);
+    const isNudge = latest.messageType === "idle_nudge";
+    if (isNudge) {
+      const existingNudge = Number(latest.extra?.idleNudgeNumber || idleNudgeRef.current || 1);
+      idleNudgeRef.current = existingNudge;
+      lastActivitySeqRef.current = latestSeq;
+      if (existingNudge >= 2) return;
+    } else if (lastActivitySeqRef.current !== latestSeq) {
+      lastActivitySeqRef.current = latestSeq;
+      idleNudgeRef.current = 0;
+    }
+    const delay = idleNudgeRef.current === 0 ? 45000 : 60000;
+    idleTimerRef.current = setTimeout(async () => {
+      const nextNudge = idleNudgeRef.current + 1;
+      if (nextNudge > 2) return;
+      try {
+        const nudge = await api.createLearningIdleNudge(sessionId, nextNudge);
+        idleNudgeRef.current = nextNudge;
+        setMessages(prev => prev.some(m => m.id === nudge.id) ? prev : [...prev, nudge]);
+        speak(nudge.content || "");
+      } catch {}
+    }, delay);
+    return () => clearTimeout(idleTimerRef.current);
+  }, [sessionId, session, messages, aiWorking, phase, mobilePanel]);
+
+  useEffect(() => {
     loadSession();
     return () => {
       clearInterval(timerRef.current);
+      clearTimeout(idleTimerRef.current);
+      revealTimersRef.current.forEach(clearTimeout);
+      revealTimersRef.current = [];
       window.speechSynthesis?.cancel();
     };
   }, [sessionId]);
@@ -125,7 +164,32 @@ export default function AILearningRoom() {
         if (Array.isArray(serverMessages)) msgs = serverMessages;
       } catch {}
       applySession(sess, msgs);
-      if (sess.status === "created") await prepareSession();
+      if (sess.status === "created") {
+        await prepareSession();
+      } else {
+        const persistedIndex = Number(sess?.learningState?.currentTaskIndex);
+        const taughtIndexes = msgs
+          .filter(m => m?.role === "ai" && (m?.messageType === "teaching" || m?.messageType === "reteach") && m?.extra?.taskIndex != null)
+          .map(m => Number(m.extra.taskIndex))
+          .filter(Number.isInteger);
+        if (sess.status === "teaching" && Number.isInteger(persistedIndex) && persistedIndex > -1 && !taughtIndexes.includes(persistedIndex)) {
+          setAiWorking(true);
+          try {
+            await api.teachConcept(sessionId, persistedIndex);
+            const fresh = await api.getAISession(sessionId);
+            let freshMsgs = fresh?.messages || [];
+            try {
+              const serverMessages = await api.getSessionMessages(sessionId);
+              if (Array.isArray(serverMessages)) freshMsgs = serverMessages;
+            } catch {}
+            applySession(fresh, freshMsgs);
+            const group = freshMsgs.find(m => m?.role === "ai" && Number(m?.extra?.taskIndex) === persistedIndex && m?.extra?.responseGroupId)?.extra?.responseGroupId;
+            if (group) speakNewAiMessages(freshMsgs, group);
+          } finally {
+            setAiWorking(false);
+          }
+        }
+      }
     } catch (err) {
       setError(err.message || "Could not open this learning room.");
     } finally {
@@ -145,8 +209,8 @@ export default function AILearningRoom() {
         if (Array.isArray(serverMessages)) msgs = serverMessages;
       } catch {}
       applySession(fresh, msgs);
-      const first = msgs.find(m => m.role === "ai" && m.messageType === "teaching");
-      if (first?.content) speak(first.content);
+      const firstGroup = msgs.find(m => m.role === "ai" && m.extra?.responseGroupId)?.extra?.responseGroupId;
+      if (firstGroup) speakNewAiMessages(msgs, firstGroup);
     } catch (err) {
       setError(err.message || "The AI tutor could not prepare this lesson.");
     } finally {
@@ -162,8 +226,17 @@ export default function AILearningRoom() {
     const plan = sess?.teaching?.learningPlan || safe.slice().reverse().map(m => m?.extra?.learningPlan).find(p => Array.isArray(p) && p.length) || [];
     if (Array.isArray(plan)) setLearningPlan(plan);
 
-    const timerMsg = safe.filter(m => m?.messageType === "timer_start" && m?.extra?.taskIndex != null).slice(-1)[0];
-    if (timerMsg?.extra?.taskIndex != null) setCurrentTaskIndex(Number(timerMsg.extra.taskIndex));
+    const state = sess?.learningState || null;
+    if (state && Number.isInteger(Number(state.currentTaskIndex))) {
+      setCurrentTaskIndex(Number(state.currentTaskIndex));
+    } else {
+      const taskMarkers = safe
+        .filter(m => m?.extra?.currentTaskIndex != null || ((m?.messageType === "teaching" || m?.messageType === "reteach" || m?.messageType === "timer_start") && m?.extra?.taskIndex != null))
+        .slice(-1);
+      const marker = taskMarkers[0];
+      const idx = marker?.extra?.currentTaskIndex ?? marker?.extra?.taskIndex;
+      if (idx != null) setCurrentTaskIndex(Number(idx));
+    }
 
     const nextPhase = statusToPhase(sess?.status, safe.some(m => m.messageType === "teaching" || m.messageType === "reteach"));
     setPhase(nextPhase);
@@ -179,9 +252,11 @@ export default function AILearningRoom() {
     // Task completion is persisted by the backend as canonical AI practice
     // completion messages. Never rely on a client-only array for this because
     // a browser refresh would otherwise make completed tasks active again.
-    const persistedCompleted = safe
-      .filter(m => m?.role === "ai" && m?.extra?.taskCompleted === true && Number.isInteger(Number(m.extra.taskIndex)))
-      .map(m => Number(m.extra.taskIndex));
+    const persistedCompleted = Array.isArray(state?.completedTaskIndexes)
+      ? state.completedTaskIndexes.map(Number).filter(Number.isInteger)
+      : safe
+        .filter(m => m?.role === "ai" && m?.extra?.taskCompleted === true && Number.isInteger(Number(m.extra.taskIndex)))
+        .map(m => Number(m.extra.taskIndex));
     setCompletedTaskIndexes([...new Set(persistedCompleted)]);
 
     if (["practice", "summary"].includes(nextPhase) && sess?.questions?.length) {
@@ -197,13 +272,50 @@ export default function AILearningRoom() {
     }
   }
 
-  function speak(text) {
+  function pickTutorVoice() {
+    const voices = window.speechSynthesis?.getVoices?.() || [];
+    if (!voices.length) return null;
+    const english = voices.filter(v => /^en(?:-|$)/i.test(v.lang));
+    const pool = english.length ? english : voices;
+    const preferred = ["Microsoft Aria", "Microsoft Jenny", "Microsoft Guy", "Google UK English Female", "Google US English", "Samantha", "Karen", "Daniel", "Alex"];
+    return pool.find(v => preferred.some(name => v.name.toLowerCase().includes(name.toLowerCase()))) || pool.find(v => /natural|neural|online|enhanced|premium/i.test(v.name)) || pool[0];
+  }
+
+  function speak(text, options = {}) {
     if (!ttsRef.current || !text || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
     const clean = String(text).replace(/```[\s\S]*?```/g, " code ").replace(/[#*_`~>-]+/g, " ").replace(/\s+/g, " ").trim();
+    if (!clean) return;
+    if (options.groupId && spokenGroupsRef.current.has(options.groupId)) return;
+    if (options.groupId) spokenGroupsRef.current.add(options.groupId);
     const utterance = new SpeechSynthesisUtterance(clean);
-    utterance.rate = 1.02;
+    const voice = pickTutorVoice();
+    if (voice) { utterance.voice = voice; utterance.lang = voice.lang; } else { utterance.lang = "en-NG"; }
+    utterance.rate = 0.96;
+    utterance.pitch = 1.0;
+    utterance.volume = 1;
+    window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utterance);
+  }
+
+  function speakNewAiMessages(msgs, onlyGroupId = null) {
+    if (!ttsRef.current) return;
+    const fresh = (msgs || []).filter(m => m?.role === "ai" && (!onlyGroupId || m?.extra?.responseGroupId === onlyGroupId));
+    if (!fresh.length) return;
+    const chunks = fresh.sort((a,b) => Number(a.sequence || 0) - Number(b.sequence || 0));
+    const groupId = onlyGroupId || chunks[0]?.extra?.responseGroupId;
+    if (groupId && spokenGroupsRef.current.has(groupId)) return;
+    if (groupId) spokenGroupsRef.current.add(groupId);
+    window.speechSynthesis.cancel();
+    const voices = window.speechSynthesis.getVoices?.() || [];
+    const voice = pickTutorVoice();
+    chunks.forEach((m, index) => {
+      const clean = String(m.content || "").replace(/```[\s\S]*?```/g, " code ").replace(/[#*_`~>-]+/g, " ").replace(/\s+/g, " ").trim();
+      if (!clean) return;
+      const u = new SpeechSynthesisUtterance(clean);
+      if (voice) { u.voice = voice; u.lang = voice.lang; } else { u.lang = "en-NG"; }
+      u.rate = 0.96; u.pitch = 1; u.volume = 1;
+      window.speechSynthesis.speak(u);
+    });
   }
 
   function toggleTts() {
@@ -225,6 +337,23 @@ export default function AILearningRoom() {
     }]);
   }
 
+  function revealCanonicalMessages(canonical, groupId = null) {
+    if (!groupId) { setMessages(canonical); return; }
+    const chunks = canonical.filter(m => m?.role === "ai" && m?.extra?.responseGroupId === groupId)
+      .sort((a,b) => Number(a.sequence || 0) - Number(b.sequence || 0));
+    if (chunks.length <= 1) { setMessages(canonical); return; }
+    const withoutGroup = canonical.filter(m => m?.extra?.responseGroupId !== groupId);
+    revealTimersRef.current.forEach(clearTimeout);
+    revealTimersRef.current = [];
+    setMessages([...withoutGroup, chunks[0]]);
+    chunks.slice(1).forEach((chunk, index) => {
+      const timer = setTimeout(() => {
+        setMessages(prev => [...prev, chunk]);
+      }, 650 * (index + 1));
+      revealTimersRef.current.push(timer);
+    });
+  }
+
   async function sendMessage(raw) {
     const content = (raw || msgInput).trim();
     if (!content || aiWorking || !canType) return;
@@ -236,13 +365,22 @@ export default function AILearningRoom() {
     addLocalMessage("student", content, {}, "question");
     try {
       const msg = await api.sendStudentMessage(sessionId, content);
-      setMessages(prev => [...prev, { ...msg }]);
-      speak(msg.content || "");
+      const fresh = await api.getAISession(sessionId);
+      let canonical = fresh?.messages || [];
+      try {
+        const serverMessages = await api.getSessionMessages(sessionId);
+        if (Array.isArray(serverMessages)) canonical = serverMessages;
+      } catch {}
+      setSession(fresh);
+      revealCanonicalMessages(canonical, msg.extra?.responseGroupId || null);
+      if (msg.extra?.responseGroupId) speakNewAiMessages(canonical, msg.extra.responseGroupId);
+      else speak(msg.content || "");
 
-      // The backend's agentic action is the source of truth. The tutor first
-      // asks readiness; only the learner's confirmation starts Practice Mode.
+      // The backend's agentic action is the source of truth.
       if (msg.extra?.action === "start_quiz") {
         await beginPractice(msg.extra?.actionData?.task_index ?? currentTaskIndex);
+      } else if (msg.extra?.action === "reteach_task") {
+        await reteachAfterPractice();
       } else if (msg.extra?.action === "next_task") {
         const nextIndex = Number(msg.extra?.actionData?.task_index);
         if (Number.isInteger(nextIndex) && nextIndex >= 0) {
@@ -259,8 +397,10 @@ export default function AILearningRoom() {
             setMessages(msgs);
             setCurrentTaskIndex(nextIndex);
             setPhase("teaching");
-            const latestTeaching = [...msgs].reverse().find(m => m.role === "ai" && m.messageType === "teaching" && Number(m.extra?.taskIndex) === nextIndex);
-            if (latestTeaching?.content) speak(latestTeaching.content);
+            const newTaskMessages = msgs.filter(m => m.role === "ai" && Number(m.extra?.taskIndex) === nextIndex);
+            const group = newTaskMessages.find(m => m.extra?.responseGroupId)?.extra?.responseGroupId;
+            if (group) speakNewAiMessages(newTaskMessages, group);
+            else if (newTaskMessages.length) speakNewAiMessages(newTaskMessages);
           } finally {
             setAiWorking(false);
           }
@@ -411,7 +551,8 @@ export default function AILearningRoom() {
       setSession(fresh);
       setMessages(msgs);
       setPhase("teaching");
-      if (t?.explanation) speak(t.explanation);
+      const group = msgs.find(m => m.role === "ai" && m.messageType === "reteach" && m.extra?.responseGroupId)?.extra?.responseGroupId;
+      if (group) speakNewAiMessages(msgs, group);
     } catch (err) {
       setError(err.message || "The tutor could not start adaptive reteaching.");
     }
@@ -485,7 +626,7 @@ export default function AILearningRoom() {
         </div>
         <div className="ar-header-center"><span className="ar-live-dot" /><span>{aiWorking ? "UPRAD is working…" : phaseLabel}</span></div>
         <div className="ar-header-right">
-          <button className={`ar-icon-btn ar-voice ${ttsEnabled ? "active" : ""}`} onClick={toggleTts} title="Tutor voice" aria-label="Toggle tutor voice">{ttsEnabled ? "◖)" : "◖"}</button>
+          <button className={`ar-header-action ar-voice ${ttsEnabled ? "active" : ""}`} onClick={toggleTts} title="Tutor voice" aria-label="Toggle tutor voice">{ttsEnabled ? "🔊 Tutor voice: On" : "🔇 Tutor voice: Off"}</button>
           <button className="ar-header-action ar-desktop-toggle" onClick={toggleLeftSidebar}>{leftOpen ? "Hide plan" : "Show plan"}</button>
           <button className="ar-header-action ar-desktop-toggle" onClick={toggleRightSidebar}>{rightOpen ? "Hide tools" : "Show tools"}</button>
           <button className="ar-header-action ar-mobile-only" onClick={() => setMobilePanel("plan")}>Plan</button>
@@ -535,7 +676,7 @@ export default function AILearningRoom() {
             {messages
               .filter(m => !["welcome", "system", "timer_start", "timer_end", "summary"].includes(m.messageType))
               .map((msg, index) => (
-                <MessageCard key={msg.id || index} msg={msg} onCopy={setCopiedId} copiedId={copiedId} />
+                <MessageCard key={msg.id || index} msg={msg} onCopy={setCopiedId} copiedId={copiedId} onTutorAction={sendMessage} />
               ))}
 
             {aiWorking && <AgentThinking phase={phase} />}
@@ -632,14 +773,14 @@ function WorkspacePanel({ session, task, phase, progress, familiarity, intent, a
   </div>;
 }
 
-function MessageCard({ msg, onCopy, copiedId }) {
+function MessageCard({ msg, onCopy, copiedId, onTutorAction }) {
   const ai = msg.role === "ai";
   const locked = ai && msg.extra?.locked;
   const action = msg.extra?.action;
   return <article className={`ar-message ${ai ? "ar-message-ai" : "ar-message-user"} ${locked ? "ar-message-locked" : ""}`}>
     {ai ? <div className="ar-message-avatar"><TutorAvatar size={34} /></div> : <div className="ar-user-avatar">You</div>}
     <div className="ar-message-column"><div className="ar-message-meta"><span>{ai ? "UPRAD" : "You"}</span>{ai && <span className="ar-meta-dot">·</span>}{ai && <span>{locked ? "Practice lock" : msg.messageType === "reteach" ? "Reteach" : "Tutor"}</span>}<time>{formatClock(msg.createdAt)}</time></div>
-      <div className="ar-message-card">{locked && <div className="ar-locked-label">🔒 Teaching temporarily hidden</div>}{action && <div className="ar-agent-badge"><span>✦</span>{activityLabel(action)}</div>}<RichText content={msg.content} onCopy={onCopy} copiedId={copiedId} /></div>
+      <div className="ar-message-card">{locked && <div className="ar-locked-label">🔒 Teaching temporarily hidden</div>}{action && <div className="ar-agent-badge"><span>✦</span>{activityLabel(action)}</div>}<RichText content={msg.content} onCopy={onCopy} copiedId={copiedId} />{msg.extra?.taskTransition && <div className="ar-transition-actions"><button type="button" onClick={() => onTutorAction("Yes, I’m ready for the next task.")}>Yes, move to next task →</button><button type="button" className="secondary" onClick={() => onTutorAction("No, please explain this task again.")}>Explain it again</button></div>}</div>
     </div>
   </article>;
 }
@@ -688,7 +829,7 @@ function formatIntent(v){return({teach_me:"learn the concept",explain_simply:"si
 function taskTitle(task){return task?.title||task?.name||task?.concept||task?.task||"Learning step";}
 function taskDescription(task){return task?.description||task?.objective||task?.goal||task?.summary||"Build understanding and apply the idea.";}
 function taskMeta(task){return task?.estimatedMinutes?`${task.estimatedMinutes} min`:task?.recommended_minutes?`${task.recommended_minutes} min`:task?.type||"Guided learning";}
-function activityLabel(action){return({practice_complete:"Practice complete",task_transition:"Ready for the next task"})[action]||"Tutor action";}
+function activityLabel(action){return({practice_complete:"Practice complete",task_transition:"Ready for the next task",reteach_task:"Re-explaining this task"})[action]||"Tutor action";}
 function formatClock(value){if(!value)return"";const d=new Date(value);return Number.isNaN(d.getTime())?"":d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});}
 function formatTime(seconds){const m=Math.floor(Number(seconds||0)/60);const s=Math.max(0,Number(seconds||0)%60);return`${m}:${String(s).padStart(2,"0")}`;}
 function RoomSkeleton(){return <div className="ar-room ar-loading"><header className="ar-header"><div className="ar-skeleton ar-sk-circle"/><div className="ar-skeleton ar-sk-title"/></header><div className="ar-loading-layout"><div className="ar-skeleton ar-sk-side"/><div className="ar-sk-chat">{[70,50,82,42].map((w,i)=><div key={i} className="ar-skeleton ar-sk-bubble" style={{width:`${w}%`}}/>)}</div><div className="ar-skeleton ar-sk-side"/></div></div>;}

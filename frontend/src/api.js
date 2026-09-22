@@ -587,6 +587,10 @@ export function sendStudentMessage(sessionId, content) {
   return post(`/api/learning/sessions/${sessionId}/message`, { content });
 }
 
+export function createLearningIdleNudge(sessionId, nudgeNumber = 1) {
+  return post(`/api/learning/sessions/${sessionId}/idle-nudge?nudge_number=${encodeURIComponent(nudgeNumber)}`, {});
+}
+
 export function startStudyPeriod(sessionId, durationSeconds = 300, taskIndex = null) {
   return post(`/api/learning/sessions/${sessionId}/study/start`, {
     duration_seconds: durationSeconds,
