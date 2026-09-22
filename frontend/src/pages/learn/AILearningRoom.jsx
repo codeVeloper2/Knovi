@@ -147,6 +147,26 @@ export default function AILearningRoom() {
       applySession(fresh, msgs);
       const first = msgs.find(m => m.role === "ai" && m.messageType === "teaching");
       if (first?.content) speak(first.content);
+
+      // Orientation is not curriculum coverage. Start the first real curriculum
+      // objective immediately so the roadmap and backend coverage stay aligned.
+      const firstObjective = Array.isArray(fresh?.learningPlan) && fresh.learningPlan.length ? 0 : null;
+      if (firstObjective !== null) {
+        setAiWorking(true);
+        try {
+          const teaching = await api.teachConcept(sessionId, firstObjective);
+          const taught = await api.getAISession(sessionId);
+          let taughtMsgs = taught?.messages || [];
+          try {
+            const serverMessages = await api.getSessionMessages(sessionId);
+            if (Array.isArray(serverMessages)) taughtMsgs = serverMessages;
+          } catch {}
+          applySession(taught, taughtMsgs);
+          if (teaching?.explanation) speak(teaching.explanation);
+        } finally {
+          setAiWorking(false);
+        }
+      }
     } catch (err) {
       setError(err.message || "The AI tutor could not prepare this lesson.");
     } finally {
@@ -159,24 +179,34 @@ export default function AILearningRoom() {
     const safe = Array.isArray(msgs) ? msgs : [];
     setMessages(safe);
 
-    const plan = sess?.teaching?.learningPlan || safe.slice().reverse().map(m => m?.extra?.learningPlan).find(p => Array.isArray(p) && p.length) || [];
+    const plan = Array.isArray(sess?.learningPlan)
+      ? sess.learningPlan
+      : (sess?.teaching?.learningPlan || safe.slice().reverse().map(m => m?.extra?.learningPlan).find(p => Array.isArray(p) && p.length) || []);
     if (Array.isArray(plan)) setLearningPlan(plan);
 
-    const timerMsg = safe.filter(m => m?.messageType === "timer_start" && m?.extra?.taskIndex != null).slice(-1)[0];
-    if (timerMsg?.extra?.taskIndex != null) setCurrentTaskIndex(Number(timerMsg.extra.taskIndex));
+    // Resume the curriculum from server-derived objective coverage. Never infer
+    // the current task from a browser-local timer or default back to task 1.
+    const coverage = sess?.learningCoverage;
+    if (coverage && Array.isArray(coverage.tasks)) {
+      setCurrentTaskIndex(Number.isInteger(coverage.currentIndex) ? coverage.currentIndex : 0);
+      setCompletedTaskIndexes(coverage.tasks.reduce((acc, item, index) => {
+        if (item?.status === "mastered") acc.push(index);
+        return acc;
+      }, []));
+    } else {
+      const timerMsg = safe.filter(m => m?.messageType === "timer_start" && m?.extra?.taskIndex != null).slice(-1)[0];
+      if (timerMsg?.extra?.taskIndex != null) setCurrentTaskIndex(Number(timerMsg.extra.taskIndex));
+    }
 
     const nextPhase = statusToPhase(sess?.status, safe.some(m => m.messageType === "teaching" || m.messageType === "reteach"));
     setPhase(nextPhase);
 
     if (Array.isArray(sess?.answers)) {
       const restored = {};
-      const done = [];
       sess.answers.forEach(item => {
         if (item?.questionId != null) restored[Number(item.questionId)] = item;
-        if (!item?.needsReteach && item?.taskIndex != null) done.push(Number(item.taskIndex));
       });
       setCheckResults(restored);
-      if (done.length) setCompletedTaskIndexes([...new Set(done)]);
     }
 
     if (["practice", "summary"].includes(nextPhase) && sess?.questions?.length) {
@@ -353,14 +383,56 @@ export default function AILearningRoom() {
       if (result?.needsReteach) {
         await reteachAfterPractice();
       } else {
-        const doneTask = Number.isInteger(currentTaskIndex) ? currentTaskIndex : 0;
-        setCompletedTaskIndexes(prev => [...new Set([...prev, doneTask])]);
-        addLocalMessage(
-          "ai",
-          "✓ Practice complete. Your learning conversation is restored. Nice work — we can keep building from here.",
-          { action: "practice_complete", needsReteach: false },
-          "agent"
-        );
+        // Server-derived coverage decides what comes next. The learner never
+        // falls back to task 1 after refresh, and the AI cannot skip objectives.
+        const coverage = fresh?.learningCoverage;
+        const nextIndex = Number.isInteger(coverage?.currentIndex) ? coverage.currentIndex : currentTaskIndex + 1;
+        const allComplete = Boolean(coverage?.allCovered);
+
+        if (allComplete) {
+          addLocalMessage(
+            "ai",
+            "✓ You have completed the required curriculum objectives for this concept. Great work.",
+            { action: "concept_complete", needsReteach: false },
+            "agent"
+          );
+          try {
+            const completed = await api.completeAISession(sessionId);
+            setSession(completed);
+            setPhase("summary");
+          } catch (completeErr) {
+            // Keep the restored conversation usable if completion is rejected; the
+            // backend remains the source of truth.
+            setError(completeErr.message || "The concept is covered, but the session could not be closed yet.");
+          }
+        } else if (nextIndex < learningPlan.length) {
+          setCurrentTaskIndex(nextIndex);
+          setCompletedTaskIndexes(prev => [...new Set([...prev, currentTaskIndex])]);
+          setAiWorking(true);
+          try {
+            const nextTeaching = await api.teachConcept(sessionId, nextIndex);
+            const nextFresh = await api.getAISession(sessionId);
+            let nextMsgs = nextFresh?.messages || [];
+            try {
+              const serverMessages = await api.getSessionMessages(sessionId);
+              if (Array.isArray(serverMessages)) nextMsgs = serverMessages;
+            } catch {}
+            setSession(nextFresh);
+            setMessages(nextMsgs);
+            setPhase("teaching");
+            if (nextTeaching?.explanation) speak(nextTeaching.explanation);
+          } finally {
+            setAiWorking(false);
+          }
+        } else {
+          setCompletedTaskIndexes(prev => [...new Set([...prev, currentTaskIndex])]);
+          addLocalMessage(
+            "ai",
+            "✓ Practice complete. Your learning conversation is restored. We can continue with the next curriculum objective.",
+            { action: "practice_complete", needsReteach: false },
+            "agent"
+          );
+        }
       }
     } catch (err) {
       setError(err.message || "Practice could not be completed.");
@@ -599,7 +671,7 @@ function WorkspacePanel({ session, task, phase, progress, familiarity, intent, a
     <div className="ar-current-card"><span className="ar-current-kicker">NOW LEARNING</span><h3>{taskTitle(task) || session?.conceptName || "Building your lesson"}</h3><p>{taskDescription(task) || "Talk with UPRAD. It will decide when you are ready for a check."}</p><div className="ar-context-facts">{familiarity && <span>Starting point: {formatFamiliarity(familiarity)}</span>}{intent && <span>Goal: {formatIntent(intent)}</span>}</div><span className={`ar-phase-pill ar-phase-${phase}`}>{phase.replace("_", " ")}</span></div>
     <div className="ar-stats-card"><div><b>{progress}%</b><span>Roadmap progress</span></div><div><b>{answeredCount}</b><span>Checks answered</span></div><div><b>{questionCount}</b><span>Current run</span></div></div>
     {(phase === "teaching" || phase === "reteaching") && <button className="ar-study-tool" onClick={onStudy}><span>◷</span><b>Optional study timer</b><small>Focus for 5 minutes before continuing the conversation.</small></button>}
-    <div className="ar-tool-tip"><b>Stay in the conversation.</b><span>Ask for examples, simpler explanations, applications, or anything that helps the idea click. UPRAD decides when to check your understanding.</span></div>
+    <div className="ar-tool-tip"><b>Focus on the current objective.</b><span>Ask questions, request examples, or ask for a simpler explanation. UPRAD covers every curriculum objective before moving on.</span></div>
   </div>;
 }
 
