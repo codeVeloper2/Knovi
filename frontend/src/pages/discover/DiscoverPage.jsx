@@ -135,7 +135,9 @@ function PeerActions({ peer, onConnect, onMessage, onChallenge, loading }) {
 
 // ── Learning Peer Card ─────────────────────────────────────────────────────
 function LearningPeerCard({ peer, onViewProfile, onConnect, onMessage, onChallenge }) {
-  const { user, learningOverlap } = peer;
+  // The discovery API is flat. Keep the fallback for older cached/API responses.
+  const user = peer.user || peer;
+  const { learningOverlap } = peer;
   const initials = (user.displayName || "?")[0].toUpperCase();
   const bg = avatarBg(user.displayName);
   const [connecting, setConnecting] = useState(false);
@@ -334,7 +336,7 @@ function LearningPeersSection({ peers, loading, onViewProfile, onConnect, onMess
       <div className="disc-peer-grid">
         {peers.map(peer => (
           <LearningPeerCard
-            key={peer.user.uid}
+            key={(peer.user || peer).uid}
             peer={peer}
             onViewProfile={onViewProfile}
             onConnect={onConnect}

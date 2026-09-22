@@ -35,6 +35,14 @@ const FAMILIARITY_OPTIONS = [
     desc: "I'm stuck on a particular part of this",
   },
 ];
+const INTENT_OPTIONS = [
+  { value: "teach_me", icon: "🧭", label: "Teach me", desc: "Build the idea from where I am" },
+  { value: "explain_simply", icon: "💡", label: "Make it simple", desc: "Use clear language and concrete comparisons" },
+  { value: "give_examples", icon: "🧩", label: "Use examples", desc: "Learn through concrete examples" },
+  { value: "go_deeper", icon: "🔎", label: "Go deeper", desc: "Focus on mechanisms and nuance" },
+  { value: "already_know", icon: "🧠", label: "I know some of it", desc: "Probe my understanding instead of starting over" },
+  { value: "quiz_me", icon: "✦", label: "Quiz me", desc: "Start with a quick diagnostic" },
+];
 
 
 export default function AISessionSetup() {
@@ -44,6 +52,7 @@ export default function AISessionSetup() {
   const [loading,    setLoading]    = useState(true);
   const [concept,    setConcept]    = useState(null);
   const [familiarity, setFamiliarity] = useState("");
+  const [intent, setIntent] = useState("teach_me");
   const [studentNote, setStudentNote] = useState("");
   const [creating,   setCreating]   = useState(false);
   const [error,      setError]      = useState(null);
@@ -66,8 +75,9 @@ export default function AISessionSetup() {
         topicId:     parseInt(topicId, 10),
         conceptId:   parseInt(conceptId, 10),
         familiarity,
-        intent: "teach_me",
+        intent,
         studentNote: studentNote.trim() || null,
+        customIntentText: null,
       });
 
       // The setup choices are the AI's session context. Prepare the first
@@ -204,10 +214,30 @@ export default function AISessionSetup() {
             ))}
           </div>
 
+          {/* Learning goal / teaching intent */}
+          <div className="ai-intent-section" style={{ marginTop: 24 }}>
+            <h2 className="ai-intent-title">How do you want to learn it?</h2>
+            <div className="ai-intent-options" role="radiogroup" aria-label="Learning goal">
+              {INTENT_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={intent === opt.value}
+                  className={`ai-intent-btn${intent === opt.value ? " active" : ""}`}
+                  onClick={() => setIntent(opt.value)}
+                >
+                  <span className="ai-intent-icon" aria-hidden="true">{opt.icon}</span>
+                  <span><strong>{opt.label}</strong><small>{opt.desc}</small></span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Student note */}
           <div className="ai-setup-additional">
             <label className="ai-setup-label" htmlFor="student-note">
-              Tell your tutor anything else <span className="ai-setup-optional">(optional)</span>
+              What do you want to get from this session? <span className="ai-setup-optional">(optional)</span>
             </label>
             <textarea
               id="student-note"
@@ -218,7 +248,7 @@ export default function AISessionSetup() {
               rows={3}
               maxLength={1000}
             />
-            <p className="ai-setup-hint">Helps your tutor personalise the explanation</p>
+            <p className="ai-setup-hint">Your goal, question, or sticking point is included in this session's AI context.</p>
           </div>
 
           {error && (

@@ -3136,3 +3136,13 @@
   .wa-task-timer-footer { flex-direction: column; align-items: stretch; }
   .wa-task-timer-footer .wa-btn-secondary { width: 100%; }
 }
+
+/* AI Learning Room setup: selected learning intent */
+.ai-intent-btn.active {
+  border-color: var(--ai-primary);
+  background: rgba(91, 111, 246, 0.12);
+  box-shadow: 0 0 0 1px rgba(91, 111, 246, 0.16);
+}
+.ai-intent-btn > span:last-child { display: flex; flex-direction: column; gap: 3px; }
+.ai-intent-btn strong { color: var(--ai-text); font-size: 0.92rem; }
+.ai-intent-btn small { color: var(--ai-muted); font-size: 0.78rem; line-height: 1.35; }

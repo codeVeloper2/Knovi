@@ -105,6 +105,53 @@ async def record_activity(session: AsyncSession, user_id: int) -> int:
     return new_streak
 
 
+async def record_ai_learning_progress(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    topic_id: int,
+    overall_score: Optional[int],
+    completed_at: datetime,
+) -> TopicProgress:
+    """Persist AI Learning Room understanding into the existing TopicProgress row.
+
+    This is intentionally small and idempotent: AI sessions update the existing
+    topic-level understanding signal and review flag, but do not create a second
+    progress store or overwrite challenge practice_score. Replaying a completed
+    session can only keep the stronger understanding score and the latest study
+    timestamp.
+    """
+    row = (
+        await session.execute(
+            select(TopicProgress)
+            .where(
+                TopicProgress.user_id == user_id,
+                TopicProgress.topic_id == topic_id,
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+
+    score = None if overall_score is None else max(0, min(100, int(overall_score)))
+    if row is None:
+        row = TopicProgress(
+            user_id=user_id,
+            topic_id=topic_id,
+            understanding_score=score,
+            practice_score=None,
+            sessions_completed=0,
+            needs_review=bool(score is not None and score < 70),
+            last_studied_at=completed_at,
+        )
+        session.add(row)
+    else:
+        if score is not None:
+            row.understanding_score = max(row.understanding_score or 0, score)
+            row.needs_review = bool((row.understanding_score or 0) < 70)
+        row.last_studied_at = max(row.last_studied_at or completed_at, completed_at)
+
+    return row
+
 async def record_challenge_practice(
     session: AsyncSession,
     *,

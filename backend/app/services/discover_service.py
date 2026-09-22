@@ -37,11 +37,13 @@ from typing import Optional
 
 from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.ai_learning import AILearningSession, AISessionTeaching
 from app.models.chat import Conversation
 from app.models.curriculum import Concept, Subject, Topic
 from app.models.user import User
+from app.services.challenge_ai_service import select_relevant_session, load_challenge_context, ChallengePreparationError
 
 
 # ── Scoring constants ─────────────────────────────────────────────────────────
@@ -454,25 +456,61 @@ async def _check_challenge_eligible(
     if concept_id is None:
         return False
 
-    async def _has_session(uid: int) -> bool:
-        row = (
-            await db.execute(
-                select(AILearningSession.id)
-                .join(
-                    AISessionTeaching,
-                    AISessionTeaching.session_id == AILearningSession.id,
-                )
-                .where(
-                    AILearningSession.user_id == uid,
-                    AILearningSession.concept_id == concept_id,
-                    AILearningSession.status.not_in(INELIGIBLE_STATUSES),
-                )
-                .limit(1)
-            )
-        ).scalar_one_or_none()
-        return row is not None
+    # Reuse the exact session-selection and objective validation used by
+    # Challenge creation. This endpoint is deliberately conservative: if the
+    # authoritative challenge context cannot be built, discovery says false.
+    session_a = await select_relevant_session(user_id, concept_id, db)
+    session_b = await select_relevant_session(peer_id, concept_id, db)
+    if not session_a or not session_b:
+        return False
 
-    return await _has_session(user_id) and await _has_session(peer_id)
+    # Load the exact curriculum objects expected by load_challenge_context.
+    # The IDs come from the shared discovery overlap, but we still verify the
+    # hierarchy and active state so a stale session can never advertise a
+    # challenge that create_challenge would reject.
+    subject = (
+        await db.execute(
+            select(Subject).where(
+                Subject.id == session_a.subject_id,
+                Subject.is_active.is_(True),
+            )
+        )
+    ).scalar_one_or_none()
+    topic = (
+        await db.execute(
+            select(Topic)
+            .options(selectinload(Topic.learning_objectives))
+            .where(Topic.id == session_a.topic_id)
+        )
+    ).scalar_one_or_none()
+    concept = (
+        await db.execute(select(Concept).where(Concept.id == concept_id))
+    ).scalar_one_or_none()
+    if not subject or not topic or not concept or not topic.is_active:
+        return False
+    if topic.subject_id != subject.id or concept.topic_id != topic.id:
+        return False
+    if session_a.subject_id != subject.id or session_a.topic_id != topic.id:
+        return False
+    if session_b.subject_id != subject.id or session_b.topic_id != topic.id:
+        return False
+
+    # load_challenge_context is the same objective-intersection gate used by
+    # ChallengeService.create_challenge(). It also relies only on persisted
+    # teaching objective_ids, not the planned learning tasks.
+    try:
+        await load_challenge_context(
+            challenger_id=user_id,
+            opponent_id=peer_id,
+            subject=subject,
+            topic=topic,
+            concept=concept,
+            session_a=session_a,
+            session_b=session_b,
+        )
+    except ChallengePreparationError:
+        return False
+    return True
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -498,11 +536,8 @@ async def discover_learning_peers(
 
     Returns
     ───────
-    A list of enriched peer dicts, each containing:
-      user              — User.serialize() output
-      relationship      — "none" | "conversation"
-      learningOverlap   — LearningOverlap.to_dict() | None
-      challengeEligible — bool (hint only; backend challenge logic is authoritative)
+    A list of flat, backward-compatible peer dicts containing the normal user
+    fields plus relationship, learningOverlap, and challengeEligible.
     Ordered by overlap score desc, then online status, then name.
     """
     if not candidates:
@@ -519,7 +554,7 @@ async def discover_learning_peers(
         connected = await _get_conversation_partners(current_user_id, candidate_ids, db)
         return [
             {
-                "user": candidate_map[uid].serialize(),
+                **candidate_map[uid].serialize(),
                 "relationship": "conversation" if uid in connected else "none",
                 "learningOverlap": None,
                 "challengeEligible": False,
@@ -554,8 +589,10 @@ async def discover_learning_peers(
         overlap = _score_peer(my_rows, peer_rows_by_user.get(uid, []))
         scored.append((uid, overlap))
 
-    # Filter by minimum overlap strength.
-    min_score = SCORE_SUBJECT if include_weak_overlap else SCORE_TOPIC
+    # Subject overlap is intentionally the weakest supported signal, but it is
+    # still a real learning overlap. Ranking keeps concept > topic > subject.
+    # include_weak_overlap remains for compatibility with older callers.
+    min_score = SCORE_SUBJECT
     filtered = [(uid, ov) for uid, ov in scored if ov is not None and ov.score >= min_score]
 
     # Resolve challenge eligibility for concept-level matches where a conversation exists.
@@ -570,7 +607,7 @@ async def discover_learning_peers(
             )
 
         results.append({
-            "user": candidate_map[uid].serialize(),
+            **candidate_map[uid].serialize(),
             "relationship": "conversation" if is_connected else "none",
             "learningOverlap": overlap.to_dict() if overlap else None,
             "challengeEligible": challenge_eligible,
@@ -581,8 +618,8 @@ async def discover_learning_peers(
         key=lambda r: (
             -(r["learningOverlap"]["score"] if r["learningOverlap"] else 0),
             -(1 if r["learningOverlap"] and r["learningOverlap"]["isActive"] else 0),
-            -(1 if r["user"]["isOnline"] else 0),
-            r["user"]["displayName"].lower(),
+            -(1 if r["isOnline"] else 0),
+            (r.get("displayName") or "").lower(),
         )
     )
 
@@ -599,7 +636,9 @@ async def enrich_discover_users(
     Lightweight enrichment for the general Discover view.
 
     Unlike discover_learning_peers(), this always returns all candidates but
-    adds relationship and a (potentially None) learningOverlap to each.
+    adds relationship and a (potentially None) learningOverlap to each. The
+    response remains flat so existing student.uid/displayName consumers continue
+    to work unchanged.
     Used by GET /api/users/discover (existing general view).
     """
     if not candidates:
@@ -638,7 +677,7 @@ async def enrich_discover_users(
             )
 
         results.append({
-            "user": candidate_map[uid].serialize(),
+            **candidate_map[uid].serialize(),
             "relationship": "conversation" if is_connected else "none",
             "learningOverlap": overlap.to_dict() if overlap else None,
             "challengeEligible": challenge_eligible,

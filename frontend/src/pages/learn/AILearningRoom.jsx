@@ -53,9 +53,7 @@ export default function AILearningRoom() {
 
   const [studyPeriod, setStudyPeriod] = useState(null);
   const [timerSeconds, setTimerSeconds] = useState(0);
-  const [timerPaused, setTimerPaused] = useState(false);
   const timerRef = useRef(null);
-  const pausedRef = useRef(false);
 
   const [summary, setSummary] = useState(null);
   const [showSummary, setShowSummary] = useState(false);
@@ -84,6 +82,7 @@ export default function AILearningRoom() {
 
   const answeredCount = Object.keys(checkResults).length;
   const currentQuestion = questions[qIndex];
+  const teachingHidden = phase === "retrieval" || phase === "practice";
 
   const phaseLabel = {
     preparing: "Preparing lesson",
@@ -327,10 +326,23 @@ export default function AILearningRoom() {
       };
       setCheckResults(prev => ({ ...prev, [currentQuestion.id]: result }));
       addLocalMessage("student", formatAnswerForChat(currentQuestion, answer), { questionId: currentQuestion.id }, "answer");
+      addLocalMessage(
+        "ai",
+        evaluation.feedback || (evaluation.understanding === "strong" ? "Good understanding. Let’s keep going." : "Let’s slow down and rebuild the idea from a different angle."),
+        {
+          questionId: currentQuestion.id,
+          understanding: evaluation.understanding,
+          score: evaluation.score,
+          needsReteach: evaluation.needsReteach,
+        },
+        "feedback"
+      );
 
       if (evaluation.needsReteach) {
-        addLocalMessage("ai", evaluation.feedback || "Let’s slow down and rebuild the idea from a different angle.", { needsReteach: true }, "reteach");
         await reteach(evaluation.misconception);
+        // The new teaching snapshot is persisted before this call, so the next
+        // retrieval is generated from the reteach rather than the old explanation.
+        await generateQuiz(currentTaskIndex);
         return;
       }
 
@@ -403,7 +415,6 @@ export default function AILearningRoom() {
       const period = await api.startStudyPeriod(sessionId, 300, currentTaskIndex);
       setStudyPeriod(period);
       setTimerSeconds(period.durationSeconds);
-      setTimerPaused(false);
       setPhase("studying");
       setSession(prev => ({ ...prev, status: "studying" }));
       startTimer(period.durationSeconds, period.id);
@@ -417,10 +428,7 @@ export default function AILearningRoom() {
   function startTimer(seconds, periodId) {
     clearInterval(timerRef.current);
     setTimerSeconds(seconds);
-    pausedRef.current = false;
-    setTimerPaused(false);
     timerRef.current = setInterval(() => {
-      if (pausedRef.current) return;
       setTimerSeconds(prev => {
         if (prev <= 1) {
           clearInterval(timerRef.current);
@@ -440,11 +448,6 @@ export default function AILearningRoom() {
     } catch (err) {
       setError(err.message || "Study mode could not transition to the quick check.");
     }
-  }
-
-  function toggleTimer() {
-    pausedRef.current = !pausedRef.current;
-    setTimerPaused(pausedRef.current);
   }
 
   async function endSession() {
@@ -524,8 +527,6 @@ export default function AILearningRoom() {
             current={currentTaskIndex}
             completed={completedTaskIndexes}
             progress={planProgress}
-            onStart={startTask}
-            disabled={aiWorking}
             onClose={() => setMobilePanel(null)}
           />
         </aside>
@@ -547,6 +548,7 @@ export default function AILearningRoom() {
           <section className="ar-conversation" aria-live="polite">
             {messages
               .filter(m => !["welcome", "system", "timer_start", "timer_end", "summary"].includes(m.messageType))
+              .filter(m => !teachingHidden || !["teaching", "reteach"].includes(m.messageType))
               .map((msg, index) => (
                 <MessageCard
                   key={msg.id || index}
@@ -573,9 +575,7 @@ export default function AILearningRoom() {
               <StudyCard
                 seconds={timerSeconds}
                 total={studyPeriod?.durationSeconds || 300}
-                paused={timerPaused}
                 task={currentTask}
-                onToggle={toggleTimer}
               />
             )}
 
@@ -648,6 +648,8 @@ export default function AILearningRoom() {
             task={currentTask}
             phase={phase}
             progress={planProgress}
+            familiarity={session?.studentFamiliarity}
+            intent={session?.intent}
             activity={activity}
             answeredCount={answeredCount}
             questionCount={questions.length}
@@ -666,7 +668,7 @@ export default function AILearningRoom() {
   );
 }
 
-function SidebarPlan({ plan, current, completed, progress, onStart, disabled, onClose }) {
+function SidebarPlan({ plan, current, completed, progress, onClose }) {
   return (
     <div className="ar-panel-inner">
       <div className="ar-panel-head">
@@ -682,19 +684,18 @@ function SidebarPlan({ plan, current, completed, progress, onStart, disabled, on
           const done = completed.includes(index);
           const active = current === index && !done;
           return (
-            <button
+            <div
               key={index}
               className={`ar-task ${done ? "done" : ""} ${active ? "active" : ""}`}
-              onClick={() => onStart(task, index)}
-              disabled={disabled}
+              aria-current={active ? "step" : undefined}
             >
               <span className="ar-task-number">{done ? "✓" : index + 1}</span>
               <span className="ar-task-copy">
                 <b>{taskTitle(task)}</b>
                 <small>{taskDescription(task)}</small>
-                <em>{done ? "Completed" : active ? "Current task" : taskMeta(task)}</em>
+                <em>{done ? "Completed" : active ? "Current focus" : taskMeta(task)}</em>
               </span>
-            </button>
+            </div>
           );
         }) : (
           <div className="ar-empty-plan"><span>✦</span><p>Your tutor is building a plan around this concept.</p></div>
@@ -702,13 +703,13 @@ function SidebarPlan({ plan, current, completed, progress, onStart, disabled, on
       </div>
       <div className="ar-plan-note">
         <span>✦</span>
-        <p><b>Agentic tutor</b> can change the order, reteach a concept, or generate a check when you’re ready.</p>
+        <p><b>Continuous tutor</b> uses this roadmap as context. You stay in one learning room while UPRAD chooses the next teaching move.</p>
       </div>
     </div>
   );
 }
 
-function WorkspacePanel({ session, task, phase, progress, activity, answeredCount, questionCount, onQuiz, onStudy, onClose }) {
+function WorkspacePanel({ session, task, phase, progress, familiarity, intent, activity, answeredCount, questionCount, onQuiz, onStudy, onClose }) {
   return (
     <div className="ar-panel-inner">
       <div className="ar-panel-head">
@@ -718,8 +719,12 @@ function WorkspacePanel({ session, task, phase, progress, activity, answeredCoun
 
       <div className="ar-current-card">
         <span className="ar-current-kicker">NOW LEARNING</span>
-        <h3>{taskTitle(task) || "Building your lesson"}</h3>
+        <h3>{taskTitle(task) || session?.conceptName || "Building your lesson"}</h3>
         <p>{taskDescription(task) || "The tutor will keep the lesson focused and adaptive."}</p>
+        <div className="ar-context-facts">
+          {familiarity && <span>Starting point: {formatFamiliarity(familiarity)}</span>}
+          {intent && <span>Goal: {formatIntent(intent)}</span>}
+        </div>
         <span className={`ar-phase-pill ar-phase-${phase}`}>{phase.replace("_", " ")}</span>
       </div>
 
@@ -815,17 +820,17 @@ function AgentCheckpoint({ task, taskIndex, onQuiz, onStudy, disabled }) {
   );
 }
 
-function StudyCard({ seconds, total, paused, task, onToggle }) {
+function StudyCard({ seconds, total, task }) {
   const pct = total ? Math.max(0, Math.min(100, Math.round((seconds / total) * 100))) : 0;
   return (
     <div className="ar-study-card">
-      <div className="ar-study-orbit"><span>{formatTime(seconds)}</span><small>{paused ? "Paused" : "Focus"}</small></div>
+      <div className="ar-study-orbit"><span>{formatTime(seconds)}</span><small>{seconds > 0 ? "Focus" : "Finishing…"}</small></div>
       <div className="ar-study-copy">
         <span className="ar-eyebrow">FOCUSED STUDY MODE</span>
         <h3>{taskTitle(task) || "Study the current concept"}</h3>
         <p>Review the explanation, work through the examples, and make your own notes. The recall check unlocks when the study period ends.</p>
         <div className="ar-study-track"><i style={{ width: `${pct}%` }} /></div>
-        <button onClick={onToggle}>{paused ? "Resume focus" : "Pause timer"}</button>
+        <span className="ar-study-server-note">Server-timed focus period · the session state survives refresh.</span>
       </div>
     </div>
   );
@@ -981,6 +986,28 @@ function inlineMarkdown(text) {
 
 async function copyText(text, id, onCopy) {
   try { await navigator.clipboard?.writeText(text); onCopy(id); setTimeout(() => onCopy(null), 1300); } catch {}
+}
+
+function formatFamiliarity(value) {
+  return ({
+    new: "new to this",
+    seen_before: "seen it before",
+    know_basics: "basics understood",
+    know_well: "confident with it",
+    need_help: "specific help needed",
+  })[value] || value;
+}
+function formatIntent(value) {
+  return ({
+    teach_me: "learn the concept",
+    explain_simply: "simple explanation",
+    give_examples: "learn through examples",
+    go_deeper: "go deeper",
+    already_know: "probe existing understanding",
+    quiz_me: "diagnostic first",
+    broaden: "broaden the context",
+    custom: "custom goal",
+  })[value] || value;
 }
 
 function taskTitle(task) {

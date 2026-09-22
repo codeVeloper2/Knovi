@@ -37,6 +37,7 @@ from app.models.curriculum import Concept, LearningObjective, Misconception, Sub
 from app.models.learning_profile import AILearningProfile
 from app.services.ai_service import call_with_fallback, parse_json
 from app.services import learning_profile_service as lp_svc
+from app.services import progress_service
 
 logger = logging.getLogger(__name__)
 
@@ -651,8 +652,9 @@ async def complete_session(session_id: int, user_id: int, db: AsyncSession) -> d
     if session.status in ("completed", "abandoned"):
         return session.serialize()
 
-    # teaching is included because the agentic flow may complete without a study timer
-    ELIGIBLE_FOR_COMPLETION = {"teaching", "retrieval", "practice", "reteaching", "paused"}
+    # Completion is only valid after the learner has entered retrieval/practice.
+    # Study mode is optional, but a completed room must contain retrieval evidence.
+    ELIGIBLE_FOR_COMPLETION = {"retrieval", "practice"}
     if session.status not in ELIGIBLE_FOR_COMPLETION:
         # Force abandon rather than falsely mark as completed
         raise HTTPException(
@@ -1459,6 +1461,8 @@ async def submit_answer(
     db: AsyncSession,
 ) -> dict:
     session = await _get_session_owned(session_id, user_id, db)
+    if session.status not in ("retrieval", "practice"):
+        raise HTTPException(409, f"Answers can only be submitted during retrieval; session is '{session.status}'.")
 
     # Verify question belongs to this session (cross-session injection guard)
     q_result = await db.execute(
@@ -1545,7 +1549,12 @@ Scoring guide:
         understanding = "partial"
     needs_reteach = bool(parsed.get("needs_reteach", False))
 
-    # Deterministic override: if score < 50, always needs reteach
+    # The learning-room policy is explicit: strong understanding can continue;
+    # partial/weak understanding gets a different teaching approach before the
+    # next retrieval check. The score guard keeps the model from accidentally
+    # marking a low-scoring answer as strong.
+    if understanding in ("weak", "partial"):
+        needs_reteach = True
     if score_val is not None and score_val < 50:
         needs_reteach = True
         if understanding == "strong":
@@ -1828,8 +1837,8 @@ async def generate_session_summary(
         load_teaching=True, load_questions=True,
         load_attempts=True, load_summary=True,
     )
-    if session.status in ("created", "abandoned"):
-        raise HTTPException(409, f"Cannot summarize: session is '{session.status}'.")
+    if session.status not in ("retrieval", "practice", "completed"):
+        raise HTTPException(409, f"Cannot summarize: session is '{session.status}'. Complete a retrieval check first.")
 
     answers_result = await db.execute(
         select(AISessionAnswer).where(AISessionAnswer.session_id == session_id)
@@ -1952,6 +1961,24 @@ Return JSON:
 
     await db.commit()
     await db.refresh(summary)
+
+    # Persist this completed AI-learning evidence into the existing progress
+    # architecture. The operation is idempotent and never touches challenge
+    # practice_score. Streak/activity is recorded through the same service used
+    # by the rest of PeerUP.
+    try:
+        await progress_service.record_ai_learning_progress(
+            db,
+            user_id=user_id,
+            topic_id=session.topic_id,
+            overall_score=overall_score,
+            completed_at=session.completed_at or _now(),
+        )
+        await db.commit()
+        await progress_service.record_activity(db, user_id)
+    except Exception as progress_exc:
+        logger.warning("AI learning progress update failed (non-fatal): %s", progress_exc)
+
     return summary.serialize()
 
 

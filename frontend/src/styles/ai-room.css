@@ -778,3 +778,8 @@
   .ar-context-progress { width:82px; }
   .ar-command-chip:nth-of-type(n+5) { display:none; }
 }
+.ar-context-facts { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
+.ar-context-facts span { padding:4px 6px; border:1px solid var(--ar-border); border-radius:6px; color:#7f9ab9; background:rgba(255,255,255,.018); font-size:7px; }
+.ar-study-server-note { display:block; margin-top:8px; color:#587596; font-size:8px; line-height:1.45; }
+.ar-task { cursor:default; }
+.ar-task:hover { cursor:default; }

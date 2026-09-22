@@ -199,7 +199,8 @@ export function discoverUsers(level, availability, sort) {
 /**
  * Learning Peers — students with meaningful learning overlap to the current user.
  * Returns up to 20 results sorted by overlap score.
- * Each result: { user, relationship, learningOverlap, challengeEligible }
+ * Each result is flat: normal user fields plus relationship, learningOverlap,
+ * and challengeEligible.
  *
  * @param {object} opts
  * @param {string} [opts.level]        - Grade filter e.g. "Year 10"

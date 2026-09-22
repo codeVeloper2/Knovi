@@ -163,7 +163,12 @@ async def teach_concept(
 
     The strategy is selected based on session intent and previous strategies used.
     """
-    return await svc.teach_concept(session_id=session_id, user_id=user.id, db=db)
+    return await svc.teach_concept(
+        session_id=session_id,
+        user_id=user.id,
+        db=db,
+        task_index=body.task_index if body else None,
+    )
 
 
 @router.post("/learning/sessions/{session_id}/message", response_model=MessageOut)

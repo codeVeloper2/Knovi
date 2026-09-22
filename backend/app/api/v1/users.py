@@ -54,8 +54,8 @@ async def discover_users(
     """Discover other students for chat, study sessions, or challenges.
 
     When section=learning_peers:
-        Returns students with meaningful learning overlap (topic or stronger by
-        default; subject-level included when overlap_type=all). Results are
+        Returns students with learning overlap (concept, topic, or subject),
+        ranked deterministically from strongest to weakest. Results are
         enriched with learningOverlap, relationship, and challengeEligible.
 
     When section=all (or section is absent — backward-compatible):
@@ -120,7 +120,7 @@ async def discover_users(
             key=lambda r: (
                 -(r["learningOverlap"]["score"] if r.get("learningOverlap") else 0),
                 -(1 if r["learningOverlap"] and r["learningOverlap"]["isActive"] else 0),
-                -(1 if r["user"]["isOnline"] else 0),
+                -(1 if r["isOnline"] else 0),
             )
         )
 
@@ -140,6 +140,7 @@ async def _fetch_candidates(
     query = select(User).where(
         and_(
             User.profile_complete.is_(True),
+            User.is_public.is_(True),
             User.id != user_id,
         )
     )
