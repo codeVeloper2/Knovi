@@ -19558,7 +19558,9 @@ kbd {
     min-height: 0 !important;
     justify-content: flex-end !important;
   }
+  /* Fix challenge page .cr-header bleed */
   .chatx-shell .cr-header {
+    text-align: left !important;
     height: 56px !important;
     padding: 0 8px 0 4px !important;
     background: var(--navy-panel) !important;
@@ -19568,6 +19570,7 @@ kbd {
     align-items: center !important;
     gap: 6px !important;
     flex-shrink: 0 !important;
+    justify-content: flex-start !important;
   }
   .chatx-shell .cr-back { display: flex !important; color: var(--text-soft); width: 36px; height: 36px; align-items: center; justify-content: center; flex-shrink: 0; }
   .chatx-shell .cr-header > .cav { margin-left: 0; width: 40px !important; height: 40px !important; flex-shrink: 0; }
@@ -19593,7 +19596,9 @@ kbd {
 
   /* ── Bubbles ── */
   .chatx-shell .cb-wrap { max-width: 82%; }
-  .chatx-shell .cmr { gap: 6px; margin-bottom: 2px; }
+  .chatx-shell .cmr { gap: 6px; margin-bottom: 2px; width: 100%; }
+  .chatx-shell .cmr--mine { justify-content: flex-end !important; }
+  .chatx-shell .cmr--theirs { justify-content: flex-start !important; }
   /* Received */
   .chatx-shell .cb { background: var(--navy-panel) !important; border: 1px solid var(--navy-line) !important; color: var(--text) !important; border-radius: 2px 14px 14px 14px !important; padding: 7px 10px 5px !important; box-shadow: 0 1px 3px rgba(0,0,0,.25) !important; font-size: .9rem !important; line-height: 1.45 !important; }
   /* Sent */
