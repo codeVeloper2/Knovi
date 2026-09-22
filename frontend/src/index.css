@@ -19494,9 +19494,15 @@ kbd {
 @media (max-width: 768px) {
   .chatx-shell {
     grid-template-columns: 1fr;
-    height: calc(100dvh - 68px);
-    margin: -20px -16px -48px;
+    position: fixed;
+    top: 56px;   /* below the 56px mobile top bar */
+    left: 0;
+    right: 0;
+    bottom: 68px; /* above the mobile bottom nav */
+    height: auto;
+    margin: 0;
     background: var(--navy-900);
+    z-index: 10;
   }
   .chatx-shell .chatx-sidebar { width: 100%; }
   .chatx-shell > .cr, .chatx-shell .cr { display: none; width: 100%; }
@@ -19671,7 +19677,7 @@ kbd {
 
 /* ─── Small mobile ─── */
 @media (max-width: 480px) {
-  .chatx-shell { margin: -16px -12px -40px; height: calc(100dvh - 68px); }
+  .chatx-shell { margin: 0; top: 56px; bottom: 68px; height: auto; }
   .chatx-shell .cb-wrap { max-width: 88%; }
   .chatx-shell .cr-header { height: 56px; }
   .chatx-shell .cr-header-actions .cr-call-action,
