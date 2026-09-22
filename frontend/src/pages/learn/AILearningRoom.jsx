@@ -45,7 +45,10 @@ export default function AILearningRoom() {
   const [checkResults, setCheckResults] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [msgInput, setMsgInput] = useState("");
-  const [ttsEnabled, setTtsEnabled] = useState(false);
+  const [ttsEnabled, setTtsEnabled] = useState(() => {
+    try { return localStorage.getItem("peerup.learningRoom.ttsEnabled") === "true"; } catch { return false; }
+  });
+  const [isTyping, setIsTyping] = useState(false);
   const [mobilePanel, setMobilePanel] = useState(null);
   const [leftOpen, setLeftOpen] = useState(() => {
     try { return localStorage.getItem("peerup.learningRoom.leftOpen") !== "false"; } catch { return true; }
@@ -53,13 +56,13 @@ export default function AILearningRoom() {
   const [rightOpen, setRightOpen] = useState(() => {
     try { return localStorage.getItem("peerup.learningRoom.rightOpen") !== "false"; } catch { return true; }
   });
-  const [restoreNotice, setRestoreNotice] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
 
   const bottomRef = useRef(null);
   const timerRef = useRef(null);
   const ttsRef = useRef(false);
   const idleTimerRef = useRef(null);
+  const typingDebounceRef = useRef(null);
   const idleNudgeRef = useRef(0);
   const spokenGroupsRef = useRef(new Set());
   const lastActivitySeqRef = useRef(null);
@@ -102,11 +105,16 @@ export default function AILearningRoom() {
   }[phase] || "Learning";
 
   useEffect(() => {
+    ttsRef.current = ttsEnabled;
+    try { localStorage.setItem("peerup.learningRoom.ttsEnabled", String(ttsEnabled)); } catch {}
+  }, [ttsEnabled]);
+
+  useEffect(() => {
     clearTimeout(idleTimerRef.current);
-    if (!session || aiWorking || !["teaching", "reteaching"].includes(phase) || mobilePanel === "plan" || mobilePanel === "tools") return;
+    if (!session || aiWorking || isTyping || !["teaching", "reteaching"].includes(phase) || mobilePanel === "plan" || mobilePanel === "tools") return;
     const ordered = [...messages].sort((a,b) => Number(a.sequence || 0) - Number(b.sequence || 0));
     const latest = ordered[ordered.length - 1];
-    if (!latest || latest.role !== "ai" || ["practice", "feedback"].includes(latest.messageType)) return;
+    if (!latest || latest.role !== "ai" || latest.messageType === "feedback") return;
     const latestSeq = Number(latest.sequence || 0);
     const isNudge = latest.messageType === "idle_nudge";
     if (isNudge) {
@@ -119,7 +127,11 @@ export default function AILearningRoom() {
       idleNudgeRef.current = 0;
     }
     const delay = idleNudgeRef.current === 0 ? 45000 : 60000;
-    idleTimerRef.current = setTimeout(async () => {
+    const fireIdleNudge = async () => {
+      if (window.speechSynthesis?.speaking || aiWorking || isTyping) {
+        idleTimerRef.current = setTimeout(fireIdleNudge, 5000);
+        return;
+      }
       const nextNudge = idleNudgeRef.current + 1;
       if (nextNudge > 2) return;
       try {
@@ -128,15 +140,17 @@ export default function AILearningRoom() {
         setMessages(prev => prev.some(m => m.id === nudge.id) ? prev : [...prev, nudge]);
         speak(nudge.content || "");
       } catch {}
-    }, delay);
+    };
+    idleTimerRef.current = setTimeout(fireIdleNudge, delay);
     return () => clearTimeout(idleTimerRef.current);
-  }, [sessionId, session, messages, aiWorking, phase, mobilePanel]);
+  }, [sessionId, session, messages, aiWorking, isTyping, phase, mobilePanel]);
 
   useEffect(() => {
     loadSession();
     return () => {
       clearInterval(timerRef.current);
       clearTimeout(idleTimerRef.current);
+      clearTimeout(typingDebounceRef.current);
       revealTimersRef.current.forEach(clearTimeout);
       revealTimersRef.current = [];
       window.speechSynthesis?.cancel();
@@ -146,12 +160,6 @@ export default function AILearningRoom() {
   useEffect(() => {
     if (!aiWorking) bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages.length, phase, currentQuestion?.id]);
-
-  useEffect(() => {
-    if (!restoreNotice) return;
-    const t = setTimeout(() => setRestoreNotice(false), 4200);
-    return () => clearTimeout(t);
-  }, [restoreNotice]);
 
   async function loadSession() {
     setLoading(true);
@@ -183,8 +191,6 @@ export default function AILearningRoom() {
               if (Array.isArray(serverMessages)) freshMsgs = serverMessages;
             } catch {}
             applySession(fresh, freshMsgs);
-            const group = freshMsgs.find(m => m?.role === "ai" && Number(m?.extra?.taskIndex) === persistedIndex && m?.extra?.responseGroupId)?.extra?.responseGroupId;
-            if (group) speakNewAiMessages(freshMsgs, group);
           } finally {
             setAiWorking(false);
           }
@@ -322,6 +328,7 @@ export default function AILearningRoom() {
     const next = !ttsEnabled;
     ttsRef.current = next;
     setTtsEnabled(next);
+    try { localStorage.setItem("peerup.learningRoom.ttsEnabled", String(next)); } catch {}
     if (!next) window.speechSynthesis?.cancel();
   }
 
@@ -338,20 +345,28 @@ export default function AILearningRoom() {
   }
 
   function revealCanonicalMessages(canonical, groupId = null) {
-    if (!groupId) { setMessages(canonical); return; }
+    if (!groupId) {
+      setMessages(canonical);
+      return Promise.resolve();
+    }
     const chunks = canonical.filter(m => m?.role === "ai" && m?.extra?.responseGroupId === groupId)
       .sort((a,b) => Number(a.sequence || 0) - Number(b.sequence || 0));
-    if (chunks.length <= 1) { setMessages(canonical); return; }
+    if (chunks.length <= 1) {
+      setMessages(canonical);
+      return Promise.resolve();
+    }
     const withoutGroup = canonical.filter(m => m?.extra?.responseGroupId !== groupId);
     revealTimersRef.current.forEach(clearTimeout);
     revealTimersRef.current = [];
     setMessages([...withoutGroup, chunks[0]]);
+    const revealDelay = 650 * (chunks.length - 1);
     chunks.slice(1).forEach((chunk, index) => {
       const timer = setTimeout(() => {
         setMessages(prev => [...prev, chunk]);
       }, 650 * (index + 1));
       revealTimersRef.current.push(timer);
     });
+    return new Promise(resolve => setTimeout(resolve, revealDelay + 50));
   }
 
   async function sendMessage(raw) {
@@ -372,7 +387,7 @@ export default function AILearningRoom() {
         if (Array.isArray(serverMessages)) canonical = serverMessages;
       } catch {}
       setSession(fresh);
-      revealCanonicalMessages(canonical, msg.extra?.responseGroupId || null);
+      await revealCanonicalMessages(canonical, msg.extra?.responseGroupId || null);
       if (msg.extra?.responseGroupId) speakNewAiMessages(canonical, msg.extra.responseGroupId);
       else speak(msg.content || "");
 
@@ -396,6 +411,12 @@ export default function AILearningRoom() {
             setSession(fresh);
             setMessages(msgs);
             setCurrentTaskIndex(nextIndex);
+            const persistedState = fresh?.learningState;
+            if (Array.isArray(persistedState?.completedTaskIndexes)) {
+              setCompletedTaskIndexes(
+                persistedState.completedTaskIndexes.map(Number).filter(Number.isInteger)
+              );
+            }
             setPhase("teaching");
             const newTaskMessages = msgs.filter(m => m.role === "ai" && Number(m.extra?.taskIndex) === nextIndex);
             const group = newTaskMessages.find(m => m.extra?.responseGroupId)?.extra?.responseGroupId;
@@ -461,25 +482,16 @@ export default function AILearningRoom() {
       };
       setCheckResults(prev => ({ ...prev, [currentQuestion.id]: result }));
 
-      // These entries are persisted by the backend through the existing
-      // ai_session_messages stream. Add them immediately for a continuous UI.
-      addLocalMessage(
-        "student",
-        `**Question ${currentQuestion.sequence || qIndex + 1}:** ${currentQuestion.question}\n\n**Answer:** ${answer}`,
-        { questionId: currentQuestion.id, practice: true },
-        "answer"
-      );
-      addLocalMessage(
-        "ai",
-        evaluation.feedback || (evaluation.understanding === "strong" ? "Good understanding. Let’s keep going." : "Let’s slow down and rebuild the idea from a different angle."),
-        {
-          questionId: currentQuestion.id,
-          understanding: evaluation.understanding,
-          score: evaluation.score,
-          needsReteach: evaluation.needsReteach,
-        },
-        "feedback"
-      );
+      // The backend already persisted the answer and feedback. Rehydrate the
+      // canonical stream so the UI never renders a second client-only copy.
+      const fresh = await api.getAISession(sessionId);
+      let canonical = fresh?.messages || [];
+      try {
+        const serverMessages = await api.getSessionMessages(sessionId);
+        if (Array.isArray(serverMessages)) canonical = serverMessages;
+      } catch {}
+      setSession(fresh);
+      setMessages(canonical);
 
       const next = qIndex + 1;
       setAnswerInput("");
@@ -515,7 +527,6 @@ export default function AILearningRoom() {
       setQuestions([]);
       setQIndex(0);
       setAnswerInput("");
-      setRestoreNotice(true);
 
       // The backend now persists the canonical AI practice-complete message and
       // taskCompleted/taskIndex metadata. Rehydrate that state instead of
@@ -709,7 +720,15 @@ export default function AILearningRoom() {
               <div className="ar-composer-icon"><TutorAvatar size={30} /></div>
               <textarea
                 value={msgInput}
-                onChange={e => setMsgInput(e.target.value)}
+                onChange={e => {
+                  setMsgInput(e.target.value);
+                  clearTimeout(idleTimerRef.current);
+                  setIsTyping(Boolean(e.target.value.trim()));
+                  clearTimeout(typingDebounceRef.current);
+                  if (e.target.value.trim()) {
+                    typingDebounceRef.current = setTimeout(() => setIsTyping(false), 3000);
+                  }
+                }}
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                 disabled={!canType}
                 rows={1}
@@ -750,7 +769,6 @@ export default function AILearningRoom() {
       </div>
 
       {mobilePanel && <button className="ar-mobile-backdrop" onClick={() => setMobilePanel(null)} aria-label="Close panel" />}
-      {restoreNotice && <div className="ar-toast" role="status"><strong>✓ Practice complete</strong><span>Your learning conversation has been restored.</span></div>}
     </div>
   );
 }

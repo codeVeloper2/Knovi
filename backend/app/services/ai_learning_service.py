@@ -1285,6 +1285,22 @@ Rules:
         action_data = {"reason": "The learner indicated understanding and can be invited to a quick check."}
         response_text = "Great. Are you ready for a quick check?"
 
+    next_task_index = (
+        int(action_data.get("task_index"))
+        if action == "next_task"
+        and isinstance(action_data, dict)
+        and str(action_data.get("task_index", "")).isdigit()
+        else None
+    )
+
+    # Passing the quiz is not itself task completion. The learner's explicit
+    # confirmation of the transition is the canonical completion event.
+    previous_completed_task_index = (
+        next_task_index - 1
+        if next_task_index is not None
+        else None
+    )
+
     response_extra = {
         "provider": provider,
         "inResponseTo": content[:100],
@@ -1294,8 +1310,14 @@ Rules:
         "sessionNote": session_note,
         "action": action,
         "actionData": action_data,
-        "currentTaskIndex": int(action_data.get("task_index")) if action == "next_task" and isinstance(action_data, dict) and str(action_data.get("task_index", "")).isdigit() else current_task_index,
+        "currentTaskIndex": next_task_index if next_task_index is not None else current_task_index,
     }
+    if previous_completed_task_index is not None:
+        response_extra.update({
+            "taskCompleted": True,
+            "taskIndex": previous_completed_task_index,
+            "transitionConfirmed": True,
+        })
     created = await _add_ai_response(session_id, "teaching", response_text, db, extra=response_extra)
     await db.commit()
     for msg in created:
@@ -1577,6 +1599,7 @@ QUESTIONS TO VALIDATE:
 
 For each question, return whether it can be answered correctly using ONLY the current task material
 and direct reasoning from it. If a question introduces a concept not taught in the current task, mark false.
+A question is invalid even if the student might know the concept from school generally.
 Return JSON only: {{"valid": true|false, "invalid_indexes": [0,1], "reason": "brief reason"}}
 """
         verify_raw, _ = await call_with_fallback(
@@ -1589,17 +1612,67 @@ Return JSON only: {{"valid": true|false, "invalid_indexes": [0,1], "reason": "br
         if not bool(verification.get("valid", False)):
             # Regenerate once with an even stricter warning.
             raw2, _ = await call_with_fallback(
-                prompt + "\nIMPORTANT: Previous questions leaked future-task knowledge. Regenerate and keep every question strictly inside the current task.",
-                system=system_prompt, temperature=0.25, json_mode=True
+                prompt + "\nIMPORTANT: Previous questions leaked future-task knowledge. Regenerate and keep every question strictly inside the current task. Do not mention or assess any future-task concept.",
+                system=system_prompt, temperature=0.2, json_mode=True
             )
             parsed = parse_json(raw2)
             raw_questions = _safe_list(parsed.get("questions"))
+
+            # Fail closed: a validator failure must never silently fall back to
+            # an unvalidated quiz. Re-run the validator against the regenerated
+            # questions and refuse to create the practice run if scope remains
+            # uncertain.
+            verify_prompt2 = f"""You are a strict curriculum assessment validator.
+CURRENT TASK MATERIAL:
+{teaching_summary}
+
+FORBIDDEN OTHER TASKS:
+{future_tasks}
+
+REGENERATED QUESTIONS TO VALIDATE:
+{json.dumps(raw_questions, ensure_ascii=False)}
+
+Return JSON only: {{"valid": true|false, "invalid_indexes": [0,1], "reason": "brief reason"}}.
+Mark false if any question requires knowledge not explicitly taught in the current task material.
+"""
+            verify_raw2, _ = await call_with_fallback(
+                verify_prompt2,
+                system="You are a strict assessment-scope checker. Reject future-task or untaught knowledge.",
+                temperature=0.05,
+                json_mode=True,
+            )
+            verification2 = parse_json(verify_raw2)
+            if not bool(verification2.get("valid", False)):
+                raise HTTPException(502, "The tutor could not produce a quiz safely scoped to the current Learning Plan task.")
+    except HTTPException:
+        raise
     except Exception as exc:
-        logger.warning("Quiz scope validation failed; keeping primary generation result: %s", exc)
+        logger.error("Quiz scope validation failed closed: %s", exc)
+        raise HTTPException(502, "The tutor could not verify that the quiz is scoped to the current Learning Plan task.")
 
     raw_questions = _safe_list(parsed.get("questions"))
     if not raw_questions:
         raise HTTPException(502, "AI returned no questions.")
+
+    # Deterministic guard for obvious future-task leakage. The semantic
+    # validator remains authoritative, but exact multi-word terms from other
+    # Learning Plan tasks are never allowed into the current task's quiz.
+    forbidden_phrases: list[str] = []
+    for i, other_task in enumerate(plan):
+        if i == task_index or not isinstance(other_task, dict):
+            continue
+        for key in ("title", "focus", "description"):
+            value = _safe_str(other_task.get(key), "")
+            normalized = re.sub(r"[^a-z0-9 ]+", " ", value.lower())
+            normalized = re.sub(r"\s+", " ", normalized).strip()
+            if len(normalized.split()) >= 2:
+                forbidden_phrases.append(normalized)
+    for q in raw_questions:
+        q_text = _safe_str(q.get("question"), "").lower()
+        normalized_q = re.sub(r"[^a-z0-9 ]+", " ", q_text)
+        normalized_q = re.sub(r"\s+", " ", normalized_q).strip()
+        if any(phrase in normalized_q for phrase in forbidden_phrases):
+            raise HTTPException(502, "The tutor generated a question that references another Learning Plan task.")
 
     # Determine next sequence number
     seq_result = await db.execute(
@@ -2009,11 +2082,11 @@ Scoring guide:
 async def complete_practice_run(
     session_id: int, user_id: int, question_ids: list[int], db: AsyncSession
 ) -> dict:
-    """Close the current practice run and persist the Learning Plan transition.
+    """Close the current practice run and persist its server-authoritative outcome.
 
-    Task completion is server-authoritative. The frontend never owns the
-    completed-task cursor, so a refresh cannot make a completed task appear
-    active again. The canonical completion event is stored as an AI message.
+    Passing a quiz creates the persisted transition prompt, but does NOT mark
+    the task complete yet. Completion is recorded only when the learner
+    explicitly confirms readiness for the next Learning Plan task.
     """
     session = await _get_session_owned(
         session_id, user_id, db, load_messages=True, load_teaching=True
@@ -2098,7 +2171,9 @@ async def complete_practice_run(
         )
         extra = {
             "practiceComplete": True,
-            "taskCompleted": True,
+            # Passing the compulsory quiz is not itself task completion. The
+            # learner must explicitly confirm readiness for the next task.
+            "taskCompleted": False,
             "taskIndex": task_index,
             "currentTaskIndex": task_index,
             "nextTaskIndex": next_task_index,
@@ -2168,6 +2243,26 @@ async def generate_adaptive_reteach(
     new_strategy    = _pick_next_strategy(used_strategies, session.intent)
     attempt_number  = len(session.teaching) + 1
 
+    # Reteaching is scoped to the same Learning Plan item that just failed.
+    # It must not broaden back out to the whole concept or future tasks.
+    current_task_index = _current_task_index_from_messages(session.messages)
+    learning_plan: list[dict] = []
+    for teaching in session.teaching:
+        try:
+            candidate = parse_json(teaching.raw_content or "{}").get("learning_tasks")
+            if isinstance(candidate, list) and candidate:
+                learning_plan = candidate
+                break
+        except Exception:
+            continue
+    current_task = (
+        learning_plan[current_task_index]
+        if 0 <= current_task_index < len(learning_plan)
+        else {}
+    )
+    current_task_title = _safe_str(current_task.get("title"), f"Learning task {current_task_index + 1}")
+    current_task_objectives = current_task.get("objectiveIds") or current_task.get("objective_ids") or []
+
     # FIX: Use .mappings() to avoid Row attribute access bugs
     recent_rows = (await db.execute(
         select(AISessionAnswer, AISessionQuestion)
@@ -2206,6 +2301,16 @@ async def generate_adaptive_reteach(
     )
     prompt = f"""{curriculum_ctx}
 
+CURRENT LEARNING PLAN TASK — RETEACH ONLY THIS TASK
+Task number: {current_task_index + 1}
+Task title: {current_task_title}
+Task objectives: {current_task_objectives}
+Task description: {current_task.get("description", "")}
+Task focus: {current_task.get("focus", "")}
+
+Do NOT reteach future Learning Plan tasks or unrelated parts of the concept.
+Use only the current task's material/objectives and the student's demonstrated gaps.
+
 PREVIOUS STRATEGIES USED: {', '.join(used_strategies)}
 NEW STRATEGY: {new_strategy}
 STUDENT STRUGGLES (recent answers):
@@ -2213,7 +2318,7 @@ STUDENT STRUGGLES (recent answers):
 {misconception_note}
 STUDENT REASON: {reason or '(none given)'}
 
-Reteach this concept from scratch using the '{new_strategy}' strategy.
+Reteach ONLY "{current_task_title}" using the '{new_strategy}' strategy.
 Make it genuinely different — a fresh angle addressing the student's actual struggles.
 {f"Specifically address: {identified_misconceptions[0]}" if identified_misconceptions else ""}
 
@@ -2243,7 +2348,7 @@ Return JSON (all array fields required; may be empty):
     explanation   = _safe_str(parsed.get("explanation"), "Reteaching content temporarily unavailable.")
     encouragement = _safe_str(parsed.get("encouragement"), "A different perspective can make all the difference!")
 
-    valid_objective_ids = {int(lo.id) for lo in (topic.learning_objectives or [])}
+    valid_objective_ids = {int(x) for x in current_task_objectives if str(x).isdigit()}
     covered_objective_ids: list[int] = []
     raw_covered = parsed.get("covered_objective_ids") or []
     for raw_id in raw_covered:
