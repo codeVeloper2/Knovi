@@ -19598,7 +19598,7 @@ kbd {
 
   /* ── Messages area ── */
   .chatx-shell .cr-messages {
-    padding: 8px 10px 12px 6px !important;
+    padding: 8px 12px 12px 2px !important;
     background: var(--navy-900) !important;
     background-image: none !important;
     gap: 3px !important;
@@ -19613,10 +19613,10 @@ kbd {
   }
 
   /* ── Bubbles ── */
-  .chatx-shell .cb-wrap { max-width: 82%; }
-  .chatx-shell .cmr { gap: 6px; margin-bottom: 2px; width: 100%; flex-direction: row !important; }
-  .chatx-shell .cmr--mine { justify-content: flex-end !important; flex-direction: row !important; }
-  .chatx-shell .cmr--theirs { justify-content: flex-start !important; flex-direction: row !important; }
+  .chatx-shell .cb-wrap { max-width: 82%; min-width: 0; position: relative; overflow: visible; }
+  .chatx-shell .cmr { gap: 6px; margin-bottom: 14px; width: 100%; flex-direction: row !important; }
+  .chatx-shell .cmr--mine { justify-content: flex-end !important; flex-direction: row !important; padding-right: 4px; }
+  .chatx-shell .cmr--theirs { justify-content: flex-start !important; flex-direction: row !important; padding-left: 0; }
   /* Received */
   .chatx-shell .cb { background: var(--navy-panel) !important; border: 1px solid var(--navy-line) !important; color: var(--text) !important; border-radius: 2px 14px 14px 14px !important; padding: 7px 10px 5px !important; box-shadow: 0 1px 3px rgba(0,0,0,.25) !important; font-size: .9rem !important; line-height: 1.45 !important; }
   /* Sent */
@@ -19638,7 +19638,9 @@ kbd {
   .chatx-shell .cb-img { max-width: 260px !important; max-height: 280px !important; border-radius: 8px !important; }
 
   /* Reactions */
-  .chatx-shell .cb-reactions { bottom: -11px !important; gap: 3px !important; }
+  .chatx-shell .cb-reactions { bottom: -13px !important; gap: 3px !important; position: absolute !important; z-index: 3 !important; }
+  .chatx-shell .cb-reactions--mine { right: 4px !important; left: auto !important; }
+  .chatx-shell .cb-reactions--theirs { left: 4px !important; right: auto !important; }
   .chatx-shell .cb-reaction { background: var(--navy-800) !important; border: 1px solid var(--navy-line) !important; border-radius: 999px !important; font-size: .75rem !important; min-height: 22px !important; padding: 1px 7px !important; box-shadow: 0 1px 3px rgba(0,0,0,.3) !important; }
   .chatx-shell .cb-reaction--me { background: rgba(91,110,245,.18) !important; border-color: var(--blue-bright) !important; }
 
