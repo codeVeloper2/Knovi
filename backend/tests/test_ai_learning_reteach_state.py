@@ -78,3 +78,19 @@ def test_uncertainty_answers_are_valid_weak_evidence():
         assert _is_uncertainty_response(answer)
 
     assert not _is_uncertainty_response("Newton's second law is F=ma")
+
+
+def test_protected_message_filter_hides_teaching_and_reteach_content():
+    from app.models.ai_learning import AISessionMessage
+    from app.services.ai_learning_service import _filter_protected_messages
+
+    messages = [
+        AISessionMessage(id=1, session_id=1, role="ai", message_type="teaching", content="hidden explanation", sequence=1),
+        AISessionMessage(id=2, session_id=1, role="student", message_type="question", content="What?", sequence=2),
+        AISessionMessage(id=3, session_id=1, role="ai", message_type="reteach", content="hidden reteach", sequence=3),
+        AISessionMessage(id=4, session_id=1, role="ai", message_type="agent", content="Quick check ready", sequence=4),
+    ]
+
+    visible = _filter_protected_messages(messages)
+    assert [m["messageType"] for m in visible] == ["question", "agent"]
+    assert all("hidden" not in m["content"] for m in visible)

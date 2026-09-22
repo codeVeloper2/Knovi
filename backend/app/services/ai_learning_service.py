@@ -137,6 +137,18 @@ def _is_uncertainty_response(answer: str) -> bool:
     return bool(normalized and _UNCERTAINTY_RESPONSE_RE.fullmatch(normalized))
 
 
+def _filter_protected_messages(messages: list) -> list:
+    """Return only learner-safe messages while retrieval/practice is active.
+
+    Teaching snapshots and their chat messages remain persisted server-side.
+    This helper only controls what the learner-facing API is allowed to return.
+    """
+    return [
+        m.serialize() for m in sorted(messages, key=lambda item: item.sequence)
+        if m.message_type not in ("teaching", "reteach")
+    ]
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -528,13 +540,9 @@ async def get_session(session_id: int, user_id: int, db: AsyncSession) -> dict:
     # Filter messages: during protected states exclude teaching-content messages
     all_messages = sorted(session.messages, key=lambda m: m.sequence)
     if in_protected_state:
-        safe_messages = [
-            m.serialize() for m in all_messages
-            if m.message_type not in ("teaching", "reteach")
-        ]
+        data["messages"] = _filter_protected_messages(all_messages)
     else:
-        safe_messages = [m.serialize() for m in all_messages]
-    data["messages"] = safe_messages
+        data["messages"] = [m.serialize() for m in all_messages]
 
     data["questions"]        = [q.serialize() for q in session.questions]
 
@@ -610,10 +618,7 @@ async def get_session_messages(session_id: int, user_id: int, db: AsyncSession) 
     in_protected_state = session.status in _PROTECTED_STATES
     messages = sorted(session.messages, key=lambda m: m.sequence)
     if in_protected_state:
-        return [
-            m.serialize() for m in messages
-            if m.message_type not in ("teaching", "reteach")
-        ]
+        return _filter_protected_messages(messages)
     return [m.serialize() for m in messages]
 
 

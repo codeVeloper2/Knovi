@@ -293,6 +293,11 @@ export default function AILearningRoom() {
     try {
       const qs = await api.generateRetrievalQuestions(sessionId, 3, taskIndex);
       const arr = Array.isArray(qs) ? qs : (qs?.questions || []);
+      // Lock the learner-facing conversation before retrieval becomes active.
+      // Do not merely cover teaching with CSS: remove teaching/reteach content
+      // from the client render state for the protected cycle. The persisted
+      // messages remain on the server for evaluation, reteaching and summary.
+      setMessages(prev => prev.filter(m => !["teaching", "reteach"].includes(m.messageType)));
       setQuestions(arr);
       setQIndex(0);
       setAnswerInput("");
@@ -571,6 +576,10 @@ export default function AILearningRoom() {
               />
             )}
 
+            {teachingHidden && (
+              <RetrievalLockBanner phase={phase} />
+            )}
+
             {phase === "studying" && (
               <StudyCard
                 seconds={timerSeconds}
@@ -831,6 +840,18 @@ function StudyCard({ seconds, total, task }) {
         <p>Review the explanation, work through the examples, and make your own notes. The recall check unlocks when the study period ends.</p>
         <div className="ar-study-track"><i style={{ width: `${pct}%` }} /></div>
         <span className="ar-study-server-note">Server-timed focus period · the session state survives refresh.</span>
+      </div>
+    </div>
+  );
+}
+
+function RetrievalLockBanner({ phase }) {
+  return (
+    <div className="ar-retrieval-lock" role="status" aria-live="polite">
+      <span className="ar-retrieval-lock-icon" aria-hidden="true">🔒</span>
+      <div>
+        <strong>Teaching content hidden during {phase === "practice" ? "practice" : "quick check"}</strong>
+        <span>Answer from what you understand. Your tutor will review the explanation after you submit.</span>
       </div>
     </div>
   );
