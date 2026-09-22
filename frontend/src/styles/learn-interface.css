@@ -4464,3 +4464,72 @@
     flex-basis: 128px;
   }
 }
+
+
+/* Learn 3.2 — use the full desktop width and keep the promo robot visible */
+@media (min-width: 1181px) {
+  .learn-home-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .learn-subject-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .learn-home-highlights .learn-robot-card {
+    grid-template-columns: 190px minmax(0, 1fr) auto;
+  }
+
+  .learn-home-highlights .learn-robot-card-art {
+    height: 116px;
+  }
+
+  .learn-home-highlights .learn-robot-card-art .learn-hero-robot {
+    width: 280px;
+    height: 188px;
+    transform: scale(.55);
+    transform-origin: 50% 50%;
+    left: 50%;
+    top: -2px;
+  }
+}
+
+/* Mid-size desktop/tablet: keep the subjects wide without creating a large dead rail. */
+@media (min-width: 821px) and (max-width: 1180px) {
+  .learn-home-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .learn-subject-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .learn-home-highlights .learn-robot-card {
+    grid-template-columns: 160px minmax(0, 1fr) auto;
+  }
+
+  .learn-home-highlights .learn-robot-card-art .learn-hero-robot {
+    transform: scale(.52);
+    transform-origin: 50% 50%;
+    left: 50%;
+    top: -2px;
+  }
+}
+
+/* The promo artwork has its own narrow viewport; scale the robot to fit
+   instead of letting the card crop its head/body. */
+.learn-home-highlights .learn-robot-card-art {
+  min-width: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 820px) {
+  .learn-home-highlights .learn-robot-card-art .learn-hero-robot {
+    width: 280px;
+    height: 188px;
+    transform: scale(.47);
+    transform-origin: 50% 50%;
+    left: 50%;
+    top: -4px;
+  }
+}
