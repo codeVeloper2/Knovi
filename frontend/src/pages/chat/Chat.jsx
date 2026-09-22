@@ -1,302 +1,144 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import * as api from "../../api";
+import "../../styles/chat.css";
 
-// ─────────────────────────────────────────────────────────────────
-// Icons
-// ─────────────────────────────────────────────────────────────────
-const SendIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M2 21 23 12 2 3v7l15 2-15 2z"/>
-  </svg>
+const Icon = ({ children, size = 20, stroke = "currentColor", fill = "none", viewBox = "0 0 24 24" }) => (
+  <svg width={size} height={size} viewBox={viewBox} fill={fill} stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>
 );
-const AttachIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-  </svg>
-);
-const VoiceIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-    <line x1="12" y1="19" x2="12" y2="23"/>
-    <line x1="8" y1="23" x2="16" y2="23"/>
-  </svg>
-);
-const PhoneIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.42 2 2 0 0 1 3.6 1.24h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.78a16 16 0 0 0 6.29 6.29l.95-.96a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
-  </svg>
-);
-const VideoIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <polygon points="23 7 16 12 23 17 23 7"/>
-    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
-  </svg>
-);
-const DotsIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-    <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
-  </svg>
-);
-const GoalIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
-  </svg>
-);
-const SearchIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-  </svg>
-);
-const CloseIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <path d="M18 6 6 18M6 6l12 12"/>
-  </svg>
-);
-const ClockIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-  </svg>
-);
-const TickIcon = () => (
-  <svg width="15" height="10" viewBox="0 0 15 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M1 5l4 4 9-8"/>
-  </svg>
-);
-const DoubleTickIcon = ({ read }) => (
-  <svg width="18" height="10" viewBox="0 0 18 10" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-    stroke={read ? "#53bdeb" : "currentColor"}>
-    <path d="M1 5l3.5 3.5 7-7"/>
-    <path d="M7 5l3.5 3.5 7-7"/>
-  </svg>
-);
-const FileDocIcon = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-    <polyline points="14 2 14 8 20 8"/>
-    <line x1="16" y1="13" x2="8" y2="13"/>
-    <line x1="16" y1="17" x2="8" y2="17"/>
-  </svg>
-);
-const DownloadIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-    <polyline points="7 10 12 15 17 10"/>
-    <line x1="12" y1="15" x2="12" y2="3"/>
-  </svg>
-);
-const InfoIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
-  </svg>
-);
-const PlusIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-    <path d="M12 5v14M5 12h14"/>
-  </svg>
-);
-const SmileIcon = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="9.5"/><path d="M8 14.2s1.6 2 4 2 4-2 4-2"/><path d="M9 9.5h.01M15 9.5h.01"/>
-  </svg>
-);
-const ChevronDownIcon = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="m6 9 6 6 6-6"/>
-  </svg>
-);
+const SearchIcon = p => <Icon {...p}><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></Icon>;
+const PlusIcon = p => <Icon {...p}><path d="M12 5v14M5 12h14"/></Icon>;
+const BackIcon = p => <Icon {...p}><path d="M19 12H5M12 19l-7-7 7-7"/></Icon>;
+const PhoneIcon = p => <Icon {...p}><path d="M22 16.92v3a2 2 0 0 1-2.18 2A19.8 19.8 0 0 1 11.2 18.85 19.5 19.5 0 0 1 5.15 12.8 19.8 19.8 0 0 1 2.08 4.18 2 2 0 0 1 4.07 2h3a2 2 0 0 1 2 1.72c.12.96.36 1.9.7 2.8a2 2 0 0 1-.45 2.12L8.05 9.9a16 16 0 0 0 6.05 6.05l1.26-1.26a2 2 0 0 1 2.12-.45c.9.34 1.84.58 2.8.7A2 2 0 0 1 22 16.92z"/></Icon>;
+const VideoIcon = p => <Icon {...p}><path d="m23 7-7 5 7 5V7Z"/><rect x="1" y="5" width="15" height="14" rx="2"/></Icon>;
+const MoreIcon = p => <Icon {...p} fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></Icon>;
+const AttachIcon = p => <Icon {...p}><path d="m21.4 11.6-8.9 8.9a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.6 5.7l-9 9a2 2 0 1 1-2.8-2.8l8.5-8.5"/></Icon>;
+const ImageIcon = p => <Icon {...p}><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></Icon>;
+const MicIcon = p => <Icon {...p}><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10a7 7 0 0 1-14 0M12 17v5M8 22h8"/></Icon>;
+const SmileIcon = p => <Icon {...p}><circle cx="12" cy="12" r="9.5"/><path d="M8 14.5s1.6 2 4 2 4-2 4-2M9 9.5h.01M15 9.5h.01"/></Icon>;
+const SendIcon = p => <Icon {...p} fill="currentColor" stroke="none"><path d="M2.5 3.2 21.7 12 2.5 20.8 4.8 13 15 12 4.8 11 2.5 3.2Z"/></Icon>;
+const FileIcon = p => <Icon {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></Icon>;
+const CloseIcon = p => <Icon {...p}><path d="M18 6 6 18M6 6l12 12"/></Icon>;
+const ReplyIcon = p => <Icon {...p}><path d="M9 17 4 12l5-5M4 12h9a7 7 0 0 1 7 7v1"/></Icon>;
+const CopyIcon = p => <Icon {...p}><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></Icon>;
+const TrashIcon = p => <Icon {...p}><path d="M4 7h16M10 11v6M14 11v6M9 7V4h6v3M6 7l1 14h10l1-14"/></Icon>;
+const InfoIcon = p => <Icon {...p}><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></Icon>;
+const CheckIcon = p => <Icon {...p}><path d="m4 12 5 5L20 6"/></Icon>;
+const DoubleCheckIcon = ({ read, size = 16 }) => <Icon size={size} stroke={read ? "#60a5fa" : "currentColor"}><path d="m2 12 4 4L14 8"/><path d="m8 12 4 4 9-9"/></Icon>;
+const GoalIcon = p => <Icon {...p}><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></Icon>;
 
-// ─────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────
-function fmtTime(iso) {
-  if (!iso) return "";
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+const EMOJIS = ["👍", "❤️", "😂", "😮", "🙏", "🔥", "✨"];
+
+function timeLabel(value) {
+  if (!value) return "";
+  return new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
-function fmtDateLabel(iso) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const now = new Date();
-  const dMid = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const nowMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const diff = Math.round((nowMid - dMid) / 86400000);
+function dayLabel(value) {
+  const d = new Date(value);
+  const n = new Date();
+  const a = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const b = new Date(n.getFullYear(), n.getMonth(), n.getDate());
+  const diff = Math.round((b - a) / 86400000);
   if (diff === 0) return "Today";
   if (diff === 1) return "Yesterday";
   return d.toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
 }
-function fmtConvTime(iso) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const now = new Date();
-  const dMid = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const nowMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const diff = Math.round((nowMid - dMid) / 86400000);
-  if (diff === 0) return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  if (diff === 1) return "Yesterday";
-  if (diff < 7) return d.toLocaleDateString([], { weekday: "short" });
+function listTime(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  const n = new Date();
+  if (d.toDateString() === n.toDateString()) return timeLabel(value);
+  const days = Math.round((new Date(n.getFullYear(), n.getMonth(), n.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+  if (days === 1) return "Yesterday";
+  if (days < 7) return d.toLocaleDateString([], { weekday: "short" });
   return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
-function getFileType(name) {
-  if (!name) return "file";
+function fileKind(name = "") {
   const ext = name.split(".").pop().toLowerCase();
-  if (["jpg","jpeg","png","gif","webp","svg","bmp"].includes(ext)) return "image";
-  if (["pdf"].includes(ext)) return "pdf";
-  if (["mp4","mov","avi","webm","mkv"].includes(ext)) return "video";
+  if (["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"].includes(ext)) return "image";
+  if (["mp4", "mov", "webm", "avi", "mkv"].includes(ext)) return "video";
   return "file";
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Avatar
-// ─────────────────────────────────────────────────────────────────
-function Avatar({ url, name, size = 40, online = false }) {
-  const initial = (name || "?").trim()[0].toUpperCase();
+function Avatar({ person, size = 48, online = false }) {
+  const name = person?.displayName || person?.name || "Peer";
+  const initial = name.trim().charAt(0).toUpperCase() || "P";
   return (
-    <div style={{ position: "relative", flexShrink: 0, display: "inline-flex" }}>
-      {url
-        ? <img src={url} alt={name} style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover" }} referrerPolicy="no-referrer" />
-        : <div className="cav" style={{ width: size, height: size, fontSize: size * 0.42 }}>{initial}</div>
-      }
-      {online && <span className="cav-dot" style={{ width: size * 0.3, height: size * 0.3 }} />}
-    </div>
+    <span className="peerup-chat-avatar-wrap" style={{ width: size, height: size }}>
+      {person?.photoURL ? (
+        <img className="peerup-chat-avatar" src={person.photoURL} alt={name} width={size} height={size} referrerPolicy="no-referrer" />
+      ) : (
+        <span className="peerup-chat-avatar peerup-chat-avatar-fallback" style={{ fontSize: Math.max(14, size * .38) }}>{initial}</span>
+      )}
+      {online && <i className="peerup-chat-online" />}
+    </span>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Coming Soon Modal
-// ─────────────────────────────────────────────────────────────────
-function ComingSoonModal({ feature, onClose }) {
+function ComingSoon({ title, onClose }) {
   return (
-    <div className="c-overlay" onClick={onClose}>
-      <div className="c-modal" onClick={e => e.stopPropagation()}>
-        <div className="c-modal-icon">{feature === "voice" ? "🎙️" : feature === "phone" ? "📞" : "🎥"}</div>
-        <h2>{feature === "voice" ? "Voice Notes" : feature === "phone" ? "Voice Call" : "Video Call"}</h2>
-        <p>Coming soon. Stay tuned!</p>
-        <button type="button" className="btn btn-primary" style={{ width:"100%", marginTop:8 }} onClick={onClose}>Got it</button>
+    <div className="peerup-chat-modal-backdrop" onClick={onClose}>
+      <div className="peerup-chat-modal" onClick={e => e.stopPropagation()}>
+        <div className="peerup-chat-modal-icon">{title === "Voice note" ? "🎙️" : title === "Voice call" ? "📞" : "🎥"}</div>
+        <h3>{title}</h3>
+        <p>This prototype keeps the control in place. The feature can be connected to the real service later.</p>
+        <button type="button" className="peerup-chat-primary-btn" onClick={onClose}>Got it</button>
       </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Image Lightbox
-// ─────────────────────────────────────────────────────────────────
-function ImageLightbox({ url, name, onClose }) {
-  useEffect(() => {
-    const h = e => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [onClose]);
-  return (
-    <div className="c-overlay" onClick={onClose} style={{ zIndex: 9999 }}>
-      <button className="lightbox-close" onClick={onClose}><CloseIcon /></button>
-      <a href={url} download={name} className="lightbox-dl" onClick={e => e.stopPropagation()} title="Download">
-        <DownloadIcon />
-      </a>
-      <img src={url} alt={name || "Image"} className="lightbox-img" onClick={e => e.stopPropagation()} />
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────
-// New Chat Modal
-// ─────────────────────────────────────────────────────────────────
-const SUBJECTS = [
-  "Mathematics","Physics","Chemistry","Biology","English","History",
-  "Geography","Computer Science","Economics","Accounting","Literature",
-  "French","Spanish","Music","Art","Physical Education","Further Math",
-];
-
-function NewChatModal({ onClose, onStart }) {
+function NewChat({ onClose, onStarted }) {
+  const toast = useToast();
   const [query, setQuery] = useState("");
-  const [connections, setConnections] = useState([]);
+  const [users, setUsers] = useState([]);
   const [selected, setSelected] = useState(null);
   const [subject, setSubject] = useState("");
   const [goal, setGoal] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [starting, setStarting] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const subjects = ["Mathematics", "Physics", "Chemistry", "Biology", "English", "Computer Science", "Economics", "Accounting", "History"];
 
   useEffect(() => {
-    // Since we removed the peer matching system, there are no pre-approved connections.
-    // Users can now message anyone directly from the Discover page.
-    setConnections([]);
-    setLoading(false);
-  }, []);
-
-  const filtered = connections.filter(u =>
-    !query.trim() || u.displayName.toLowerCase().includes(query.toLowerCase())
-  );
+    if (!query.trim()) { setUsers([]); return; }
+    let alive = true;
+    const timer = setTimeout(() => {
+      api.searchChatUsers(query.trim()).then(data => { if (alive) setUsers(Array.isArray(data) ? data : []); }).catch(() => { if (alive) setUsers([]); });
+    }, 250);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [query]);
 
   async function start() {
-    if (!selected || !subject) return;
-    setStarting(true);
+    if (!selected || !subject || busy) return;
+    setBusy(true);
     try {
-      const conv = await api.startConversation(selected.partnerId, subject, goal.trim() || null);
-      onStart(conv);
-    } catch (err) {
-      alert("Couldn't start the chat. Please try again.");
-    } finally { setStarting(false); }
+      const id = selected.partnerId || selected.id || selected.uid;
+      const conv = await api.startConversation(id, subject, goal.trim() || null);
+      onStarted(conv);
+    } catch { toast.error("Couldn't start the chat."); }
+    finally { setBusy(false); }
   }
 
   return (
-    <div className="c-overlay" onClick={onClose}>
-      <div className="c-modal c-modal--wide" onClick={e => e.stopPropagation()}>
-        <div className="c-modal-head">
-          <h2>New Chat</h2>
-          <button type="button" className="icon-btn" onClick={onClose}><CloseIcon /></button>
-        </div>
+    <div className="peerup-chat-modal-backdrop" onClick={onClose}>
+      <div className="peerup-chat-modal peerup-chat-modal-wide" onClick={e => e.stopPropagation()}>
+        <div className="peerup-chat-modal-head"><div><span className="peerup-chat-kicker">NEW CONVERSATION</span><h2>Start a chat</h2></div><button type="button" className="peerup-chat-icon-btn" onClick={onClose}><CloseIcon /></button></div>
         {!selected ? (
           <>
-            <div className="chat-search-wrap" style={{ margin: "8px 0" }}>
-              <SearchIcon />
-              <input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Search connections…" />
-            </div>
-            {loading && <p className="c-hint">Loading…</p>}
-            <div className="c-user-list">
-              {filtered.map(u => (
-                <button key={u.partnerId} type="button" className="c-user-item" onClick={() => setSelected(u)}>
-                  <Avatar url={u.photoURL} name={u.displayName} size={38} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="c-user-name">{u.displayName}</div>
-                    <div className="c-user-sub">{u.grade || u.subject || ""}</div>
-                  </div>
-                  {u.isOnline && <span className="c-online-dot" />}
-                </button>
-              ))}
-              {!loading && filtered.length === 0 && (
-                <p className="c-hint">{connections.length === 0 ? "No conversations yet. Start a chat from Discover." : "No match found."}</p>
-              )}
+            <label className="peerup-chat-search large"><SearchIcon /><input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Search a study partner" /></label>
+            <div className="peerup-chat-user-results">
+              {!query && <p className="peerup-chat-muted">Search by name to find a study partner.</p>}
+              {users.map(u => <button key={u.partnerId || u.id || u.uid} type="button" className="peerup-chat-user-result" onClick={() => setSelected(u)}><Avatar person={u} size={42} online={u.isOnline}/><span><b>{u.displayName || u.name}</b><small>{u.grade || u.subject || "PeerUP learner"}</small></span></button>)}
+              {query && !users.length && <p className="peerup-chat-muted">No matching users found.</p>}
             </div>
           </>
         ) : (
           <>
-            <div className="c-selected">
-              <Avatar url={selected.photoURL} name={selected.displayName} size={40} />
-              <div style={{ flex:1, minWidth:0 }}>
-                <div className="c-user-name">{selected.displayName}</div>
-              </div>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>Change</button>
-            </div>
-            <div className="field" style={{ marginTop:16 }}>
-              <label>Subject <span style={{ color:"var(--danger)" }}>*</span></label>
-              <select value={subject} onChange={e => setSubject(e.target.value)}>
-                <option value="">Select a subject…</option>
-                {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-            <div className="field" style={{ marginTop:12 }}>
-              <label>Session goal <span style={{ color:"var(--text-dim)" }}>(optional)</span></label>
-              <input value={goal} onChange={e => setGoal(e.target.value)} placeholder="e.g. Finish Chapter 5 problems" />
-            </div>
-            <div className="c-modal-actions">
-              <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
-              <button type="button" className="btn btn-primary" onClick={start} disabled={!subject || starting}>
-                {starting ? "Starting…" : "Start chat"}
-              </button>
-            </div>
+            <div className="peerup-chat-selected-user"><Avatar person={selected} size={44}/><div><b>{selected.displayName || selected.name}</b><button type="button" onClick={() => setSelected(null)}>Change</button></div></div>
+            <label className="peerup-chat-field"><span>Subject</span><select value={subject} onChange={e => setSubject(e.target.value)}><option value="">Select a subject</option>{subjects.map(s => <option key={s}>{s}</option>)}</select></label>
+            <label className="peerup-chat-field"><span>Session goal <em>optional</em></span><input value={goal} onChange={e => setGoal(e.target.value)} placeholder="e.g. Finish Chapter 5 problems" /></label>
+            <div className="peerup-chat-modal-actions"><button type="button" className="peerup-chat-secondary-btn" onClick={onClose}>Cancel</button><button type="button" className="peerup-chat-primary-btn" disabled={!subject || busy} onClick={start}>{busy ? "Starting…" : "Start chat"}</button></div>
           </>
         )}
       </div>
@@ -304,1234 +146,271 @@ function NewChatModal({ onClose, onStart }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Reaction emoji list
-// ─────────────────────────────────────────────────────────────────
-const EMOJIS = ["👍","❤️","😂","😮","🙏","🔥"];
-
-// Portal-based emoji picker — renders into document.body so it is never clipped
-function EmojiPickerPortal({ anchor, onPick, onClose }) {
-  const [pos, setPos] = useState(null);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    if (!anchor) return;
-    const rect = anchor.getBoundingClientRect();
-    const pickerW = 272; // approx width
-    const pickerH = 56;
-    const vw = window.innerWidth;
-
-    let left = rect.left;
-    // If picker would overflow right edge, align to right of anchor
-    if (left + pickerW > vw - 8) left = rect.right - pickerW;
-    if (left < 8) left = 8;
-
-    // Place above bubble if not enough space below
-    // On mobile always show above the bubble (WhatsApp style)
-    const isMobile = window.innerWidth <= 768;
-    let top = isMobile
-      ? rect.top - pickerH - 8
-      : rect.bottom + 8;
-    if (!isMobile && top + pickerH > window.innerHeight - 8) top = rect.top - pickerH - 8;
-
-    setPos({ top, left });
-  }, [anchor]);
-
-  // Close on outside click / touch
-  useEffect(() => {
-    function handler(e) {
-      if (ref.current && !ref.current.contains(e.target) &&
-          anchor && !anchor.contains(e.target)) {
-        onClose();
-      }
-    }
-    const t = setTimeout(() => {
-      document.addEventListener("mousedown", handler);
-      document.addEventListener("touchstart", handler);
-    }, 50);
-    return () => {
-      clearTimeout(t);
-      document.removeEventListener("mousedown", handler);
-      document.removeEventListener("touchstart", handler);
-    };
-  }, [anchor, onClose]);
-
-  if (!pos) return null;
-
-  return createPortal(
-    <div
-      ref={ref}
-      className="emoji-picker-portal"
-      style={{ top: pos.top, left: pos.left }}
-      onMouseDown={e => e.stopPropagation()}
-    >
-      {EMOJIS.map(em => (
-        <button
-          key={em}
-          type="button"
-          className="emoji-picker-btn"
-          onPointerDown={e => { e.preventDefault(); onPick(em); onClose(); }}
-        >
-          {em}
-        </button>
-      ))}
-    </div>,
-    document.body
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Message Bubble
-// ─────────────────────────────────────────────────────────────────
-function MessageBubble({ msg, myId, partnerName, partnerUrl, onDelete, onReport, onReact, onReply, onLightbox, onCopy }) {
-  const mine = msg.senderId === myId;
-  const [showPicker, setShowPicker] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
-  const [showActionModal, setShowActionModal] = useState(false);
-  const [swipeX, setSwipeX] = useState(0);
-
-  const bubbleRef = useRef(null);
-  const rowRef = useRef(null);
-  const lastTapRef = useRef(0);
-  const [highlighted, setHighlighted] = useState(false);
-
-  const fileType = getFileType(msg.attachmentName);
-  const isImage = fileType === "image";
-
-  // Close menu when clicking outside
-  useEffect(() => {
-    if (!showMenu && !showActionModal) return;
-    const h = e => {
-      if (rowRef.current && !rowRef.current.contains(e.target)) {
-        setShowMenu(false);
-        setShowActionModal(false);
-      }
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, [showMenu, showActionModal]);
-
-  // Double-tap → highlight flash + full action modal (WhatsApp style)
-  function handlePointerUp(e) {
-    if (e.pointerType !== "touch") return;
-    const now = Date.now();
-    if (now - lastTapRef.current < 350) {
-      e.preventDefault();
-      setHighlighted(true);
-      setTimeout(() => {
-        setHighlighted(false);
-        setShowActionModal(true);
-      }, 150);
-      lastTapRef.current = 0;
-    } else {
-      lastTapRef.current = now;
-    }
-  }
-
-  // Long-press is handled in onTouchStart below
-  const longPressTimer = useRef(null);
-  function handlePointerDown(e) { /* no-op; long-press via onTouchStart */ }
-  function handlePointerLeave() { clearTimeout(longPressTimer.current); }
-
-  // Swipe-right to reply
-  const touchStartX = useRef(0);
-  const touchStartY = useRef(0);
-  const swipingRef = useRef(false);
-  const repliedRef = useRef(false);
-
-  function onTouchStart(e) {
-    e.preventDefault(); // suppress native long-press / text-select / browser context menu
-    clearTimeout(longPressTimer.current);
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
-    swipingRef.current = false;
-    repliedRef.current = false;
-    // Start long-press timer (500ms → WhatsApp-style action modal)
-    longPressTimer.current = setTimeout(() => {
-      setHighlighted(true);
-      setTimeout(() => setHighlighted(false), 200);
-      setShowActionModal(true);
-      if (navigator.vibrate) navigator.vibrate(40);
-    }, 500);
-  }
-  function onTouchMove(e) {
-    clearTimeout(longPressTimer.current);
-    const dx = e.touches[0].clientX - touchStartX.current;
-    const dy = e.touches[0].clientY - touchStartY.current;
-    if (!swipingRef.current && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-      swipingRef.current = true;
-    }
-    if (!swipingRef.current || dx <= 0) return;
-    const capped = Math.min(Math.sqrt(dx * 20), 80);
-    setSwipeX(capped);
-    if (capped >= 60 && !repliedRef.current && navigator.vibrate) navigator.vibrate(30);
-  }
-  function onTouchEnd() {
-    clearTimeout(longPressTimer.current);
-    if (swipeX >= 60 && !repliedRef.current) {
-      repliedRef.current = true;
-      onReply(msg);
-    }
-    setSwipeX(0);
-    swipingRef.current = false;
-  }
-
-  // Deleted tombstone
-  if (msg.deleted) {
-    return (
-      <div className={`cmr ${mine ? "cmr--mine" : "cmr--theirs"}`}>
-        {!mine && <Avatar url={partnerUrl} name={partnerName} size={30} />}
-        <div className="cb cb--deleted">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
-            <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
-          </svg>
-          <em>This message was deleted</em>
-        </div>
-      </div>
-    );
-  }
-
-  const reactions = msg.reactions || {};
-  const hasReactions = Object.keys(reactions).length > 0;
-
-  return (
-    <div className={`cmr ${mine ? "cmr--mine" : "cmr--theirs"}`} ref={rowRef}>
-      {!mine && <Avatar url={partnerUrl} name={partnerName} size={30} />}
-
-      {/* Swipe reply arrow */}
-      {swipeX >= 30 && (
-        <div className="cmr-reply-arrow" style={{ opacity: Math.min(1, (swipeX - 30) / 30) }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-            <polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
-          </svg>
-        </div>
-      )}
-
-      <div className="cb-wrap">
-        {/* Bubble */}
-        <div
-          ref={bubbleRef}
-          className={`cb ${mine ? "cb--mine" : "cb--theirs"} ${hasReactions ? "cb--has-reactions" : ""} ${highlighted ? "cb--highlighted" : ""}`}
-          style={swipeX > 0 ? { transform: `translateX(${mine ? -swipeX : swipeX}px)`, transition: "none" } : {}}
-          onPointerUp={handlePointerUp}
-          onPointerDown={handlePointerDown}
-          onPointerLeave={handlePointerLeave}
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-        >
-          {/* Reply quote */}
-          {msg.replyToSnapshot && (
-            <div className="cb-quote">
-              <div className="cb-quote-bar" />
-              <div className="cb-quote-body">
-                <span className="cb-quote-name">{msg.replyToSenderName || partnerName}</span>
-                <span className="cb-quote-text">{msg.replyToSnapshot}</span>
-              </div>
-            </div>
-          )}
-
-          {/* Image attachment */}
-          {msg.attachmentUrl && isImage && (
-            <img
-              src={msg.attachmentUrl}
-              alt={msg.attachmentName || "image"}
-              className="cb-img"
-              onClick={e => { e.stopPropagation(); onLightbox?.(msg.attachmentUrl, msg.attachmentName); }}
-            />
-          )}
-
-          {/* File attachment */}
-          {msg.attachmentUrl && !isImage && (
-            <div className="cb-file">
-              <FileDocIcon />
-              <div className="cb-file-info">
-                <span className="cb-file-name">{msg.attachmentName || "File"}</span>
-                <span className="cb-file-ext">{(msg.attachmentName?.split(".").pop() || "FILE").toUpperCase()}</span>
-              </div>
-            </div>
-          )}
-
-          {/* Text */}
-          {msg.body ? <span className="cb-text">{msg.body}</span> : null}
-
-          {/* Meta: time + ticks */}
-          <div className="cb-meta">
-            <span className="cb-time">{fmtTime(msg.createdAt)}</span>
-            {mine && (
-              msg.failed ? <span className="cb-tick" title="Message not sent">⚠️</span>
-              : msg.pending ? <span className="cb-tick"><ClockIcon /></span>
-              : <span className="cb-tick">
-                  {msg.isRead || msg.isDelivered
-                    ? <DoubleTickIcon read={msg.isRead} />
-                    : <TickIcon />}
-                </span>
-            )}
-          </div>
-        </div>
-
-        {/* Reaction chips — WhatsApp style at bottom corner of bubble */}
-        {hasReactions && (
-          <div className={`cb-reactions ${mine ? "cb-reactions--mine" : "cb-reactions--theirs"}`}>
-            {Object.entries(reactions).map(([emoji, users]) => (
-              <button
-                key={emoji}
-                type="button"
-                className={`cb-reaction ${Array.isArray(users) && users.includes(myId) ? "cb-reaction--me" : ""}`}
-                onPointerDown={e => { e.preventDefault(); onReact(msg.id, emoji); }}
-              >
-                {emoji} <span>{Array.isArray(users) ? users.length : users}</span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Desktop hover actions */}
-        <div className={`cb-actions ${mine ? "cb-actions--mine" : ""}`}>
-          <button type="button" className="cb-act-btn" title="React"
-            onClick={() => setShowPicker(v => !v)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <circle cx="12" cy="12" r="10"/>
-              <path d="M8 13s1.5 2 4 2 4-2 4-2"/>
-              <line x1="9" y1="9" x2="9.01" y2="9"/>
-              <line x1="15" y1="9" x2="15.01" y2="9"/>
-            </svg>
-          </button>
-          <button type="button" className="cb-act-btn" title="Reply"
-            onClick={() => onReply(msg)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
-            </svg>
-          </button>
-          <button type="button" className="cb-act-btn" title="More"
-            onClick={() => setShowMenu(v => !v)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-              <circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>
-            </svg>
-          </button>
-        </div>
-
-        {/* Context menu */}
-        {showMenu && (
-          <div className={`cb-menu ${mine ? "cb-menu--mine" : ""}`}>
-            <button type="button" onClick={() => { onReply(msg); setShowMenu(false); }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
-              </svg>
-              Reply
-            </button>
-            <button type="button" onClick={() => { onCopy?.(msg); setShowMenu(false); }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-              </svg>
-              Copy
-            </button>
-            {mine && (
-              <button type="button" className="danger" onClick={() => { onDelete(msg.id); setShowMenu(false); }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/>
-                  <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
-                </svg>
-                Delete
-              </button>
-            )}
-            {!mine && (
-              <button type="button" className="danger" onClick={() => { onReport(msg.id); setShowMenu(false); }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
-                  <line x1="4" y1="22" x2="4" y2="15"/>
-                </svg>
-                Report
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Emoji picker portal (desktop hover) */}
-      {showPicker && (
-        <EmojiPickerPortal
-          anchor={bubbleRef.current}
-          onPick={em => onReact(msg.id, em)}
-          onClose={() => setShowPicker(false)}
-        />
-      )}
-
-      {/* Long-press / double-tap action modal (WhatsApp style) */}
-      {showActionModal && createPortal(
-        <div
-          style={{
-            position: "fixed", inset: 0, zIndex: 9999,
-            background: "rgba(0,0,0,0.6)", backdropFilter: "blur(3px)",
-            display: "flex", flexDirection: "column",
-            alignItems: mine ? "flex-end" : "flex-start",
-            justifyContent: "center", padding: "0 14px",
-            gap: 10,
-          }}
-          onClick={() => setShowActionModal(false)}
-        >
-          {/* Emoji reaction bar */}
-          <div
-            style={{
-              display: "flex", alignItems: "center", gap: 2,
-              background: "#1e2d44", borderRadius: 999,
-              padding: "6px 10px",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
-              border: "1px solid rgba(255,255,255,0.08)",
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            {EMOJIS.map(em => (
-              <button
-                key={em}
-                type="button"
-                style={{
-                  background: "none", border: "none",
-                  fontSize: "1.55rem", cursor: "pointer",
-                  padding: "4px 6px", borderRadius: 10,
-                  transition: "transform 0.12s",
-                  lineHeight: 1,
-                }}
-                onPointerDown={e => { e.preventDefault(); e.currentTarget.style.transform = "scale(1.3)"; }}
-                onPointerUp={e => { e.currentTarget.style.transform = ""; onReact(msg.id, em); setShowActionModal(false); }}
-              >{em}</button>
-            ))}
-            {/* + more reactions button */}
-            <button
-              type="button"
-              style={{
-                background: "rgba(255,255,255,0.1)", border: "none",
-                width: 34, height: 34, borderRadius: "50%",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", color: "#94a3b8", marginLeft: 2,
-              }}
-              onClick={() => setShowActionModal(false)}
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <path d="M12 5v14M5 12h14"/>
-              </svg>
-            </button>
-          </div>
-
-          {/* Action menu */}
-          <div
-            style={{
-              background: "#1e2d44", borderRadius: 16, overflow: "hidden",
-              width: "100%", maxWidth: 300,
-              boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
-              border: "1px solid rgba(255,255,255,0.08)",
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            {[
-              {
-                label: "Reply",
-                icon: (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
-                  </svg>
-                ),
-                action: () => { onReply(msg); setShowActionModal(false); },
-              },
-              {
-                label: "Copy",
-                icon: (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="9" y="9" width="11" height="11" rx="2"/>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                  </svg>
-                ),
-                action: () => { onCopy?.(msg); setShowActionModal(false); },
-              },
-              mine
-                ? {
-                    label: "Delete",
-                    danger: true,
-                    icon: (
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <polyline points="3 6 5 6 21 6"/>
-                        <path d="M19 6l-1 14H6L5 6"/>
-                        <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
-                      </svg>
-                    ),
-                    action: () => { onDelete(msg.id); setShowActionModal(false); },
-                  }
-                : {
-                    label: "Report",
-                    danger: true,
-                    icon: (
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
-                        <line x1="4" y1="22" x2="4" y2="15"/>
-                      </svg>
-                    ),
-                    action: () => { onReport(msg.id); setShowActionModal(false); },
-                  },
-            ].map((item, i, arr) => (
-              <button
-                key={item.label}
-                type="button"
-                onClick={item.action}
-                style={{
-                  width: "100%", display: "flex", alignItems: "center", gap: 14,
-                  padding: "15px 20px", background: "none", border: "none",
-                  borderBottom: i < arr.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none",
-                  color: item.danger ? "#f87171" : "#e2e8f0",
-                  fontSize: "0.98rem", fontWeight: 500, cursor: "pointer",
-                  textAlign: "left", letterSpacing: "0.01em",
-                  transition: "background 0.12s",
-                }}
-                onPointerDown={e => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
-                onPointerUp={e => { e.currentTarget.style.background = ""; }}
-              >
-                <span style={{ color: item.danger ? "#f87171" : "#94a3b8", display: "flex" }}>{item.icon}</span>
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </div>,
-        document.body
-      )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Conversation List (WhatsApp Style)
-// ─────────────────────────────────────────────────────────────────
-function ConversationList({ convs, activeId, onSelect, onNew, myId }) {
-  const [search, setSearch] = useState("");
+function ConversationList({ conversations, activeId, myId, onSelect, onNew }) {
+  const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
-  const unreadTotal = convs.reduce((n, c) => n + (c.unread || 0), 0);
-
-  const filtered = convs.filter(c => {
-    const q = search.trim().toLowerCase();
-    const matchesSearch = !q ||
-      c.partner.displayName.toLowerCase().includes(q) ||
-      (c.subject || "").toLowerCase().includes(q) ||
-      (c.lastMessage?.body || "").toLowerCase().includes(q);
-    const matchesFilter = filter === "unread" ? c.unread > 0 : true;
-    return matchesSearch && matchesFilter;
-  });
+  const unread = conversations.reduce((n, c) => n + (c.unread || 0), 0);
+  const list = useMemo(() => conversations.filter(c => {
+    const q = query.trim().toLowerCase();
+    const match = !q || c.partner?.displayName?.toLowerCase().includes(q) || c.subject?.toLowerCase().includes(q) || c.lastMessage?.body?.toLowerCase().includes(q);
+    return match && (filter === "all" || (c.unread || 0) > 0);
+  }), [conversations, query, filter]);
 
   return (
-    <aside className="chatx-sidebar">
-      <div className="chatx-sidebar-top">
-        <div className="chatx-brand-row">
-          <h1>Chats</h1>
-          <div className="chatx-header-actions">
-            <button type="button" className="chatx-header-icon" onClick={() => setFilter("all")} title="More options" aria-label="More options"><DotsIcon /></button>
-            <button type="button" className="chatx-compose" onClick={onNew} title="New chat" aria-label="New chat"><PlusIcon /></button>
-          </div>
-        </div>
-
-        <div className="chatx-search">
-          <SearchIcon />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search or start a new chat" />
-          {search && <button type="button" onClick={() => setSearch("")} aria-label="Clear search"><CloseIcon /></button>}
-        </div>
-
-        <div className="chatx-tabs" role="tablist" aria-label="Conversation filters">
-          <button type="button" className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>All</button>
-          <button type="button" className={filter === "unread" ? "active" : ""} onClick={() => setFilter("unread")}>Unread {unreadTotal > 0 && <span>{unreadTotal}</span>}</button>
-        </div>
-      </div>
-
-      <div className="chatx-list-label">
-        <span>{filter === "unread" ? "Unread" : "All chats"}</span>
-        <span>{filtered.length}</span>
-      </div>
-
-      <div className="chatx-list">
-        {filtered.length === 0 ? (
-          <div className="chatx-empty-list">
-            <div className="chatx-empty-orb">💬</div>
-            <strong>{convs.length ? "No matches" : "Your inbox is empty"}</strong>
-            <p>{convs.length ? "Try a different name, subject, or filter." : "Start a conversation with a study partner."}</p>
-            <button type="button" onClick={onNew}>Start a chat</button>
-          </div>
-        ) : filtered.map(c => {
+    <aside className="peerup-chat-list-pane">
+      <header className="peerup-chat-list-header">
+        <div className="peerup-chat-brand"><div className="peerup-chat-logo">P</div><div><h1>Chats</h1><span>Study together</span></div></div>
+        <div className="peerup-chat-header-actions"><button type="button" className="peerup-chat-icon-btn" onClick={onNew} aria-label="New chat"><PlusIcon /></button></div>
+      </header>
+      <label className="peerup-chat-search"><SearchIcon /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search chats..." />{query && <button type="button" onClick={() => setQuery("")}><CloseIcon size={15}/></button>}</label>
+      <div className="peerup-chat-tabs"><button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>All</button><button className={filter === "unread" ? "active" : ""} onClick={() => setFilter("unread")}>Unread {unread > 0 && <span>{unread > 9 ? "9+" : unread}</span>}</button></div>
+      <div className="peerup-chat-list-title"><span>{filter === "all" ? "All chats" : "Unread"}</span><span>{list.length}</span></div>
+      <div className="peerup-chat-list">
+        {list.length === 0 ? <div className="peerup-chat-list-empty"><div>💬</div><b>{conversations.length ? "No matches" : "Your inbox is empty"}</b><p>{conversations.length ? "Try another search or filter." : "Start a conversation with a study partner."}</p><button type="button" onClick={onNew}>Start a chat</button></div> : list.map(c => {
           const last = c.lastMessage;
-          const isMine = last?.senderId === myId;
-          const preview = last
-            ? last.deleted ? "Message deleted"
-              : last.body || (last.attachmentUrl ? "Sent an attachment" : "No messages yet")
-            : "Start your study conversation";
-          return (
-            <button key={c.id} type="button" className={`chatx-conversation ${c.id === activeId ? "active" : ""}`} onClick={() => onSelect(c)}>
-              <div className="chatx-avatar-wrap">
-                <Avatar url={c.partner.photoURL} name={c.partner.displayName} size={52} online={c.partner.isOnline} />
-                {c.unread > 0 && <span className="chatx-unread-dot">{c.unread > 9 ? "9+" : c.unread}</span>}
-              </div>
-              <div className="chatx-conversation-body">
-                <div className="chatx-conversation-top">
-                  <strong>{c.partner.displayName}</strong>
-                  <time className={c.unread ? "unread" : ""}>{fmtConvTime(last?.createdAt)}</time>
-                </div>
-                <div className="chatx-conversation-bottom">
-                  <span className="chatx-preview">
-                    {isMine && last && <span className="chatx-you">You: </span>}
-                    {preview}
-                  </span>
-                  {c.subject && <span className="chatx-subject">{c.subject}</span>}
-                </div>
-                {c.sessionGoal && <div className="chatx-goal"><GoalIcon /> {c.sessionGoal}</div>}
-              </div>
-            </button>
-          );
+          const mine = last?.senderId === myId;
+          const preview = last?.deleted ? "Message deleted" : last?.body || (last?.attachmentUrl ? "Sent an attachment" : "Start your study conversation");
+          return <button key={c.id} type="button" className={`peerup-chat-row ${activeId === c.id ? "active" : ""}`} onClick={() => onSelect(c)}>
+            <Avatar person={c.partner} size={52} online={c.partner?.isOnline}/>
+            <div className="peerup-chat-row-main"><div className="peerup-chat-row-top"><b>{c.partner?.displayName || "Peer"}</b><time className={c.unread ? "unread" : ""}>{listTime(last?.createdAt)}</time></div><div className="peerup-chat-row-bottom"><span>{mine ? "You: " : ""}{preview}</span>{c.unread > 0 && <i>{c.unread > 9 ? "9+" : c.unread}</i>}</div>{c.subject && <small>{c.subject}</small>}{c.sessionGoal && <div className="peerup-chat-goal"><GoalIcon size={13}/> {c.sessionGoal}</div>}</div>
+          </button>;
         })}
       </div>
-
-      <button type="button" className="chatx-new-fab" onClick={onNew} aria-label="New chat">
-        <PlusIcon /><span>New chat</span>
-      </button>
+      <button type="button" className="peerup-chat-new-fab" onClick={onNew}><PlusIcon size={18}/> <span>New chat</span></button>
     </aside>
   );
 }
 
-function ChatMessagesSkeleton() {
-  return (
-    <div className="cr-skeleton" aria-label="Loading messages" aria-busy="true">
-      <div className="cr-skeleton-day" />
-      <div className="cr-skeleton-msg cr-skeleton-msg--left"><span /><i /></div>
-      <div className="cr-skeleton-msg cr-skeleton-msg--right"><span /><i /></div>
-      <div className="cr-skeleton-msg cr-skeleton-msg--left wide"><span /><i /></div>
-      <div className="cr-skeleton-msg cr-skeleton-msg--right short"><span /><i /></div>
-      <div className="cr-skeleton-msg cr-skeleton-msg--left"><span /><i /></div>
-    </div>
-  );
+function ReactionPicker({ onPick, onClose }) {
+  useEffect(() => { const close = () => onClose(); const id = setTimeout(() => document.addEventListener("click", close), 0); return () => { clearTimeout(id); document.removeEventListener("click", close); }; }, [onClose]);
+  return <div className="peerup-chat-reaction-picker" onClick={e => e.stopPropagation()}>{EMOJIS.map(e => <button key={e} type="button" onClick={() => onPick(e)}>{e}</button>)}</div>;
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Chat Room
-// ─────────────────────────────────────────────────────────────────
-function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
+function Message({ msg, mine, partner, myId, onReply, onReact, onDelete, onReport, onCopy, onImage }) {
+  const [menu, setMenu] = useState(false);
+  const [picker, setPicker] = useState(false);
+  const [swipe, setSwipe] = useState(0);
+  const startX = useRef(0);
+  const timer = useRef(null);
+  const kind = fileKind(msg.attachmentName);
+  const reactions = msg.reactions || {};
+
+  function touchStart(e) { startX.current = e.touches[0].clientX; clearTimeout(timer.current); timer.current = setTimeout(() => setMenu(true), 550); }
+  function touchMove(e) { clearTimeout(timer.current); const dx = e.touches[0].clientX - startX.current; if (dx > 0) setSwipe(Math.min(dx, 70)); }
+  function touchEnd() { clearTimeout(timer.current); if (swipe > 50) onReply(msg); setSwipe(0); }
+
+  if (msg.deleted) return <div className={`peerup-chat-message ${mine ? "mine" : "theirs"}`}><div className="peerup-chat-deleted"><TrashIcon size={14}/><em>This message was deleted</em></div></div>;
+
+  return <div className={`peerup-chat-message ${mine ? "mine" : "theirs"}`}>
+    {!mine && <Avatar person={partner} size={28}/>}<div className="peerup-chat-message-stack" style={{ transform: `translateX(${swipe}px)` }}>
+      {swipe > 20 && <div className="peerup-chat-reply-hint"><ReplyIcon size={15}/></div>}
+      <div className={`peerup-chat-bubble ${mine ? "out" : "in"}`} onTouchStart={touchStart} onTouchMove={touchMove} onTouchEnd={touchEnd}>
+        {msg.replyToSnapshot && <div className="peerup-chat-quote"><b>{msg.replyToSenderName || partner?.displayName || "Reply"}</b><span>{msg.replyToSnapshot}</span></div>}
+        {msg.attachmentUrl && kind === "image" && <img className="peerup-chat-message-image" src={msg.attachmentUrl} alt={msg.attachmentName || "Image"} onClick={() => onImage(msg.attachmentUrl, msg.attachmentName)}/>}
+        {msg.attachmentUrl && kind === "video" && <video className="peerup-chat-message-video" src={msg.attachmentUrl} controls playsInline />}
+        {msg.attachmentUrl && kind === "file" && <div className="peerup-chat-file"><span><FileIcon/></span><div><b>{msg.attachmentName || "File"}</b><small>{(msg.attachmentName || "FILE").split(".").pop().toUpperCase()}</small></div></div>}
+        {msg.body && <p>{msg.body}</p>}
+        <div className="peerup-chat-meta"><time>{timeLabel(msg.createdAt)}</time>{mine && (msg.failed ? <span>⚠️</span> : msg.pending ? <span>⌛</span> : msg.isRead || msg.isDelivered ? <DoubleCheckIcon read={msg.isRead}/> : <CheckIcon size={14}/>)}</div>
+      </div>
+      {Object.keys(reactions).length > 0 && <div className={`peerup-chat-reactions ${mine ? "right" : "left"}`}>{Object.entries(reactions).map(([emoji, users]) => <button key={emoji} type="button" onClick={() => onReact(msg.id, emoji)}>{emoji}<span>{Array.isArray(users) ? users.length : users}</span></button>)}</div>}
+      <div className={`peerup-chat-message-actions ${mine ? "right" : "left"}`}>
+        <button type="button" onClick={() => setPicker(v => !v)}><SmileIcon size={15}/></button><button type="button" onClick={() => onReply(msg)}><ReplyIcon size={15}/></button><button type="button" onClick={() => setMenu(v => !v)}><MoreIcon size={15}/></button>
+        {picker && <ReactionPicker onPick={e => { onReact(msg.id, e); setPicker(false); }} onClose={() => setPicker(false)}/>}
+        {menu && <div className={`peerup-chat-message-menu ${mine ? "right" : "left"}`}>
+          <button type="button" onClick={() => { onReply(msg); setMenu(false); }}><ReplyIcon size={15}/>Reply</button>
+          <button type="button" onClick={() => { onCopy(msg); setMenu(false); }}><CopyIcon size={15}/>Copy</button>
+          {mine ? <button type="button" className="danger" onClick={() => { onDelete(msg.id); setMenu(false); }}><TrashIcon size={15}/>Delete</button> : <button type="button" className="danger" onClick={() => { onReport(msg.id); setMenu(false); }}><InfoIcon size={15}/>Report</button>}
+        </div>}
+      </div>
+    </div>
+  </div>;
+}
+
+function ChatRoom({ conversation, myId, onBack, onRefresh }) {
   const toast = useToast();
-  const navigate = useNavigate();
-
   const [messages, setMessages] = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [text, setText]         = useState("");
-  const [sending, setSending]   = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [stagedFile, setStagedFile] = useState(null);
-  const [replyTo, setReplyTo]   = useState(null);
-  const [typing, setTyping]     = useState(false);
-  const [noticeDismissed, setNoticeDismissed] = useState(false);
-  const [editGoal, setEditGoal] = useState(false);
-  const [goalText, setGoalText] = useState(conv.sessionGoal || "");
+  const [loading, setLoading] = useState(true);
+  const [text, setText] = useState("");
+  const [reply, setReply] = useState(null);
+  const [staged, setStaged] = useState(null);
+  const [typing, setTyping] = useState(false);
+  const [goalEditing, setGoalEditing] = useState(false);
+  const [goal, setGoal] = useState(conversation.sessionGoal || "");
+  const [notice, setNotice] = useState(true);
   const [comingSoon, setComingSoon] = useState(null);
-  const [lightbox, setLightbox] = useState(null);
-  const [pendingDelete, setPendingDelete] = useState(null);
-  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+  const [imageView, setImageView] = useState(null);
+  const [deleteId, setDeleteId] = useState(null);
+  const bottomRef = useRef(null);
+  const socketRef = useRef(null);
+  const typingRef = useRef(null);
+  const fileRef = useRef(null);
+  const imageRef = useRef(null);
 
-  const bottomRef   = useRef(null);
-  const wsRef       = useRef(null);
-  const typingTimer = useRef(null);
-  const fileRef     = useRef(null);
-  const imageRef    = useRef(null);
-  const headerMenuRef = useRef(null);
+  const partner = conversation.partner;
 
-  const partner = conv.partner;
-
-  // Load messages
   useEffect(() => {
-    let active = true;
+    let alive = true;
     setLoading(true);
-    setMessages([]);
-    api.getMessages(conv.id).then(msgs => {
-      if (!active) return;
-      const byId = Object.fromEntries(msgs.map(m => [m.id, m]));
-      const enriched = msgs.map(m => {
-        if (!m.replyToId) return m;
-        const q = byId[m.replyToId];
-        return { ...m, replyToSenderName: q ? (q.senderId === myId ? "You" : partner.displayName) : null };
-      });
-      setMessages(enriched.filter(m => !m.hiddenForMe));
-    }).catch(() => {}).finally(() => { if (active) setLoading(false); });
-    api.markRead(conv.id).catch(() => {});
-    return () => { active = false; };
-  }, [conv.id]);
+    api.getMessages(conversation.id).then(data => {
+      if (!alive) return;
+      const byId = Object.fromEntries(data.map(m => [m.id, m]));
+      setMessages(data.filter(m => !m.hiddenForMe).map(m => ({ ...m, replyToSenderName: m.replyToId && byId[m.replyToId] ? (byId[m.replyToId].senderId === myId ? "You" : partner?.displayName) : m.replyToSenderName })));
+    }).catch(() => toast.error("Couldn't load messages.")).finally(() => alive && setLoading(false));
+    api.markRead(conversation.id).catch(() => {});
+    return () => { alive = false; };
+  }, [conversation.id]);
 
-  // Scroll to bottom on new messages
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  // WebSocket
-  useEffect(() => {
-    const ws = api.openChatSocket(conv.id, handleWsMsg, () => {});
-    wsRef.current = ws;
-    return () => { ws.close(); wsRef.current = null; };
-  }, [conv.id]);
-
-  // Close header menu on outside click
-  useEffect(() => {
-    if (!showHeaderMenu) return;
-    const h = e => {
-      if (headerMenuRef.current && !headerMenuRef.current.contains(e.target)) setShowHeaderMenu(false);
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, [showHeaderMenu]);
-
-  function handleWsMsg(msg) {
-    if (msg.type === "message") {
-      setMessages(prev => {
-        const temp = prev.find(m => m.pending && m.senderId === myId && m.body === msg.data.body);
-        const without = prev.filter(m => !(m.pending && m.senderId === myId && m.body === msg.data.body));
-        if (without.find(m => m.id === msg.data.id)) return without;
-        return [...without, {
-          ...msg.data,
-          replyToSnapshot: msg.data.replyToSnapshot || temp?.replyToSnapshot || null,
-          replyToSenderName: temp?.replyToSenderName || null,
-        }];
-      });
-      api.markRead(conv.id).catch(() => {});
-    } else if (msg.type === "typing") {
-      if (msg.userId !== myId) {
-        setTyping(true);
-        clearTimeout(typingTimer.current);
-        typingTimer.current = setTimeout(() => setTyping(false), 2000);
+    const ws = api.openChatSocket(conversation.id, event => {
+      if (event.type === "message") {
+        setMessages(prev => {
+          const pending = prev.find(m => m.pending && m.senderId === myId && m.body === event.data.body);
+          const without = prev.filter(m => !(m.pending && m.senderId === myId && m.body === event.data.body));
+          if (without.some(m => m.id === event.data.id)) return without;
+          return [...without, { ...event.data, replyToSnapshot: event.data.replyToSnapshot || pending?.replyToSnapshot, replyToSenderName: pending?.replyToSenderName }];
+        });
+        api.markRead(conversation.id).catch(() => {});
       }
-    } else if (msg.type === "delivered") {
-      const ids = new Set(msg.msgIds || []);
-      setMessages(prev => prev.map(m => ids.has(m.id) ? { ...m, isDelivered: true } : m));
-    } else if (msg.type === "read") {
-      setMessages(prev => prev.map(m => m.senderId === myId ? { ...m, isDelivered: true, isRead: true } : m));
-    } else if (msg.type === "deleted") {
-      setMessages(prev => prev.map(m => m.id === msg.msgId ? { ...m, deleted: true, body: "", attachmentUrl: null } : m));
-    } else if (msg.type === "reaction") {
-      setMessages(prev => prev.map(m => m.id === msg.msgId ? { ...m, reactions: msg.reactions } : m));
-    }
-  }
+      if (event.type === "typing" && event.userId !== myId) { setTyping(true); clearTimeout(typingRef.current); typingRef.current = setTimeout(() => setTyping(false), 1800); }
+      if (event.type === "delivered") { const ids = new Set(event.msgIds || []); setMessages(prev => prev.map(m => ids.has(m.id) ? { ...m, isDelivered: true } : m)); }
+      if (event.type === "read") setMessages(prev => prev.map(m => m.senderId === myId ? { ...m, isRead: true, isDelivered: true } : m));
+      if (event.type === "deleted") setMessages(prev => prev.map(m => m.id === event.msgId ? { ...m, deleted: true, body: "", attachmentUrl: null } : m));
+      if (event.type === "reaction") setMessages(prev => prev.map(m => m.id === event.msgId ? { ...m, reactions: event.reactions } : m));
+    }, () => {});
+    socketRef.current = ws;
+    return () => { ws.close(); socketRef.current = null; };
+  }, [conversation.id, myId]);
 
-  function sendTyping() {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: "typing" }));
-    }
-  }
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: loading ? "auto" : "smooth" }); }, [messages, typing, loading]);
 
-  async function send(e, overrideBody = null) {
+  function typingNow(value) {
+    setText(value);
+    if (socketRef.current?.readyState === WebSocket.OPEN) socketRef.current.send(JSON.stringify({ type: "typing" }));
+  }
+  function pickFile(e, forceImage = false) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setStaged({ file, url, kind: forceImage ? "image" : fileKind(file.name) });
+  }
+  function clearStaged() { if (staged?.url) URL.revokeObjectURL(staged.url); setStaged(null); }
+
+  async function send(e, bodyOverride = null) {
     e?.preventDefault();
-    const body = overrideBody !== null ? overrideBody : text.trim();
-    if (!body && !stagedFile) return;
-    if (sending || uploading) return;
-
-    if (stagedFile) {
-      const sf = stagedFile;
-      setStagedFile(null);
-      if (sf.localUrl) URL.revokeObjectURL(sf.localUrl);
-      const tempId = `pending-file-${Date.now()}`;
-      setText("");
-      setMessages(prev => [...prev, {
-        id: tempId, senderId: myId, body, attachmentUrl: sf.localUrl,
-        attachmentName: sf.name, createdAt: new Date().toISOString(),
-        isDelivered: false, isRead: false, pending: true,
-      }]);
-      setUploading(true);
+    const body = bodyOverride ?? text.trim();
+    if ((!body && !staged) || staged?.kind === "video" && !staged.file) return;
+    const currentReply = reply;
+    setText(""); setReply(null);
+    if (staged) {
+      const item = staged; setStaged(null);
+      const tempId = `upload-${Date.now()}`;
+      setMessages(prev => [...prev, { id: tempId, senderId: myId, body, attachmentUrl: item.url, attachmentName: item.file.name, createdAt: new Date().toISOString(), pending: true }]);
       try {
-        const { url, name } = await api.uploadAttachment(conv.id, sf.file);
-        const real = await api.sendMessageRest(conv.id, body, url, name);
-        setMessages(prev => prev.filter(m => m.id !== tempId).concat(prev.find(m => m.id === real.id) ? [] : [real]));
-        onConvUpdate(conv.id);
-      } catch (err) {
-        setMessages(prev => prev.map(m => m.id === tempId ? { ...m, failed: true } : m));
-        toast.error("Couldn't upload the file. Please try again.");
-      } finally { setUploading(false); }
+        const uploaded = await api.uploadAttachment(conversation.id, item.file);
+        const real = await api.sendMessageRest(conversation.id, body, uploaded.url, uploaded.name, currentReply?.id || null);
+        setMessages(prev => prev.filter(m => m.id !== tempId).concat(real));
+        if (item.url) URL.revokeObjectURL(item.url);
+        onRefresh(conversation.id);
+      } catch { if (item.url) URL.revokeObjectURL(item.url); setMessages(prev => prev.map(m => m.id === tempId ? { ...m, failed: true } : m)); toast.error("Couldn't upload that file."); }
       return;
     }
-
-    setText("");
-    const currentReply = replyTo;
-    setReplyTo(null);
-    setSending(true);
-    const tempId = `pending-${Date.now()}`;
-    setMessages(prev => [...prev, {
-      id: tempId, senderId: myId, body,
-      createdAt: new Date().toISOString(),
-      isDelivered: false, isRead: false, pending: true,
-      replyToId: currentReply?.id || null,
-      replyToSnapshot: currentReply?.body || null,
-      replyToSenderName: currentReply?.senderName || null,
-      reactions: {},
-    }]);
-
+    const tempId = `msg-${Date.now()}`;
+    setMessages(prev => [...prev, { id: tempId, senderId: myId, body, createdAt: new Date().toISOString(), pending: true, replyToSnapshot: currentReply?.body, replyToSenderName: currentReply?.senderName }]);
     try {
-      const ws = wsRef.current;
-      if (ws?.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "message", body, replyToId: currentReply?.id || null }));
-      } else {
-        const real = await api.sendMessageRest(conv.id, body, null, null, currentReply?.id || null);
-        setMessages(prev => prev.filter(m => m.id !== tempId).concat(prev.find(m => m.id === real.id) ? [] : [real]));
+      if (socketRef.current?.readyState === WebSocket.OPEN) socketRef.current.send(JSON.stringify({ type: "message", body, replyToId: currentReply?.id || null }));
+      else {
+        const real = await api.sendMessageRest(conversation.id, body, null, null, currentReply?.id || null);
+        setMessages(prev => prev.filter(m => m.id !== tempId).concat(real));
       }
-      onConvUpdate(conv.id);
-    } catch (err) {
-      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, failed: true } : m));
-      toast.error("Couldn't send your message. Please try again.");
-    } finally { setSending(false); }
+      onRefresh(conversation.id);
+    } catch { setMessages(prev => prev.map(m => m.id === tempId ? { ...m, failed: true } : m)); toast.error("Couldn't send your message."); }
   }
 
-  async function handleFile(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = "";
-    const localUrl = URL.createObjectURL(file);
-    setStagedFile({ file, localUrl, name: file.name, type: getFileType(file.name) });
+  async function react(id, emoji) { try { const result = await api.sendReaction(id, emoji); setMessages(prev => prev.map(m => m.id === id ? { ...m, reactions: result.reactions } : m)); } catch { toast.error("Couldn't add reaction."); } }
+  async function deleteMessage(id, scope) { setDeleteId(null); if (scope === "me") setMessages(prev => prev.filter(m => m.id !== id)); else setMessages(prev => prev.map(m => m.id === id ? { ...m, deleted: true, body: "", attachmentUrl: null } : m)); try { await api.deleteMessage(id, scope); } catch { toast.error("Couldn't delete the message."); } }
+  async function report(id) { try { await api.reportMessage(id); toast.success("Message reported."); } catch { toast.error("Couldn't report the message."); } }
+  async function copy(msg) { const value = msg.body || (msg.attachmentName ? `📎 ${msg.attachmentName}` : ""); if (!value) return; try { await navigator.clipboard.writeText(value); toast.success("Message copied."); } catch { toast.error("Couldn't copy the message."); } }
+  async function saveGoal() { try { const result = await api.setGoal(conversation.id, goal.trim()); setGoal(result.sessionGoal || ""); setGoalEditing(false); onRefresh(); } catch { toast.error("Couldn't update the goal."); } }
+
+  const grouped = [];
+  let previousDay = "";
+  for (const msg of messages) {
+    const key = new Date(msg.createdAt).toDateString();
+    if (key !== previousDay) { grouped.push({ type: "day", id: `day-${key}`, label: dayLabel(msg.createdAt) }); previousDay = key; }
+    grouped.push({ type: "message", msg });
   }
 
-  function handleImage(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = "";
-    const localUrl = URL.createObjectURL(file);
-    setStagedFile({ file, localUrl, name: file.name, type: "image" });
-  }
+  return <section className="peerup-chat-room">
+    <header className="peerup-chat-room-header">
+      <button type="button" className="peerup-chat-icon-btn peerup-chat-back" onClick={onBack} aria-label="Back"><BackIcon/></button>
+      <Avatar person={partner} size={42} online={partner?.isOnline}/>
+      <div className="peerup-chat-room-user"><b>{partner?.displayName || "Peer"}</b><span>{typing ? "typing…" : partner?.isOnline ? "Online" : conversation.subject || "Offline"}</span></div>
+      <div className="peerup-chat-room-actions"><button type="button" className="peerup-chat-icon-btn" onClick={() => setComingSoon("Voice call")}><PhoneIcon/></button><button type="button" className="peerup-chat-icon-btn" onClick={() => setComingSoon("Video call")}><VideoIcon/></button><button type="button" className="peerup-chat-icon-btn" onClick={() => setComingSoon("Conversation info")}><InfoIcon/></button></div>
+    </header>
 
-  async function reactMsg(msgId, emoji) {
-    try {
-      const { reactions } = await api.sendReaction(msgId, emoji);
-      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, reactions } : m));
-    } catch (err) { toast.error("Couldn't add reaction. Please try again."); }
-  }
+    {notice && <div className="peerup-chat-notice"><InfoIcon size={15}/><span>This is a study space. Keep it respectful and on-topic.</span><button type="button" onClick={() => setNotice(false)}><CloseIcon size={14}/></button></div>}
 
-  async function deleteForMe(msgId) {
-    setPendingDelete(null);
-    setMessages(prev => prev.filter(m => m.id !== msgId));
-    try { await api.deleteMessage(msgId, "me"); }
-    catch (err) { toast.error("Couldn't delete message. Please try again."); }
-  }
+    {goalEditing ? <div className="peerup-chat-goal-editor"><GoalIcon size={17}/><input autoFocus value={goal} onChange={e => setGoal(e.target.value)} placeholder="Set a session goal"/><button type="button" onClick={saveGoal}>Save</button><button type="button" onClick={() => { setGoalEditing(false); setGoal(conversation.sessionGoal || ""); }}>Cancel</button></div> : conversation.sessionGoal && <button type="button" className="peerup-chat-goal-banner" onClick={() => setGoalEditing(true)}><GoalIcon size={15}/><span>{conversation.sessionGoal}</span></button>}
 
-  async function deleteForEveryone(msgId) {
-    setPendingDelete(null);
-    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, deleted: true, body: "", attachmentUrl: null } : m));
-    try { await api.deleteMessage(msgId, "everyone"); }
-    catch (err) {
-      toast.error("Couldn't delete message. Please try again.");
-      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, deleted: false } : m));
-    }
-  }
+    <div className="peerup-chat-messages">
+      {loading ? <div className="peerup-chat-loading"><span/><span/><i/><b/></div> : grouped.map(group => group.type === "day" ? <div className="peerup-chat-day" key={group.id}><span>{group.label}</span></div> : <Message key={group.msg.id} msg={group.msg} mine={group.msg.senderId === myId} partner={partner} myId={myId} onReply={m => setReply({ id: m.id, body: m.body || (m.attachmentName ? `📎 ${m.attachmentName}` : "Attachment"), senderName: m.senderId === myId ? "You" : partner?.displayName })} onReact={react} onDelete={id => setDeleteId(id)} onReport={report} onCopy={copy} onImage={(url, name) => setImageView({ url, name })}/>)}
+      {typing && <div className="peerup-chat-typing"><Avatar person={partner} size={28}/><span><i/><i/><i/></span></div>}
+      <div ref={bottomRef}/>
+    </div>
 
-  async function reportMsg(msgId) {
-    try { await api.reportMessage(msgId); toast.success("Message reported."); }
-    catch { toast.error("Couldn't report message. Please try again."); }
-  }
-
-  async function copyMsg(msg) {
-    const value = msg?.body || (msg?.attachmentName ? `📎 ${msg.attachmentName}` : "");
-    if (!value) return;
-    try {
-      await navigator.clipboard.writeText(value);
-      toast.success("Message copied.");
-    } catch {
-      toast.error("Couldn't copy the message.");
-    }
-  }
-
-  async function saveGoal() {
-    try {
-      const res = await api.setGoal(conv.id, goalText);
-      onGoalUpdate(conv.id, res.sessionGoal);
-      setEditGoal(false);
-    } catch { toast.error("Couldn't update goal. Please try again."); }
-  }
-
-  // Group messages by date
-  const groups = [];
-  let lastDate = "";
-  for (const m of messages) {
-    const d = new Date(m.createdAt).toLocaleDateString();
-    if (d !== lastDate) {
-      groups.push({ type: "date", label: fmtDateLabel(m.createdAt) });
-      lastDate = d;
-    }
-    groups.push({ type: "msg", msg: m });
-  }
-
-  return (
-    <div className="cr">
-      {/* ── WhatsApp chat header — single unified header for desktop and mobile ── */}
-      <div className="cr-header">
-        <button
-          type="button"
-          className="cr-back"
-          onClick={onBack}
-          aria-label="Back to chats"
-          title="Back to chats"
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19 12H5M12 19l-7-7 7-7"/>
-          </svg>
-        </button>
-
-        <Avatar url={partner.photoURL} name={partner.displayName} size={38} online={partner.isOnline} />
-
-        <div className="cr-header-info">
-          <div className="cr-header-name">{partner.displayName}</div>
-          <div className="cr-header-sub">
-            {typing ? (
-              <span className="cr-status-typing">typing...</span>
-            ) : partner.isOnline ? (
-              <span className="cr-status-online"><span className="cr-online-dot" />Online</span>
-            ) : (
-              <span className="cr-status-offline">{conv.subject || "Offline"}</span>
-            )}
-          </div>
-        </div>
-
-        <div className="cr-header-actions">
-          <button type="button" className="icon-btn cr-call-action" title="Voice call" onClick={() => setComingSoon("phone")} aria-label="Voice call"><PhoneIcon /></button>
-          <button type="button" className="icon-btn cr-video-action" title="Video call" onClick={() => setComingSoon("video")} aria-label="Video call"><VideoIcon /></button>
-          <button type="button" className="icon-btn cr-search-action" title="Search in conversation" onClick={() => toast.info("Message search is coming soon.")} aria-label="Search in conversation"><SearchIcon /></button>
-          <div ref={headerMenuRef} style={{ position: "relative" }}>
-            <button type="button" className="icon-btn" onClick={() => setShowHeaderMenu(v => !v)} aria-label="More options">
-              <DotsIcon />
-            </button>
-            {showHeaderMenu && (
-              <div className="cr-header-menu">
-                <button type="button" onClick={() => { setEditGoal(true); setShowHeaderMenu(false); }}>
-                  <GoalIcon /> {conv.sessionGoal ? "Edit goal" : "Set goal"}
-                </button>
-                <button type="button" onClick={() => { setShowHeaderMenu(false); setComingSoon("Group Chat"); }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                  </svg>
-                  Add to Group
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+    <form className="peerup-chat-composer" onSubmit={e => send(e)}>
+      {reply && <div className="peerup-chat-reply-bar"><div><b>{reply.senderName}</b><span>{reply.body}</span></div><button type="button" onClick={() => setReply(null)}><CloseIcon size={15}/></button></div>}
+      {staged && <div className="peerup-chat-staged"><div className="peerup-chat-staged-thumb">{staged.kind === "image" ? <img src={staged.url} alt="Selected"/> : staged.kind === "video" ? <video src={staged.url} muted/> : <FileIcon size={22}/>}</div><div><b>{staged.file.name}</b><span>Selected from this device</span></div><button type="button" onClick={clearStaged}><CloseIcon size={15}/></button></div>}
+      <div className="peerup-chat-composer-row">
+        <button type="button" className="peerup-chat-composer-btn" onClick={() => fileRef.current?.click()} aria-label="Attach file"><AttachIcon/></button>
+        <input ref={fileRef} type="file" hidden accept="*/*" onChange={e => pickFile(e, false)}/>
+        <button type="button" className="peerup-chat-composer-btn" onClick={() => imageRef.current?.click()} aria-label="Choose photo or video"><ImageIcon/></button>
+        <input ref={imageRef} type="file" hidden accept="image/*,video/*" onChange={e => pickFile(e, true)}/>
+        <button type="button" className="peerup-chat-composer-btn" onClick={() => setComingSoon("Voice note")} aria-label="Voice note"><MicIcon/></button>
+        <div className="peerup-chat-input-wrap"><input value={text} onChange={e => typingNow(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={staged ? "Add a caption…" : "Message"}/><button type="button" onClick={() => setText(v => `${v}${v ? " " : ""}😊`)} aria-label="Emoji"><SmileIcon/></button></div>
+        <button type={text.trim() || staged ? "submit" : "button"} className="peerup-chat-send" onClick={e => { if (!text.trim() && !staged) { e.preventDefault(); send(e, "👍"); } }} aria-label="Send">{text.trim() || staged ? <SendIcon size={19}/> : <span>👍</span>}</button>
       </div>
+    </form>
 
-      {/* ── Study notice ── */}
-      {!noticeDismissed && (
-        <div className="cr-notice">
-          <InfoIcon />
-          <span>This is a study space. Keep it respectful and on-topic.</span>
-          <button type="button" className="icon-btn icon-btn--sm" onClick={() => setNoticeDismissed(true)}>
-            <CloseIcon />
-          </button>
-        </div>
-      )}
-
-      {/* ── Goal edit bar ── */}
-      {editGoal && (
-        <div className="cr-goal-bar">
-          <GoalIcon />
-          <input
-            className="cr-goal-input"
-            value={goalText}
-            onChange={e => setGoalText(e.target.value)}
-            placeholder="Set a session goal…"
-            autoFocus
-          />
-          <button type="button" className="btn btn-primary btn-sm" onClick={saveGoal}>Save</button>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setEditGoal(false); setGoalText(conv.sessionGoal || ""); }}>Cancel</button>
-        </div>
-      )}
-
-      {/* ── Messages ── */}
-      <div className="cr-messages">
-        {loading && <ChatMessagesSkeleton />}
-        {groups.map((g, i) =>
-          g.type === "date"
-            ? <div key={`d${i}`} className="cr-date-pill"><span>{g.label}</span></div>
-            : <MessageBubble
-                key={g.msg.id}
-                msg={g.msg}
-                myId={myId}
-                partnerName={partner.displayName}
-                partnerUrl={partner.photoURL}
-                onDelete={id => setPendingDelete(id)}
-                onReport={reportMsg}
-                onReact={reactMsg}
-                onLightbox={(url, name) => setLightbox({ url, name })}
-                onCopy={copyMsg}
-                onReply={m => setReplyTo({
-                  id: m.id,
-                  body: m.body || (m.attachmentName ? `📎 ${m.attachmentName}` : ""),
-                  senderName: m.senderId === myId ? "You" : partner.displayName,
-                })}
-              />
-        )}
-        {typing && (
-          <div className="cr-typing">
-            <Avatar url={partner.photoURL} name={partner.displayName} size={26} />
-            <div className="cr-typing-bubble">
-              <span /><span /><span />
-            </div>
-          </div>
-        )}
-        <div ref={bottomRef} />
-      </div>
-
-      {/* ── Input bar ── */}
-      <form className="cr-input-bar" onSubmit={send}>
-        {/* Reply preview */}
-        {replyTo && (
-          <div className="cr-reply-strip">
-            <div className="cr-reply-strip-body">
-              <span className="cr-reply-strip-name">{replyTo.senderName}</span>
-              <span className="cr-reply-strip-text">{replyTo.body}</span>
-            </div>
-            <button type="button" className="icon-btn icon-btn--sm" onClick={() => setReplyTo(null)}>
-              <CloseIcon />
-            </button>
-          </div>
-        )}
-
-        {/* Staged file preview */}
-        {stagedFile && (
-          <div className="cr-staged">
-            {stagedFile.type === "image"
-              ? <img src={stagedFile.localUrl} alt={stagedFile.name} className="cr-staged-thumb" />
-              : <FileDocIcon />
-            }
-            <span className="cr-staged-name">{stagedFile.name}</span>
-            <button type="button" className="icon-btn icon-btn--sm" onClick={() => {
-              if (stagedFile.localUrl) URL.revokeObjectURL(stagedFile.localUrl);
-              setStagedFile(null);
-            }}>
-              <CloseIcon />
-            </button>
-          </div>
-        )}
-
-        <div className="cr-input-row">
-          {/* Media / document uploads always come from the user's device. */}
-          <button type="button" className="cr-tool-btn" onClick={() => fileRef.current?.click()} disabled={uploading || !!stagedFile} aria-label="Attach file">
-            <AttachIcon />
-          </button>
-          <input ref={fileRef} type="file" hidden onChange={handleFile}
-            accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt" />
-          <button type="button" className="cr-tool-btn cr-gallery-btn" onClick={() => imageRef.current?.click()} disabled={uploading || !!stagedFile} aria-label="Choose photo or video">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>
-            </svg>
-          </button>
-          <input ref={imageRef} type="file" hidden onChange={handleImage} accept="image/*,video/*" />
-
-          {/* Voice note */}
-          <button type="button" className="cr-tool-btn cr-voice-btn" title="Voice note" aria-label="Voice note" onClick={() => setComingSoon("voice")} disabled={sending || uploading || !!stagedFile}>
-            <VoiceIcon />
-          </button>
-
-          {/* Text input */}
-          <div className="cr-input-wrap">
-            <input
-              className="cr-input"
-              value={text}
-              onChange={e => { setText(e.target.value); sendTyping(); }}
-              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-              placeholder={stagedFile ? "Add a caption…" : "Message"}
-              disabled={sending || uploading}
-            />
-            <button type="button" className="cr-emoji-btn" title="Emoji" aria-label="Emoji" onClick={() => setText(prev => `${prev}${prev ? " " : ""}😊`)}><SmileIcon /></button>
-          </div>
-
-          {/* Send / like */}
-          <button
-            type={text.trim() || stagedFile ? "submit" : "button"}
-            className="cr-send-btn"
-            disabled={sending || uploading}
-            onClick={e => {
-              if (!text.trim() && !stagedFile) {
-                e.preventDefault();
-                send(e, "👍");
-              }
-            }}
-            aria-label={text.trim() || stagedFile ? "Send" : "Send like"}
-          >
-            {text.trim() || stagedFile ? <SendIcon /> : <span className="cr-like">👍</span>}
-          </button>
-        </div>
-      </form>
-
-      {/* ── Modals ── */}
-      {comingSoon && <ComingSoonModal feature={comingSoon} onClose={() => setComingSoon(null)} />}
-
-      {lightbox && <ImageLightbox url={lightbox.url} name={lightbox.name} onClose={() => setLightbox(null)} />}
-
-      {/* Delete modal */}
-      {pendingDelete && (
-        <div className="c-overlay" onClick={() => setPendingDelete(null)}>
-          <div className="c-modal" onClick={e => e.stopPropagation()}>
-            <div className="c-modal-icon">🗑️</div>
-            <h3>Delete message?</h3>
-            <p style={{ color: "var(--text-dim)", fontSize: "0.9rem", marginTop: 6 }}>
-              Choose how you want to delete.
-            </p>
-            <div className="c-modal-actions" style={{ marginTop: 20, flexDirection: "column", gap: 8 }}>
-              <button type="button" className="btn btn-danger" onClick={() => deleteForEveryone(pendingDelete)}>
-                Delete for everyone
-              </button>
-              <button type="button" className="btn btn-ghost" onClick={() => deleteForMe(pendingDelete)}>
-                Delete for me
-              </button>
-              <button type="button" className="btn btn-ghost" onClick={() => setPendingDelete(null)}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+    {comingSoon && <ComingSoon title={comingSoon} onClose={() => setComingSoon(null)}/>}
+    {imageView && <div className="peerup-chat-lightbox" onClick={() => setImageView(null)}><button type="button" onClick={() => setImageView(null)}><CloseIcon/></button><img src={imageView.url} alt={imageView.name || "Image"}/></div>}
+    {deleteId && <div className="peerup-chat-modal-backdrop" onClick={() => setDeleteId(null)}><div className="peerup-chat-modal" onClick={e => e.stopPropagation()}><div className="peerup-chat-modal-icon">🗑️</div><h3>Delete message?</h3><p>Choose how you want to remove this message.</p><button type="button" className="peerup-chat-danger-btn" onClick={() => deleteMessage(deleteId, "everyone")}>Delete for everyone</button><button type="button" className="peerup-chat-secondary-btn" onClick={() => deleteMessage(deleteId, "me")}>Delete for me</button><button type="button" className="peerup-chat-text-btn" onClick={() => setDeleteId(null)}>Cancel</button></div></div>}
+  </section>;
 }
 
-function ChatPageSkeleton() {
-  return (
-    <div className="chatx-shell chatx-loading-shell" aria-label="Loading chats" aria-busy="true">
-      <aside className="chatx-sidebar chatx-skeleton-sidebar">
-        <div className="chatx-sidebar-top">
-          <div className="chatx-skel-title shimmer" />
-          <div className="chatx-skel-search shimmer" />
-          <div className="chatx-skel-tabs"><i className="shimmer"/><i className="shimmer"/><i className="shimmer"/></div>
-        </div>
-        <div className="chatx-list-label"><span className="shimmer chatx-skel-label"/><span className="shimmer chatx-skel-count"/></div>
-        <div className="chatx-skel-list">
-          {[1,2,3,4,5,6].map(i => <div className="chatx-skel-conv" key={i}><i className="shimmer"/><div><b className="shimmer"/><span className="shimmer"/><small className="shimmer"/></div></div>)}
-        </div>
-      </aside>
-      <section className="chatx-skeleton-room">
-        <div className="chatx-skel-header"><i className="shimmer"/><div><b className="shimmer"/><span className="shimmer"/></div><aside><i className="shimmer"/><i className="shimmer"/><i className="shimmer"/></aside></div>
-        <div className="chatx-skel-messages">
-          <div className="shimmer chatx-skel-date"/>
-          <div className="chatx-skel-bubble left shimmer"/>
-          <div className="chatx-skel-bubble right short shimmer"/>
-          <div className="chatx-skel-bubble right shimmer"/>
-          <div className="chatx-skel-bubble left wide shimmer"/>
-          <div className="chatx-skel-bubble right shimmer"/>
-        </div>
-        <div className="chatx-skel-composer"><i className="shimmer"/><span className="shimmer"/><i className="shimmer"/></div>
-      </section>
-    </div>
-  );
+function EmptyRoom({ onNew }) {
+  return <section className="peerup-chat-empty-room"><div className="peerup-chat-empty-icon">💬</div><h2>Select a chat</h2><p>Your study conversations appear here.</p><button type="button" className="peerup-chat-primary-btn" onClick={onNew}>Start a chat</button></section>;
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Empty state
-// ─────────────────────────────────────────────────────────────────
-function EmptyState({ onNew }) {
-  return (
-    <div className="cr-empty">
-      <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" style={{ color: "var(--navy-line)" }}>
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-      </svg>
-      <h3>Select a chat</h3>
-      <p>Your study conversations appear on the left.</p>
-      <button type="button" className="btn btn-primary" style={{ marginTop: 8 }} onClick={onNew}>New chat</button>
-    </div>
-  );
+function LoadingShell() {
+  return <div className="peerup-chat-shell peerup-chat-loading-shell"><aside className="peerup-chat-list-pane"><div className="peerup-chat-loading-title"/><div className="peerup-chat-loading-search"/><div className="peerup-chat-loading-list">{[1,2,3,4,5].map(i => <div key={i}><i/><span/><b/></div>)}</div></aside><section className="peerup-chat-empty-room"><div className="peerup-chat-spinner"/></section></div>;
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Main Chat Page
-// ─────────────────────────────────────────────────────────────────
 export default function ChatPage() {
   const { profile, user } = useAuth();
-  const toast = useToast();
-  const { convId: convIdParam } = useParams();
+  const { convId } = useParams();
+  const [conversations, setConversations] = useState([]);
+  const [active, setActive] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [newChat, setNewChat] = useState(false);
   const myId = parseInt(profile?.uid || user?.uid || "0", 10);
 
-  const [convs, setConvs]           = useState([]);
-  const [activeConv, setActiveConv] = useState(null);
-  const [loading, setLoading]       = useState(true);
-  const [showNew, setShowNew]       = useState(false);
-
-  // Sync mobile full-screen state to document.body
-  useEffect(() => {
-    if (activeConv) {
-      document.body.classList.add("chat-active-mobile");
-    } else {
-      document.body.classList.remove("chat-active-mobile");
-    }
-    return () => {
-      document.body.classList.remove("chat-active-mobile");
-    };
-  }, [activeConv]);
-
-  // Handle hardware / browser back gesture on mobile
-  useEffect(() => {
-    if (!activeConv) return;
-    const handlePopState = () => {
-      setActiveConv(null);
-    };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, [activeConv]);
-
-  const loadConvs = useCallback(async () => {
-    try { const data = await api.listConversations(); setConvs(data); return data; }
-    catch { return []; } finally { setLoading(false); }
-  }, []);
-
-  // Load convs, then auto-select if URL has :convId
-  useEffect(() => {
-    let active = true;
-    api.listConversations()
-      .then(data => {
-        if (!active) return;
-        setConvs(data);
-        if (convIdParam) {
-          const target = data.find(c => String(c.id) === String(convIdParam));
-          if (target) setActiveConv(target);
-        }
-      })
-      .catch(() => {})
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [convIdParam]);
-
-  function handleSelect(conv) {
-    window.history.pushState({ inChat: true }, "");
-    setActiveConv(conv);
-    setConvs(prev => prev.map(c => c.id === conv.id ? { ...c, unread: 0 } : c));
+  async function refresh(selectId = null) {
+    try {
+      const data = await api.listConversations();
+      setConversations(data);
+      if (selectId) setActive(data.find(c => String(c.id) === String(selectId)) || null);
+      return data;
+    } catch { return []; }
   }
-  function handleBack() {
-    setActiveConv(null);
-  }
-  function handleGoalUpdate(convId, goal) {
-    setConvs(prev => prev.map(c => c.id === convId ? { ...c, sessionGoal: goal } : c));
-    setActiveConv(prev => prev?.id === convId ? { ...prev, sessionGoal: goal } : prev);
-  }
-  function handleConvUpdate() {
-    api.listConversations().then(setConvs).catch(() => {});
-  }
-  async function handleStart(conv) {
-    setShowNew(false);
-    await loadConvs();
-    setActiveConv(conv);
-  }
+  useEffect(() => { let alive = true; api.listConversations().then(data => { if (!alive) return; setConversations(data); if (convId) setActive(data.find(c => String(c.id) === String(convId)) || null); }).finally(() => alive && setLoading(false)); return () => { alive = false; }; }, [convId]);
+  useEffect(() => { document.body.classList.toggle("peerup-chat-open", !!active); return () => document.body.classList.remove("peerup-chat-open"); }, [active]);
 
-  if (loading) return <ChatPageSkeleton />;
-
-  return (
-    <div className={`chatx-shell${activeConv ? " chatx-shell--active" : ""}`}>
-      <ConversationList
-        convs={convs}
-        activeId={activeConv?.id}
-        onSelect={handleSelect}
-        onNew={() => setShowNew(true)}
-        myId={myId}
-      />
-
-      {activeConv
-        ? <ChatRoom
-            key={activeConv.id}
-            conv={activeConv}
-            myId={myId}
-            onGoalUpdate={handleGoalUpdate}
-            onConvUpdate={handleConvUpdate}
-            onBack={handleBack}
-          />
-        : <EmptyState onNew={() => setShowNew(true)} />
-      }
-
-      {showNew && <NewChatModal onClose={() => setShowNew(false)} onStart={handleStart} />}
-    </div>
-  );
+  if (loading) return <LoadingShell/>;
+  return <div className={`peerup-chat-shell ${active ? "has-room" : ""}`}>
+    <ConversationList conversations={conversations} activeId={active?.id} myId={myId} onSelect={c => setActive(c)} onNew={() => setNewChat(true)}/>
+    {active ? <ChatRoom key={active.id} conversation={active} myId={myId} onBack={() => setActive(null)} onRefresh={refresh}/> : <EmptyRoom onNew={() => setNewChat(true)}/>}
+    {newChat && <NewChat onClose={() => setNewChat(false)} onStarted={async conv => { setNewChat(false); await refresh(conv.id); }}/>}
+  </div>;
 }
