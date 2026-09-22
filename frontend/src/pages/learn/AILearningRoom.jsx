@@ -47,14 +47,34 @@ export default function AILearningRoom() {
   const [msgInput, setMsgInput] = useState("");
   const [ttsEnabled, setTtsEnabled] = useState(false);
   const [mobilePanel, setMobilePanel] = useState(null);
-  const [leftOpen, setLeftOpen] = useState(true);
-  const [rightOpen, setRightOpen] = useState(true);
+  const [leftOpen, setLeftOpen] = useState(() => {
+    try { return localStorage.getItem("peerup.learningRoom.leftOpen") !== "false"; } catch { return true; }
+  });
+  const [rightOpen, setRightOpen] = useState(() => {
+    try { return localStorage.getItem("peerup.learningRoom.rightOpen") !== "false"; } catch { return true; }
+  });
   const [restoreNotice, setRestoreNotice] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
 
   const bottomRef = useRef(null);
   const timerRef = useRef(null);
   const ttsRef = useRef(false);
+
+  function toggleLeftSidebar() {
+    setLeftOpen(prev => {
+      const next = !prev;
+      try { localStorage.setItem("peerup.learningRoom.leftOpen", String(next)); } catch {}
+      return next;
+    });
+  }
+
+  function toggleRightSidebar() {
+    setRightOpen(prev => {
+      const next = !prev;
+      try { localStorage.setItem("peerup.learningRoom.rightOpen", String(next)); } catch {}
+      return next;
+    });
+  }
 
   const conceptName = session?.conceptName || "Learning session";
   const subjectName = session?.subjectName || "AI Learning";
@@ -437,8 +457,8 @@ export default function AILearningRoom() {
         <div className="ar-header-center"><span className="ar-live-dot" /><span>{aiWorking ? "UPRAD is working…" : phaseLabel}</span></div>
         <div className="ar-header-right">
           <button className={`ar-icon-btn ar-voice ${ttsEnabled ? "active" : ""}`} onClick={toggleTts} title="Tutor voice" aria-label="Toggle tutor voice">{ttsEnabled ? "◖)" : "◖"}</button>
-          <button className="ar-header-action ar-desktop-toggle" onClick={() => setLeftOpen(v => !v)}>{leftOpen ? "Hide plan" : "Show plan"}</button>
-          <button className="ar-header-action ar-desktop-toggle" onClick={() => setRightOpen(v => !v)}>{rightOpen ? "Hide tools" : "Show tools"}</button>
+          <button className="ar-header-action ar-desktop-toggle" onClick={toggleLeftSidebar}>{leftOpen ? "Hide plan" : "Show plan"}</button>
+          <button className="ar-header-action ar-desktop-toggle" onClick={toggleRightSidebar}>{rightOpen ? "Hide tools" : "Show tools"}</button>
           <button className="ar-header-action ar-mobile-only" onClick={() => setMobilePanel("plan")}>Plan</button>
           <button className="ar-header-action ar-mobile-only" onClick={() => setMobilePanel("tools")}>Tools</button>
           <button className="ar-end" onClick={endSession}>End</button>
@@ -449,7 +469,28 @@ export default function AILearningRoom() {
         {leftOpen && (
           <aside className={`ar-sidebar ar-plan-sidebar ${mobilePanel === "plan" ? "ar-mobile-open" : ""}`}>
             <SidebarPlan plan={learningPlan} current={currentTaskIndex} completed={completedTaskIndexes} progress={planProgress} onClose={() => setMobilePanel(null)} />
+            <button
+              type="button"
+              className="ar-sidebar-edge-toggle ar-left-edge-toggle"
+              onClick={toggleLeftSidebar}
+              aria-label="Collapse learning plan"
+              title="Collapse learning plan"
+            >
+              ‹
+            </button>
           </aside>
+        )}
+
+        {!leftOpen && (
+          <button
+            type="button"
+            className="ar-sidebar-restore ar-left-restore"
+            onClick={toggleLeftSidebar}
+            aria-label="Show learning plan"
+            title="Show learning plan"
+          >
+            ›
+          </button>
         )}
 
         <main className="ar-main">
@@ -513,7 +554,28 @@ export default function AILearningRoom() {
         {rightOpen && (
           <aside className={`ar-sidebar ar-work-sidebar ${mobilePanel === "tools" ? "ar-mobile-open" : ""}`}>
             <WorkspacePanel session={session} task={currentTask} phase={phase} progress={planProgress} familiarity={session?.studentFamiliarity} intent={session?.intent} answeredCount={answeredCount} questionCount={questions.length} onStudy={startStudyMode} onClose={() => setMobilePanel(null)} />
+            <button
+              type="button"
+              className="ar-sidebar-edge-toggle ar-right-edge-toggle"
+              onClick={toggleRightSidebar}
+              aria-label="Collapse session tools"
+              title="Collapse session tools"
+            >
+              ›
+            </button>
           </aside>
+        )}
+
+        {!rightOpen && (
+          <button
+            type="button"
+            className="ar-sidebar-restore ar-right-restore"
+            onClick={toggleRightSidebar}
+            aria-label="Show session tools"
+            title="Show session tools"
+          >
+            ‹
+          </button>
         )}
       </div>
 

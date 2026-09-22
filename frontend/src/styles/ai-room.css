@@ -904,3 +904,66 @@
   .ar-practice-banner { margin:10px 10px 0; }
   .ar-toast { left:12px; right:12px; bottom:12px; min-width:0; }
 }
+
+/* ==========================================================================
+   Sidebar focus controls
+   The Learning Room is the primary workspace. Sidebars can be fully hidden
+   without leaving reserved grid space, and the preference survives refresh.
+   ========================================================================== */
+.ar-sidebar { position: relative; }
+
+.ar-sidebar-edge-toggle,
+.ar-sidebar-restore {
+  position: absolute;
+  z-index: 25;
+  width: 26px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--ar-border);
+  background: rgba(7, 24, 42, .96);
+  color: #9db2ce;
+  cursor: pointer;
+  font-size: 21px;
+  line-height: 1;
+  box-shadow: 0 8px 24px rgba(0,0,0,.20);
+  transition: background .18s ease, color .18s ease, border-color .18s ease, transform .18s ease;
+}
+
+.ar-sidebar-edge-toggle:hover,
+.ar-sidebar-restore:hover {
+  color: #fff;
+  border-color: rgba(91,111,246,.55);
+  background: rgba(30, 51, 93, .98);
+}
+
+.ar-left-edge-toggle {
+  top: 50%;
+  right: -13px;
+  transform: translateY(-50%);
+  border-radius: 0 10px 10px 0;
+}
+
+.ar-right-edge-toggle {
+  top: 50%;
+  left: -13px;
+  transform: translateY(-50%);
+  border-radius: 10px 0 0 10px;
+}
+
+.ar-sidebar-restore {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  border-radius: 10px;
+}
+
+.ar-left-restore { left: 0; }
+.ar-right-restore { right: 0; }
+
+/* The restore controls are desktop focus controls; mobile uses the Plan/Tools drawers. */
+@media (max-width: 900px) {
+  .ar-sidebar-edge-toggle,
+  .ar-sidebar-restore { display: none; }
+}
