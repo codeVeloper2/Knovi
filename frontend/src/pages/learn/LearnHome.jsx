@@ -163,7 +163,7 @@ export default function LearnHome() {
     let alive = true;
 
     Promise.all([
-      api.getSubjects().catch(() => []),
+      api.getSubjects("ALL").catch(() => []),
       api.getAISessions({ limit: 100, offset: 0 }).catch(() => []),
       api.getProgress().catch(() => null),
     ]).then(async ([subjectResult, sessionResult, progressResult]) => {
@@ -207,13 +207,37 @@ export default function LearnHome() {
     [sessions]
   );
 
+  const uniqueSubjects = useMemo(() => {
+    const grouped = new Map();
+
+    subjects.forEach((subject) => {
+      const key = String(subject.name || "").trim().toLowerCase();
+      if (!key) return;
+
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.variants.push(subject);
+        return;
+      }
+
+      grouped.set(key, {
+        ...subject,
+        variants: [subject],
+      });
+    });
+
+    return Array.from(grouped.values()).sort((a, b) =>
+      String(a.name || "").localeCompare(String(b.name || ""))
+    );
+  }, [subjects]);
+
   const filteredSubjects = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return subjects;
-    return subjects.filter(s =>
+    if (!q) return uniqueSubjects;
+    return uniqueSubjects.filter(s =>
       `${s.name} ${s.description || ""}`.toLowerCase().includes(q)
     );
-  }, [subjects, query]);
+  }, [uniqueSubjects, query]);
 
   const overallPercent = sessions.length
     ? Math.round((completedSessions.length / sessions.length) * 100)
@@ -305,10 +329,9 @@ export default function LearnHome() {
             <div className="learn-subject-grid">
               {filteredSubjects.map((subject, index) => {
                 const meta = iconMeta(subject.name, index);
-                const topicCount = topicCounts[subject.id] ?? subject.topicCount ?? 0;
                 return (
                   <button
-                    key={subject.id}
+                    key={subject.name}
                     type="button"
                     className="learn-subject-card"
                     onClick={() => navigate(`/app/learn/ai/subject/${subject.id}`)}
@@ -324,10 +347,9 @@ export default function LearnHome() {
                     <div className="learn-subject-card-foot">
                       <span>
                         <Icon size={18}>
-                          <path d="M6 6.5 12 3l6 3.5-6 3.5-6-3.5Z" stroke="currentColor" strokeWidth="1.5" />
-                          <path d="m6 10 6 3.5 6-3.5M6 13.5 12 17l6-3.5" stroke="currentColor" strokeWidth="1.5" />
+                          <path d="M4 7.5h16M4 12h16M4 16.5h16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                         </Icon>
-                        {topicCount} {topicCount === 1 ? "topic" : "topics"}
+                        Choose your class
                       </span>
                     </div>
                   </button>

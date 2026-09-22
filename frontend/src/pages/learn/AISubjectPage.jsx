@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import * as api from "../../api";
 
 const META = {
@@ -45,7 +45,10 @@ function Clock() {
 export default function AISubjectPage() {
   const { subjectId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const selectedClassLevel = searchParams.get("classLevel");
   const [subject, setSubject] = useState(null);
+  const [subjectVariants, setSubjectVariants] = useState([]);
   const [topics, setTopics] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -54,18 +57,49 @@ export default function AISubjectPage() {
   useEffect(() => {
     let alive = true;
     setLoading(true);
+
     Promise.all([
       api.getSubject(subjectId),
-      api.getTopics(subjectId),
-      api.getAISessions({ subjectId, limit: 100, offset: 0 }).catch(() => []),
-    ]).then(([s, t, sess]) => {
+      api.getSubjects("ALL").catch(() => []),
+    ]).then(async ([baseSubject, allSubjectsResult]) => {
       if (!alive) return;
-      setSubject(s);
-      setTopics(Array.isArray(t) ? t : (t?.topics || []));
-      setSessions(Array.isArray(sess) ? sess : (sess?.items || []));
+
+      const allSubjects = Array.isArray(allSubjectsResult)
+        ? allSubjectsResult
+        : (allSubjectsResult?.subjects || []);
+
+      const variants = allSubjects
+        .filter(s => String(s.name || "").trim().toLowerCase() === String(baseSubject?.name || "").trim().toLowerCase())
+        .sort((a, b) => String(a.classLevel || "").localeCompare(String(b.classLevel || "")));
+
+      setSubjectVariants(variants);
+
+      // No class has been selected yet: this route is the subject landing page.
+      if (!selectedClassLevel) {
+        setSubject(baseSubject);
+        setTopics([]);
+        setSessions([]);
+        return;
+      }
+
+      const selected = variants.find(
+        s => String(s.classLevel || "").toUpperCase() === String(selectedClassLevel).toUpperCase()
+      ) || baseSubject;
+
+      const [topicResult, sessionResult] = await Promise.all([
+        api.getTopics(selected.id),
+        api.getAISessions({ subjectId: selected.id, limit: 100, offset: 0 }).catch(() => []),
+      ]);
+
+      if (!alive) return;
+
+      setSubject(selected);
+      setTopics(Array.isArray(topicResult) ? topicResult : (topicResult?.topics || []));
+      setSessions(Array.isArray(sessionResult) ? sessionResult : (sessionResult?.items || []));
     }).catch(() => {}).finally(() => alive && setLoading(false));
+
     return () => { alive = false; };
-  }, [subjectId]);
+  }, [subjectId, selectedClassLevel]);
 
   const annotated = useMemo(() => topics.map((topic) => {
     const ts = sessions.filter(s => Number(s.topicId) === Number(topic.id));
@@ -82,6 +116,21 @@ export default function AISubjectPage() {
 
   if (loading) return <CurriculumSkeleton />;
   if (!subject) return <EmptyPage text="Subject not found." onBack={() => navigate("/app/learn")} />;
+
+  if (!selectedClassLevel) {
+    return (
+      <ClassSelection
+        subject={subject}
+        variants={subjectVariants}
+        onBack={() => navigate("/app/learn")}
+        onSelect={(variant) => {
+          navigate(
+            `/app/learn/ai/subject/${variant.id}?classLevel=${encodeURIComponent(variant.classLevel)}`
+          );
+        }}
+      />
+    );
+  }
 
   const openTopic = topic => {
     navigate(`/app/learn/ai/subject/${subject.id}/topic/${topic.id}`);
@@ -158,6 +207,51 @@ export default function AISubjectPage() {
           ))}
         </section>
       )}
+    </div>
+  );
+}
+
+function formatClassLevel(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  const match = normalized.match(/^SSS([123])$/);
+  return match ? `SSS ${match[1]}` : normalized || "Class";
+}
+
+function ClassSelection({ subject, variants, onBack, onSelect }) {
+  return (
+    <div className="cp-page">
+      <button className="cp-back" onClick={onBack}><Back /> Back to Subjects</button>
+
+      <section className="cp-class-picker">
+        <div className="cp-class-picker-icon">
+          {subjectMeta(subject.name).symbol}
+        </div>
+        <div className="cp-class-picker-eyebrow">Subject</div>
+        <h1>{subject.name}</h1>
+        <p>
+          Choose your class to load the curriculum for your level.
+        </p>
+
+        <div className="cp-class-options">
+          {variants.map((variant) => (
+            <button
+              key={variant.id}
+              type="button"
+              className="cp-class-option"
+              onClick={() => onSelect(variant)}
+            >
+              <span className="cp-class-option-number">
+                {String(variant.classLevel || "").replace(/^SSS/i, "") || "•"}
+              </span>
+              <span>
+                <strong>{formatClassLevel(variant.classLevel)}</strong>
+                <small>View {subject.name} curriculum</small>
+              </span>
+              <Arrow />
+            </button>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

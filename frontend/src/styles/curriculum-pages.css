@@ -120,3 +120,121 @@
 @media(max-width:420px){
  .cp-page{padding-left:10px;padding-right:10px}.cp-hero-copy h1{font-size:1.55rem}.cp-hero-copy p{font-size:.84rem}.cp-topic-main strong{font-size:.9rem}.cp-topic-main small{font-size:.76rem}.cp-flow{grid-template-columns:1fr}.cp-section-heading p{font-size:.74rem}.cp-section-icon{width:34px;height:34px}
 }
+
+
+/* Subject -> class selection */
+.cp-class-picker {
+  max-width: 760px;
+  margin: 56px auto 0;
+  padding: 42px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 28px;
+  background: rgba(18, 24, 38, .78);
+  box-shadow: 0 24px 70px rgba(0,0,0,.28);
+  text-align: center;
+}
+
+.cp-class-picker-icon {
+  width: 76px;
+  height: 76px;
+  margin: 0 auto 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 22px;
+  background: rgba(47,155,255,.12);
+  color: #4db3ff;
+  font-size: 34px;
+  font-weight: 800;
+}
+
+.cp-class-picker-eyebrow {
+  color: #8da0ba;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.cp-class-picker h1 {
+  margin: 8px 0 10px;
+  font-size: clamp(30px, 5vw, 44px);
+}
+
+.cp-class-picker > p {
+  max-width: 520px;
+  margin: 0 auto 30px;
+  color: #94a3b8;
+  line-height: 1.6;
+}
+
+.cp-class-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  text-align: left;
+}
+
+.cp-class-option {
+  min-height: 112px;
+  padding: 18px;
+  display: grid;
+  grid-template-columns: 48px 1fr 18px;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 18px;
+  background: rgba(255,255,255,.035);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: transform .18s ease, border-color .18s ease, background .18s ease;
+}
+
+.cp-class-option:hover {
+  transform: translateY(-2px);
+  border-color: rgba(77,179,255,.45);
+  background: rgba(77,179,255,.07);
+}
+
+.cp-class-option-number {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(77,179,255,.1);
+  color: #62bcff;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.cp-class-option strong,
+.cp-class-option small {
+  display: block;
+}
+
+.cp-class-option strong {
+  font-size: 17px;
+  margin-bottom: 5px;
+}
+
+.cp-class-option small {
+  color: #8493a8;
+  line-height: 1.35;
+}
+
+.cp-class-option svg {
+  color: #718198;
+}
+
+@media (max-width: 700px) {
+  .cp-class-picker {
+    margin-top: 32px;
+    padding: 28px 18px;
+    border-radius: 22px;
+  }
+
+  .cp-class-options {
+    grid-template-columns: 1fr;
+  }
+}
