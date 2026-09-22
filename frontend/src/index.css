@@ -19498,7 +19498,7 @@ kbd {
     top: 56px;   /* below the 56px mobile top bar */
     left: 0;
     right: 0;
-    bottom: 68px; /* above the mobile bottom nav */
+    bottom: 0;   /* no bottom nav — fill to screen edge */
     height: auto;
     margin: 0;
     background: var(--navy-900);
@@ -19677,7 +19677,7 @@ kbd {
 
 /* ─── Small mobile ─── */
 @media (max-width: 480px) {
-  .chatx-shell { margin: 0; top: 56px; bottom: 68px; height: auto; }
+  .chatx-shell { margin: 0; top: 56px; bottom: 0; height: auto; }
   .chatx-shell .cb-wrap { max-width: 88%; }
   .chatx-shell .cr-header { height: 56px; }
   .chatx-shell .cr-header-actions .cr-call-action,
