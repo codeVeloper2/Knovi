@@ -803,7 +803,6 @@ function MessageBubble({ msg, myId, partnerName, partnerUrl, onDelete, onReport,
 function ConversationList({ convs, activeId, onSelect, onNew, myId }) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
-  const [pinnedOnly, setPinnedOnly] = useState(false);
   const unreadTotal = convs.reduce((n, c) => n + (c.unread || 0), 0);
 
   const filtered = convs.filter(c => {
@@ -813,7 +812,7 @@ function ConversationList({ convs, activeId, onSelect, onNew, myId }) {
       (c.subject || "").toLowerCase().includes(q) ||
       (c.lastMessage?.body || "").toLowerCase().includes(q);
     const matchesFilter = filter === "unread" ? c.unread > 0 : true;
-    return matchesSearch && matchesFilter && (!pinnedOnly || c.sessionGoal);
+    return matchesSearch && matchesFilter;
   });
 
   return (
@@ -840,7 +839,7 @@ function ConversationList({ convs, activeId, onSelect, onNew, myId }) {
       </div>
 
       <div className="chatx-list-label">
-        <span>{filter === "unread" ? "Unread" : pinnedOnly ? "Favorites" : ""}</span>
+        <span>{filter === "unread" ? "Unread" : "All chats"}</span>
         <span>{filtered.length}</span>
       </div>
 
@@ -931,6 +930,7 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
   const wsRef       = useRef(null);
   const typingTimer = useRef(null);
   const fileRef     = useRef(null);
+  const imageRef    = useRef(null);
   const headerMenuRef = useRef(null);
 
   const partner = conv.partner;
@@ -1013,9 +1013,9 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
     }
   }
 
-  async function send(e) {
+  async function send(e, overrideBody = null) {
     e?.preventDefault();
-    const body = text.trim();
+    const body = overrideBody !== null ? overrideBody : text.trim();
     if (!body && !stagedFile) return;
     if (sending || uploading) return;
 
@@ -1079,6 +1079,14 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
     e.target.value = "";
     const localUrl = URL.createObjectURL(file);
     setStagedFile({ file, localUrl, name: file.name, type: getFileType(file.name) });
+  }
+
+  function handleImage(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    const localUrl = URL.createObjectURL(file);
+    setStagedFile({ file, localUrl, name: file.name, type: "image" });
   }
 
   async function reactMsg(msgId, emoji) {
@@ -1293,35 +1301,52 @@ function ChatRoom({ conv, myId, onGoalUpdate, onConvUpdate, onBack }) {
         )}
 
         <div className="cr-input-row">
-          {/* Attach */}
-          <button type="button" className="cr-tool-btn" onClick={() => fileRef.current?.click()} disabled={uploading || !!stagedFile}>
+          {/* Media / document uploads always come from the user's device. */}
+          <button type="button" className="cr-tool-btn" onClick={() => fileRef.current?.click()} disabled={uploading || !!stagedFile} aria-label="Attach file">
             <AttachIcon />
           </button>
           <input ref={fileRef} type="file" hidden onChange={handleFile}
             accept="image/*,video/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt" />
+          <button type="button" className="cr-tool-btn cr-gallery-btn" onClick={() => imageRef.current?.click()} disabled={uploading || !!stagedFile} aria-label="Choose photo or video">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>
+            </svg>
+          </button>
+          <input ref={imageRef} type="file" hidden onChange={handleImage} accept="image/*,video/*" />
+
+          {/* Voice note */}
+          <button type="button" className="cr-tool-btn cr-voice-btn" title="Voice note" aria-label="Voice note" onClick={() => setComingSoon("voice")} disabled={sending || uploading || !!stagedFile}>
+            <VoiceIcon />
+          </button>
 
           {/* Text input */}
-          <button type="button" className="cr-emoji-btn" title="Emoji" aria-label="Emoji" onClick={() => setText(prev => `${prev}${prev ? " " : ""}😊`)}><SmileIcon /></button>
+          <div className="cr-input-wrap">
+            <input
+              className="cr-input"
+              value={text}
+              onChange={e => { setText(e.target.value); sendTyping(); }}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+              placeholder={stagedFile ? "Add a caption…" : "Message"}
+              disabled={sending || uploading}
+            />
+            <button type="button" className="cr-emoji-btn" title="Emoji" aria-label="Emoji" onClick={() => setText(prev => `${prev}${prev ? " " : ""}😊`)}><SmileIcon /></button>
+          </div>
 
-          <input
-            className="cr-input"
-            value={text}
-            onChange={e => { setText(e.target.value); sendTyping(); }}
-            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder={stagedFile ? "Add a caption…" : "Message"}
+          {/* Send / like */}
+          <button
+            type={text.trim() || stagedFile ? "submit" : "button"}
+            className="cr-send-btn"
             disabled={sending || uploading}
-          />
-
-          {/* Voice / Send */}
-          {text.trim() || stagedFile ? (
-            <button type="submit" className="cr-send-btn" disabled={sending || uploading}>
-              <SendIcon />
-            </button>
-          ) : (
-            <button type="button" className="cr-send-btn" onClick={() => setComingSoon("voice")}>
-              <VoiceIcon />
-            </button>
-          )}
+            onClick={e => {
+              if (!text.trim() && !stagedFile) {
+                e.preventDefault();
+                send(e, "👍");
+              }
+            }}
+            aria-label={text.trim() || stagedFile ? "Send" : "Send like"}
+          >
+            {text.trim() || stagedFile ? <SendIcon /> : <span className="cr-like">👍</span>}
+          </button>
         </div>
       </form>
 
