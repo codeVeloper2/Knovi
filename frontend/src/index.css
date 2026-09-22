@@ -19598,13 +19598,19 @@ kbd {
 
   /* ── Messages area ── */
   .chatx-shell .cr-messages {
-    padding: 8px 4% 12px !important;
+    padding: 8px 10px 12px 6px !important;
     background: var(--navy-900) !important;
     background-image: none !important;
     gap: 3px !important;
   }
   .chatx-shell .cr-date-pill { margin: 10px 0 !important; }
   .chatx-shell .cr-date-pill span { background: var(--navy-800); border: 1px solid var(--navy-line); border-radius: 8px; padding: 4px 12px; color: var(--text-soft); font-size: .68rem; box-shadow: none; }
+
+  /* ── Bubble highlight on double-tap (WhatsApp style) ── */
+  .chatx-shell .cb.cb--highlighted {
+    filter: brightness(1.35) !important;
+    transition: filter 0.1s ease !important;
+  }
 
   /* ── Bubbles ── */
   .chatx-shell .cb-wrap { max-width: 82%; }

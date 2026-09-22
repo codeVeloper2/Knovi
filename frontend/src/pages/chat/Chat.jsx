@@ -327,8 +327,12 @@ function EmojiPickerPortal({ anchor, onPick, onClose }) {
     if (left < 8) left = 8;
 
     // Place above bubble if not enough space below
-    let top = rect.bottom + 8;
-    if (top + pickerH > window.innerHeight - 8) top = rect.top - pickerH - 8;
+    // On mobile always show above the bubble (WhatsApp style)
+    const isMobile = window.innerWidth <= 768;
+    let top = isMobile
+      ? rect.top - pickerH - 8
+      : rect.bottom + 8;
+    if (!isMobile && top + pickerH > window.innerHeight - 8) top = rect.top - pickerH - 8;
 
     setPos({ top, left });
   }, [anchor]);
@@ -388,6 +392,7 @@ function MessageBubble({ msg, myId, partnerName, partnerUrl, onDelete, onReport,
   const bubbleRef = useRef(null);
   const rowRef = useRef(null);
   const lastTapRef = useRef(0);
+  const [highlighted, setHighlighted] = useState(false);
 
   const fileType = getFileType(msg.attachmentName);
   const isImage = fileType === "image";
@@ -402,13 +407,18 @@ function MessageBubble({ msg, myId, partnerName, partnerUrl, onDelete, onReport,
     return () => document.removeEventListener("mousedown", h);
   }, [showMenu]);
 
-  // Double-tap → emoji picker (mobile)
+  // Double-tap → highlight flash + emoji picker (mobile, WhatsApp style)
   function handlePointerUp(e) {
     if (e.pointerType !== "touch") return;
     const now = Date.now();
     if (now - lastTapRef.current < 350) {
       e.preventDefault();
-      setShowPicker(true);
+      // Flash highlight like WhatsApp
+      setHighlighted(true);
+      setTimeout(() => {
+        setHighlighted(false);
+        setShowPicker(true);
+      }, 180);
       lastTapRef.current = 0;
     } else {
       lastTapRef.current = now;
@@ -497,7 +507,7 @@ function MessageBubble({ msg, myId, partnerName, partnerUrl, onDelete, onReport,
         {/* Bubble */}
         <div
           ref={bubbleRef}
-          className={`cb ${mine ? "cb--mine" : "cb--theirs"} ${hasReactions ? "cb--has-reactions" : ""}`}
+          className={`cb ${mine ? "cb--mine" : "cb--theirs"} ${hasReactions ? "cb--has-reactions" : ""} ${highlighted ? "cb--highlighted" : ""}`}
           style={swipeX > 0 ? { transform: `translateX(${mine ? -swipeX : swipeX}px)`, transition: "none" } : {}}
           onPointerUp={handlePointerUp}
           onPointerDown={handlePointerDown}
