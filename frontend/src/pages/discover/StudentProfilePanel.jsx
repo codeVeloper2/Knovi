@@ -9,6 +9,14 @@ const MessageIcon = () => (
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
   </svg>
 );
+const SwordIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/>
+    <line x1="13" y1="19" x2="19" y2="13"/>
+    <line x1="16" y1="16" x2="19" y2="19"/>
+    <line x1="20" y1="21" x2="21" y2="20"/>
+  </svg>
+);
 const StarIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
     <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
@@ -22,6 +30,11 @@ const VerifiedIcon = () => (
 const CalendarIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
     <rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>
+  </svg>
+);
+const SparkIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
   </svg>
 );
 
@@ -47,7 +60,60 @@ function formatJoinDate(dateStr) {
   return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
 }
 
-export default function StudentProfilePanel({ student, onClose, onMessage }) {
+/**
+ * Learning overlap section shown inside the profile panel.
+ * Displays the curriculum breadcrumb and the natural-language reason.
+ */
+function LearningOverlapSection({ overlap }) {
+  if (!overlap) return null;
+  const { type, subjectName, topicName, conceptName, reason, isActive } = overlap;
+
+  return (
+    <div className="profile-panel-section">
+      <h3 className="profile-panel-section-title">
+        <SparkIcon /> Learning overlap
+      </h3>
+      {isActive && (
+        <span className="disc-overlap-active-dot" style={{ marginBottom: 6, display: "inline-block" }}>
+          🟢 Learning now
+        </span>
+      )}
+      <div className="disc-overlap-breadcrumb">
+        <span className="disc-overlap-crumb disc-overlap-crumb--subject">{subjectName}</span>
+        {(type === "topic" || type === "concept") && topicName && (
+          <>
+            <span className="disc-overlap-arrow">→</span>
+            <span className="disc-overlap-crumb disc-overlap-crumb--topic">{topicName}</span>
+          </>
+        )}
+        {type === "concept" && conceptName && (
+          <>
+            <span className="disc-overlap-arrow">→</span>
+            <span className="disc-overlap-crumb disc-overlap-crumb--concept">{conceptName}</span>
+          </>
+        )}
+      </div>
+      <p className="disc-overlap-reason" style={{ marginTop: 6 }}>"{reason}"</p>
+    </div>
+  );
+}
+
+/**
+ * StudentProfilePanel
+ *
+ * Props:
+ *  student        — User serialisation + relationship/learningOverlap/challengeEligible
+ *  currentUser    — The authenticated user's profile
+ *  onClose        — Close the panel
+ *  onMessage      — Start/open a chat conversation
+ *  onChallenge    — Start a Challenge (null when not eligible)
+ */
+export default function StudentProfilePanel({ student, onClose, onMessage, onChallenge }) {
+  const relationship = student.relationship ?? "none";
+  const learningOverlap = student.learningOverlap ?? null;
+  const challengeEligible = student.challengeEligible ?? false;
+  const canMessage = student.allowDirectMessage !== false;
+
   return (
     <>
       <div className="profile-panel-overlay" onClick={onClose} />
@@ -99,18 +165,44 @@ export default function StudentProfilePanel({ student, onClose, onMessage }) {
             </div>
           </div>
 
-          {/* Action button */}
+          {/* Learning overlap — shown when present */}
+          <LearningOverlapSection overlap={learningOverlap} />
+
+          {/* Action buttons */}
           <div className="profile-panel-actions">
-            {student.allowDirectMessage !== false ? (
-              <button type="button" className="btn btn-primary btn-full" onClick={onMessage}>
-                <MessageIcon />
-                Message
-              </button>
+            {relationship === "conversation" ? (
+              <>
+                {canMessage ? (
+                  <button type="button" className="btn btn-primary btn-full" onClick={onMessage}>
+                    <MessageIcon /> Message
+                  </button>
+                ) : (
+                  <button type="button" className="btn btn-ghost btn-full" disabled title="This student does not accept direct messages">
+                    <MessageIcon /> Direct messages disabled
+                  </button>
+                )}
+                {challengeEligible && onChallenge && (
+                  <button
+                    type="button"
+                    className="btn btn-challenge btn-full"
+                    onClick={onChallenge}
+                    style={{ marginTop: 8 }}
+                  >
+                    <SwordIcon /> Challenge to AI Quiz Battle
+                  </button>
+                )}
+              </>
             ) : (
-              <button type="button" className="btn btn-ghost btn-full" disabled title="This student does not accept direct messages">
-                <MessageIcon />
-                Direct messages disabled
-              </button>
+              // Not yet connected
+              canMessage ? (
+                <button type="button" className="btn btn-primary btn-full" onClick={onMessage}>
+                  Connect & Message
+                </button>
+              ) : (
+                <button type="button" className="btn btn-ghost btn-full" disabled title="This student does not accept direct messages">
+                  <MessageIcon /> Direct messages disabled
+                </button>
+              )
             )}
           </div>
 

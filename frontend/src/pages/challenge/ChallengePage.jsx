@@ -212,10 +212,13 @@ export default function ChallengePage() {
       const [challengeData, peerData, sessionData, conversations] = await Promise.all([api.listChallenges(30), api.discoverUsers("All Levels", "all", "recommended"), api.getAISessions({ limit: 100, offset: 0 }), api.listConversations()]);
       const connected = new Set((Array.isArray(conversations) ? conversations : []).map(c => String(c?.partner?.uid ?? c?.partner?.id ?? c?.partnerId ?? "")).filter(Boolean));
       setConnectedPeerIds(connected);
-      setChallenges(challengeData?.items || []); setPeers(Array.isArray(peerData) ? peerData.filter(p => connected.has(String(p.uid ?? p.id))) : []); setSessions(Array.isArray(sessionData) ? sessionData : []);
+      // Normalise: new API wraps each entry as { user, relationship, ... }; old shape was a flat user object.
+      const rawPeers = Array.isArray(peerData) ? peerData.map(p => p?.user ?? p) : [];
+      setChallenges(challengeData?.items || []); setPeers(rawPeers.filter(p => connected.has(String(p.uid ?? p.id)))); setSessions(Array.isArray(sessionData) ? sessionData : []);
     } catch (err) { setError(err.message || "Could not load Challenge."); }
     finally { setLoadingHome(false); }
   }, []);
+
 
   const loadChallenge = useCallback(async () => {
     if (!challengeId) return;

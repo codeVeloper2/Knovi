@@ -183,11 +183,34 @@ export function setOffline() {
 }
 
 // ── Discover ─────────────────────────────────────────────────────
+
+/**
+ * General Discover — all profile-complete users with optional filters.
+ * Backward-compatible: results now also include { relationship, learningOverlap, challengeEligible }.
+ */
 export function discoverUsers(level, availability, sort) {
   const params = new URLSearchParams();
   if (level && level !== "All Levels") params.set("level", level);
   if (availability) params.set("availability", availability);
   if (sort) params.set("sort", sort);
+  return request(`/api/users/discover?${params}`, { auth: true });
+}
+
+/**
+ * Learning Peers — students with meaningful learning overlap to the current user.
+ * Returns up to 20 results sorted by overlap score.
+ * Each result: { user, relationship, learningOverlap, challengeEligible }
+ *
+ * @param {object} opts
+ * @param {string} [opts.level]        - Grade filter e.g. "Year 10"
+ * @param {string} [opts.availability] - "online" | "all"
+ * @param {string} [opts.overlapType]  - "concept"|"topic"|"subject"|"all"
+ */
+export function discoverLearningPeers({ level, availability, overlapType } = {}) {
+  const params = new URLSearchParams({ section: "learning_peers" });
+  if (level && level !== "All Levels") params.set("level", level);
+  if (availability && availability !== "all") params.set("availability", availability);
+  if (overlapType) params.set("overlap_type", overlapType);
   return request(`/api/users/discover?${params}`, { auth: true });
 }
 

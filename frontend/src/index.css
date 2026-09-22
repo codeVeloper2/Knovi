@@ -10099,7 +10099,428 @@ kbd {
   }
   .disc-mobile-empty-btn:active { background: rgba(91,110,245,0.2); }
 
+
+  /* ── Result count note ───────────────────────────────────────── */
+  .disc-mobile-result-note {
+    font-size: 0.75rem;
+    color: var(--text-soft, #9ca3af);
+    flex-shrink: 0;
+  }
+  /* Full-width filter btn (mobile) */
+  .disc-mobile-filter-btn--full {
+    flex: 1;
+    height: 44px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    justify-content: center;
+    gap: 7px;
+    width: auto;
+  }
+  /* Mobile inline search */
+  .disc-mobile-search {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 16px 12px;
+    background: #111827;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 10px 14px;
+    color: var(--text-soft, #9ca3af);
+  }
+  .disc-mobile-search input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: #fff;
+    font-size: 0.9rem;
+    outline: none;
+  }
+  .disc-mobile-search input::placeholder { color: var(--text-soft, #9ca3af); }
+  .disc-mobile-search button {
+    background: none;
+    border: none;
+    color: var(--text-soft, #9ca3af);
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+  }
+
+  /* ── Challenge button ────────────────────────────────────────── */
+  .disc-student-btn--challenge {
+    background: linear-gradient(135deg, #f59e0b, #ef4444);
+    border: none;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(239,68,68,0.25);
+    flex: 0 0 auto;
+    min-width: 48px;
+  }
+  .disc-student-btn--challenge:active {
+    transform: scale(0.97);
+    box-shadow: none;
+  }
+
 } /* end mobile discover */
+
+/* ══════════════════════════════════════════════════════════════
+   LEARNING PEERS — Shared styles (mobile + desktop)
+   Namespace: disc-learning-*, disc-peer-*, disc-overlap-*,
+              disc-section-*
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Section layout ─────────────────────────────────────────────── */
+.disc-learning-section {
+  margin-bottom: 36px;
+}
+.disc-section-divider {
+  margin-top: 8px;
+}
+.disc-section-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 0 16px;
+}
+.disc-section-header svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: #a78bfa;
+}
+.disc-section-header--all svg {
+  color: var(--text-dim);
+}
+.disc-section-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text);
+  margin: 0 0 2px;
+}
+.disc-section-subtitle {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  margin: 0;
+}
+
+/* ── Peer cards grid ─────────────────────────────────────────────── */
+.disc-peer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  padding: 0 16px;
+}
+@media (max-width: 768px) {
+  .disc-peer-grid {
+    grid-template-columns: 1fr;
+    padding: 0 16px;
+    gap: 12px;
+  }
+  .disc-section-header {
+    padding: 0;
+    margin: 16px 0 12px;
+  }
+  .disc-learning-section {
+    padding: 0 16px;
+  }
+  .disc-section-divider {
+    padding: 0;
+  }
+}
+
+/* ── Peer card ───────────────────────────────────────────────────── */
+.disc-peer-card {
+  background: var(--navy-panel, #111827);
+  border: 1px solid rgba(167,139,250,0.15);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.disc-peer-card:hover {
+  border-color: rgba(167,139,250,0.4);
+  box-shadow: 0 4px 20px rgba(167,139,250,0.1);
+}
+.disc-peer-card-footer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ── Student card (general discover, also shared styles) ─────────── */
+.disc-student-card {
+  background: var(--navy-panel, #111827);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.15s;
+}
+.disc-student-card:hover {
+  border-color: rgba(91,110,245,0.3);
+}
+
+/* ── Shared avatar/name styles also used outside @media blocks ─── */
+.disc-student-top {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.disc-student-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+.disc-student-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.disc-student-avatar-fallback {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+.disc-student-online {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #34d399;
+  border: 2px solid var(--navy-panel, #111827);
+}
+.disc-student-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.disc-student-name-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.disc-student-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text, #fff);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.disc-student-verified { flex-shrink: 0; color: var(--blue, #60a5fa); }
+.disc-student-grade {
+  font-size: 0.75rem;
+  color: var(--text-soft, #9ca3af);
+}
+.disc-student-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+.disc-student-status {
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.disc-student-status--on  { color: #34d399; }
+.disc-student-status--off { color: var(--text-soft, #9ca3af); }
+.disc-student-rating {
+  font-size: 0.72rem;
+  color: #f59e0b;
+  font-weight: 600;
+}
+.disc-student-bio {
+  font-size: 0.8rem;
+  color: var(--text-soft, #9ca3af);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Shared action buttons */
+.disc-student-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+.disc-student-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+  text-decoration: none;
+}
+.disc-student-btn--primary {
+  background: linear-gradient(135deg, #5b6ef5, #6366f1);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(91,110,245,0.3);
+}
+.disc-student-btn--primary:hover { box-shadow: 0 4px 16px rgba(91,110,245,0.45); }
+.disc-student-btn--primary:active { transform: scale(0.97); box-shadow: none; }
+.disc-student-btn--ghost {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text-soft, #9ca3af);
+}
+.disc-student-btn--ghost:hover {
+  background: rgba(255,255,255,0.08);
+  color: var(--text, #fff);
+}
+.disc-student-btn--challenge {
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(239,68,68,0.25);
+  flex: 0 0 auto;
+  min-width: 48px;
+}
+.disc-student-btn--challenge:hover { box-shadow: 0 4px 16px rgba(239,68,68,0.4); }
+.disc-student-btn--challenge:active { transform: scale(0.97); box-shadow: none; }
+.disc-student-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Challenge button in profile panel */
+.btn-challenge {
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  border: none;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(239,68,68,0.2);
+}
+.btn-challenge:hover {
+  box-shadow: 0 4px 18px rgba(239,68,68,0.35);
+}
+
+/* Shimmer skeleton (also works outside @media) */
+@keyframes disc-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
+}
+.disc-mobile-shimmer {
+  height: 160px;
+  border-radius: 16px;
+  background: linear-gradient(
+    90deg,
+    var(--navy-panel, #111827) 25%,
+    rgba(255,255,255,0.04) 50%,
+    var(--navy-panel, #111827) 75%
+  );
+  background-size: 800px 100%;
+  animation: disc-shimmer 1.4s infinite linear;
+}
+
+/* ── Learning overlap styles ──────────────────────────────────────── */
+.disc-overlap-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: rgba(167,139,250,0.07);
+  border: 1px solid rgba(167,139,250,0.15);
+  border-radius: 10px;
+}
+.disc-overlap-active-dot {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #34d399;
+  letter-spacing: 0.01em;
+  margin-bottom: 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.disc-overlap-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.disc-overlap-crumb {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+.disc-overlap-crumb--subject {
+  background: rgba(96,165,250,0.12);
+  color: #60a5fa;
+  border: 1px solid rgba(96,165,250,0.2);
+}
+.disc-overlap-crumb--topic {
+  background: rgba(167,139,250,0.12);
+  color: #a78bfa;
+  border: 1px solid rgba(167,139,250,0.2);
+}
+.disc-overlap-crumb--concept {
+  background: rgba(52,211,153,0.12);
+  color: #34d399;
+  border: 1px solid rgba(52,211,153,0.2);
+}
+.disc-overlap-arrow {
+  font-size: 0.65rem;
+  color: var(--text-dim, #6b7280);
+  line-height: 1;
+}
+.disc-overlap-reason {
+  font-size: 0.78rem;
+  color: var(--text-soft, #9ca3af);
+  margin: 0;
+  font-style: normal;
+  line-height: 1.4;
+}
+
+/* ── Learning peers empty state ───────────────────────────────────── */
+.disc-learning-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 36px 24px;
+  text-align: center;
+  background: var(--navy-panel, #111827);
+  border: 1px dashed rgba(255,255,255,0.08);
+  border-radius: 16px;
+  margin: 0 16px;
+}
+.disc-learning-empty-icon { font-size: 2rem; }
+.disc-learning-empty-text {
+  font-size: 0.85rem;
+  color: var(--text-dim, #6b7280);
+  margin: 0;
+  max-width: 280px;
+  line-height: 1.5;
+}
+
+/* ── Shimmer / loading for peer grid ─────────────────────────────── */
+.disc-peer-grid .disc-mobile-shimmer {
+  height: 180px;
+}
+
+
 
 
 
