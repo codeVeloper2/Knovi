@@ -171,7 +171,7 @@ async def teach_concept(
     )
 
 
-@router.post("/learning/sessions/{session_id}/message", response_model=list[MessageOut])
+@router.post("/learning/sessions/{session_id}/message", response_model=MessageOut)
 async def student_message(
     session_id: int,
     body: StudentMessageRequest,
@@ -293,26 +293,6 @@ async def submit_answer(
 # ---------------------------------------------------------------------------
 # Adaptive reteaching
 # ---------------------------------------------------------------------------
-
-@router.post("/learning/sessions/{session_id}/advance-task", response_model=dict)
-async def advance_task(
-    session_id: int,
-    user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Advance the Learning Plan after the learner confirms the next task transition."""
-    return await svc.advance_learning_task(session_id=session_id, user_id=user.id, db=db)
-
-
-@router.post("/learning/sessions/{session_id}/idle-nudge", response_model=MessageOut)
-async def idle_nudge(
-    session_id: int,
-    level: int = Query(default=1, ge=1, le=2),
-    user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    return await svc.record_idle_nudge(session_id=session_id, user_id=user.id, db=db, level=level)
-
 
 @router.post("/learning/sessions/{session_id}/reteach", response_model=TeachingOut)
 async def reteach(

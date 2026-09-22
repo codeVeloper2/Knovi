@@ -587,14 +587,6 @@ export function sendStudentMessage(sessionId, content) {
   return post(`/api/learning/sessions/${sessionId}/message`, { content });
 }
 
-export function advanceLearningTask(sessionId) {
-  return post(`/api/learning/sessions/${sessionId}/advance-task`);
-}
-
-export function recordLearningIdleNudge(sessionId, level = 1) {
-  return post(`/api/learning/sessions/${sessionId}/idle-nudge?level=${level}`);
-}
-
 export function startStudyPeriod(sessionId, durationSeconds = 300, taskIndex = null) {
   return post(`/api/learning/sessions/${sessionId}/study/start`, {
     duration_seconds: durationSeconds,
