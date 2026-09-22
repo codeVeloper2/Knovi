@@ -428,15 +428,9 @@ function MessageBubble({ msg, myId, partnerName, partnerUrl, onDelete, onReport,
     }
   }
 
-  // Long-press → context menu (mobile)
+  // Long-press is handled in onTouchStart below
   const longPressTimer = useRef(null);
-  function handlePointerDown(e) {
-    if (e.pointerType !== "touch") return;
-    longPressTimer.current = setTimeout(() => {
-      setShowMenu(true);
-      if (navigator.vibrate) navigator.vibrate(40);
-    }, 500);
-  }
+  function handlePointerDown(e) { /* no-op; long-press via onTouchStart */ }
   function handlePointerLeave() { clearTimeout(longPressTimer.current); }
 
   // Swipe-right to reply
@@ -451,6 +445,13 @@ function MessageBubble({ msg, myId, partnerName, partnerUrl, onDelete, onReport,
     touchStartY.current = e.touches[0].clientY;
     swipingRef.current = false;
     repliedRef.current = false;
+    // Start long-press timer (500ms → WhatsApp-style action modal)
+    longPressTimer.current = setTimeout(() => {
+      setHighlighted(true);
+      setTimeout(() => setHighlighted(false), 200);
+      setShowActionModal(true);
+      if (navigator.vibrate) navigator.vibrate(40);
+    }, 500);
   }
   function onTouchMove(e) {
     clearTimeout(longPressTimer.current);
@@ -656,24 +657,27 @@ function MessageBubble({ msg, myId, partnerName, partnerUrl, onDelete, onReport,
         />
       )}
 
-      {/* Double-tap action modal (mobile WhatsApp style) */}
+      {/* Long-press / double-tap action modal (WhatsApp style) */}
       {showActionModal && createPortal(
         <div
           style={{
             position: "fixed", inset: 0, zIndex: 9999,
-            background: "rgba(0,0,0,0.55)", backdropFilter: "blur(2px)",
+            background: "rgba(0,0,0,0.6)", backdropFilter: "blur(3px)",
             display: "flex", flexDirection: "column",
             alignItems: mine ? "flex-end" : "flex-start",
-            justifyContent: "center", padding: "0 12px",
+            justifyContent: "center", padding: "0 14px",
+            gap: 10,
           }}
           onClick={() => setShowActionModal(false)}
         >
-          {/* Emoji bar */}
+          {/* Emoji reaction bar */}
           <div
             style={{
-              display: "flex", gap: 4, marginBottom: 8,
-              background: "#1a2a3f", borderRadius: 999,
-              padding: "8px 12px", boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+              display: "flex", alignItems: "center", gap: 2,
+              background: "#1e2d44", borderRadius: 999,
+              padding: "6px 10px",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+              border: "1px solid rgba(255,255,255,0.08)",
             }}
             onClick={e => e.stopPropagation()}
           >
@@ -681,40 +685,106 @@ function MessageBubble({ msg, myId, partnerName, partnerUrl, onDelete, onReport,
               <button
                 key={em}
                 type="button"
-                style={{ background: "none", border: "none", fontSize: "1.5rem", cursor: "pointer", padding: "2px 4px", borderRadius: 8 }}
-                onPointerDown={e => { e.preventDefault(); onReact(msg.id, em); setShowActionModal(false); }}
+                style={{
+                  background: "none", border: "none",
+                  fontSize: "1.55rem", cursor: "pointer",
+                  padding: "4px 6px", borderRadius: 10,
+                  transition: "transform 0.12s",
+                  lineHeight: 1,
+                }}
+                onPointerDown={e => { e.preventDefault(); e.currentTarget.style.transform = "scale(1.3)"; }}
+                onPointerUp={e => { e.currentTarget.style.transform = ""; onReact(msg.id, em); setShowActionModal(false); }}
               >{em}</button>
             ))}
+            {/* + more reactions button */}
+            <button
+              type="button"
+              style={{
+                background: "rgba(255,255,255,0.1)", border: "none",
+                width: 34, height: 34, borderRadius: "50%",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer", color: "#94a3b8", marginLeft: 2,
+              }}
+              onClick={() => setShowActionModal(false)}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+            </button>
           </div>
-          {/* Action buttons */}
+
+          {/* Action menu */}
           <div
             style={{
-              background: "#1a2a3f", borderRadius: 16, overflow: "hidden",
-              width: "100%", maxWidth: 280,
-              boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+              background: "#1e2d44", borderRadius: 16, overflow: "hidden",
+              width: "100%", maxWidth: 300,
+              boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+              border: "1px solid rgba(255,255,255,0.08)",
             }}
             onClick={e => e.stopPropagation()}
           >
             {[
-              { label: "Reply", icon: "↩️", action: () => { onReply(msg); setShowActionModal(false); } },
-              { label: "Copy", icon: "📋", action: () => { onCopy?.(msg); setShowActionModal(false); } },
+              {
+                label: "Reply",
+                icon: (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
+                  </svg>
+                ),
+                action: () => { onReply(msg); setShowActionModal(false); },
+              },
+              {
+                label: "Copy",
+                icon: (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="11" height="11" rx="2"/>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                ),
+                action: () => { onCopy?.(msg); setShowActionModal(false); },
+              },
               mine
-                ? { label: "Delete", icon: "🗑️", danger: true, action: () => { onDelete(msg.id); setShowActionModal(false); } }
-                : { label: "Report", icon: "🚩", danger: true, action: () => { onReport(msg.id); setShowActionModal(false); } },
-            ].filter(Boolean).map((item, i, arr) => (
+                ? {
+                    label: "Delete",
+                    danger: true,
+                    icon: (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6l-1 14H6L5 6"/>
+                        <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
+                      </svg>
+                    ),
+                    action: () => { onDelete(msg.id); setShowActionModal(false); },
+                  }
+                : {
+                    label: "Report",
+                    danger: true,
+                    icon: (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+                        <line x1="4" y1="22" x2="4" y2="15"/>
+                      </svg>
+                    ),
+                    action: () => { onReport(msg.id); setShowActionModal(false); },
+                  },
+            ].map((item, i, arr) => (
               <button
                 key={item.label}
                 type="button"
                 onClick={item.action}
                 style={{
-                  width: "100%", display: "flex", alignItems: "center", gap: 12,
-                  padding: "14px 18px", background: "none", border: "none",
-                  borderBottom: i < arr.length - 1 ? "1px solid rgba(255,255,255,0.07)" : "none",
+                  width: "100%", display: "flex", alignItems: "center", gap: 14,
+                  padding: "15px 20px", background: "none", border: "none",
+                  borderBottom: i < arr.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none",
                   color: item.danger ? "#f87171" : "#e2e8f0",
-                  fontSize: "0.95rem", cursor: "pointer", textAlign: "left",
+                  fontSize: "0.98rem", fontWeight: 500, cursor: "pointer",
+                  textAlign: "left", letterSpacing: "0.01em",
+                  transition: "background 0.12s",
                 }}
+                onPointerDown={e => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
+                onPointerUp={e => { e.currentTarget.style.background = ""; }}
               >
-                <span style={{ fontSize: "1.1rem" }}>{item.icon}</span>
+                <span style={{ color: item.danger ? "#f87171" : "#94a3b8", display: "flex" }}>{item.icon}</span>
                 {item.label}
               </button>
             ))}

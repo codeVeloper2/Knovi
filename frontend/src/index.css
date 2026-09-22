@@ -5649,8 +5649,15 @@ kbd {
   word-break: break-word;
   position: relative;
   display: inline-block;
+  min-width: 72px;
   max-width: 100%;
+  overflow: hidden; /* contain the float */
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.cb::after {
+  content: "";
+  display: table;
+  clear: both;
 }
 .cmr--mine .cb {
   background: #1a3199;
@@ -19190,6 +19197,8 @@ kbd {
 /* ─── Bubbles ─── */
 .chatx-shell .cb {
   position: relative;
+  display: inline-block;
+  min-width: 72px;
   border-radius: 10px;
   padding: 7px 10px 5px;
   color: var(--c-text);
@@ -19197,6 +19206,7 @@ kbd {
   line-height: 1.45;
   word-break: break-word;
   box-shadow: 0 1px 2px rgba(0,0,0,.3);
+  overflow: hidden; /* contain the float */
 }
 
 /* Theirs — incoming */
@@ -19229,10 +19239,25 @@ kbd {
 }
 
 /* ─── Bubble content ─── */
-.chatx-shell .cb-text { display: block; }
+.chatx-shell .cb-text { display: inline; }
 .chatx-shell .cb-meta {
-  display: flex; align-items: center; justify-content: flex-end;
-  gap: 3px; margin-top: 3px; margin-left: 8px;
+  float: right;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 2px;
+  margin-left: 8px;
+  margin-bottom: 0;
+  line-height: 1;
+  /* pull it down to sit at the bottom of the text */
+  position: relative;
+  bottom: -1px;
+}
+/* Clearfix so the bubble stretches to contain the float */
+.chatx-shell .cb::after {
+  content: "";
+  display: table;
+  clear: both;
 }
 .chatx-shell .cb-time { font-size: .62rem; color: rgba(148,163,184,.8); }
 .chatx-shell .cmr--mine .cb-time { color: rgba(186,200,255,.65); }
