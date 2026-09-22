@@ -82,33 +82,41 @@ export default function DashboardLayout() {
   }, []);
 
   // ── Swipe-from-left-edge gesture to open drawer ──────────────────────────────
+  // Zone is 44px from left edge — wide enough to not clash with Android back gesture
   const edgeTouchStart = useRef(null);
   useEffect(() => {
     if (!isMobile) return;
 
     function onTouchStart(e) {
       const x = e.touches[0].clientX;
-      // Only trigger if touch starts within 24px of the left edge
-      if (x <= 24) {
+      if (x <= 44) {
         edgeTouchStart.current = { x, y: e.touches[0].clientY };
       } else {
         edgeTouchStart.current = null;
       }
     }
 
-    function onTouchEnd(e) {
+    function onTouchMove(e) {
       if (!edgeTouchStart.current || drawerOpen) return;
-      const dx = e.changedTouches[0].clientX - edgeTouchStart.current.x;
-      const dy = Math.abs(e.changedTouches[0].clientY - edgeTouchStart.current.y);
-      // Swipe right at least 60px, mostly horizontal → open drawer
-      if (dx > 60 && dy < 80) setDrawerOpen(true);
+      const dx = e.touches[0].clientX - edgeTouchStart.current.x;
+      const dy = Math.abs(e.touches[0].clientY - edgeTouchStart.current.y);
+      // Open as soon as they've dragged 50px right and it's mostly horizontal
+      if (dx > 50 && dy < 60) {
+        setDrawerOpen(true);
+        edgeTouchStart.current = null;
+      }
+    }
+
+    function onTouchEnd() {
       edgeTouchStart.current = null;
     }
 
     document.addEventListener("touchstart", onTouchStart, { passive: true });
+    document.addEventListener("touchmove",  onTouchMove,  { passive: true });
     document.addEventListener("touchend",   onTouchEnd,   { passive: true });
     return () => {
       document.removeEventListener("touchstart", onTouchStart);
+      document.removeEventListener("touchmove",  onTouchMove);
       document.removeEventListener("touchend",   onTouchEnd);
     };
   }, [isMobile, drawerOpen]);
@@ -178,8 +186,6 @@ export default function DashboardLayout() {
             onClose={closeDrawer}
             onLogout={() => setLogoutOpen(true)}
           />
-
-          {!isAISessionRoom && <MobileFabMenu />}
         </>
       )}
 

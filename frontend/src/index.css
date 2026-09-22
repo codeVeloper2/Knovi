@@ -12390,9 +12390,9 @@ kbd {
 
 @media (max-width: 820px) {
   .mobile-topbar {
-    display: grid;
-    grid-template-columns: 44px 1fr 1fr;
+    display: flex;
     align-items: center;
+    justify-content: space-between;
     position: fixed;
     top: 0;
     left: 0;
@@ -12400,12 +12400,21 @@ kbd {
     height: 56px;
     background: var(--navy-800);
     border-bottom: 1px solid var(--navy-line);
-    padding: 0 12px 0 4px;
+    /* left pad tight so hamburger is close to edge; right pad keeps actions off edge */
+    padding: 0 16px 0 8px;
     z-index: 200;
-    gap: 0;
   }
 
-  /* Hamburger button — first column */
+  /* LEFT GROUP: hamburger + brand sitting together */
+  .mobile-topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Hamburger button */
   .mobile-topbar-hamburger {
     display: flex;
     align-items: center;
@@ -12420,9 +12429,8 @@ kbd {
     padding: 0;
     flex-shrink: 0;
     -webkit-tap-highlight-color: transparent;
-    transition: color 0.15s, background 0.15s;
+    transition: color 0.18s, background 0.18s;
   }
-  .mobile-topbar-hamburger:hover,
   .mobile-topbar-hamburger:active {
     color: var(--text);
     background: rgba(255,255,255,0.08);
@@ -12431,12 +12439,11 @@ kbd {
     color: var(--blue-bright);
   }
 
-  /* Brand — second column, centred */
+  /* Brand — sits right next to hamburger */
   .mobile-topbar-brand {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 8px;
+    gap: 7px;
   }
 
   .mobile-topbar-mark {
@@ -12454,7 +12461,9 @@ kbd {
   .mobile-topbar-actions {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
+    flex-shrink: 0;
+    /* padding-right already handled by topbar's padding: 0 16px */
   }
 
   .mobile-topbar-bell {
@@ -12828,12 +12837,20 @@ kbd {
 }
 
 /* ── Floating Action Button (FAB) ── */
+/* FAB removed — navigation is now handled by the hamburger drawer */
 .mobile-fab {
-  display: none; /* Hidden on desktop */
+  display: none !important;
+}
+
+.mobile-fab-overlay,
+.fab-diamond {
+  display: none !important;
 }
 
 @media (max-width: 820px) {
   .mobile-fab {
+    display: none !important; /* kept so existing @media block below doesn't break */
+    /* original: display: grid; */
     display: grid;
     place-items: center;
     position: fixed;
@@ -20195,11 +20212,11 @@ kbd {
    MOBILE LAYOUT REPAIR — single global top bar
    ═══════════════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
-  /* Every page starts below the single MobileTopBar.
-     No bottom nav anymore — hamburger drawer replaced it. */
+  /* Every page starts below the fixed MobileTopBar.
+     No bottom nav or FAB anymore — hamburger drawer replaced them. */
   .dash-main--mobile {
     padding-top: 56px !important;
-    padding-bottom: 24px !important;
+    padding-bottom: env(safe-area-inset-bottom, 16px) !important;
     min-height: 100dvh;
   }
 
