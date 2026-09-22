@@ -19519,11 +19519,11 @@ kbd {
   .chatx-shell .chatx-search input { font-size: .875rem; color: var(--text); }
   .chatx-shell .chatx-search input::placeholder { color: var(--text-dim); }
 
-  /* Tabs */
-  .chatx-shell .chatx-tabs { margin: 0; padding: 0; border-bottom: 1px solid var(--navy-line); gap: 0; }
-  .chatx-shell .chatx-tabs button { border: none; background: transparent; border-radius: 0; color: var(--text-dim); font-size: .75rem; font-weight: 600; letter-spacing: .04em; padding: 10px 6px; border-bottom: 2px solid transparent; flex: initial; }
+  /* Tabs — compact, left-aligned, WhatsApp style */
+  .chatx-shell .chatx-tabs { margin: 0; padding: 0 16px; border-bottom: 1px solid var(--navy-line); gap: 24px; justify-content: flex-start; }
+  .chatx-shell .chatx-tabs button { border: none; background: transparent; border-radius: 0; color: var(--text-dim); font-size: .8rem; font-weight: 600; letter-spacing: .04em; padding: 10px 0; border-bottom: 2px solid transparent; flex: none; width: auto; }
   .chatx-shell .chatx-tabs button.active { color: var(--blue-bright); border-bottom-color: var(--blue-bright); background: transparent; }
-  .chatx-shell .chatx-tabs button span { background: var(--blue-bright); color: #fff; }
+  .chatx-shell .chatx-tabs button span { background: var(--blue-bright); color: #fff; border-radius: 999px; padding: 1px 5px; font-size: .65rem; margin-left: 4px; }
   .chatx-shell .chatx-tabs .chatx-filter-btn { display: none; }
 
   /* Conversation rows */
@@ -19556,6 +19556,7 @@ kbd {
     flex: 1 !important;
     overflow-y: auto !important;
     min-height: 0 !important;
+    justify-content: flex-end !important;
   }
   .chatx-shell .cr-header {
     height: 56px !important;

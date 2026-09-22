@@ -685,8 +685,6 @@ function ConversationList({ convs, activeId, onSelect, onNew, myId }) {
         <div className="chatx-tabs" role="tablist" aria-label="Conversation filters">
           <button type="button" className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>All</button>
           <button type="button" className={filter === "unread" ? "active" : ""} onClick={() => setFilter("unread")}>Unread {unreadTotal > 0 && <span>{unreadTotal}</span>}</button>
-          <button type="button" className={pinnedOnly ? "active" : ""} onClick={() => setPinnedOnly(v => !v)}>Favorites</button>
-          <button type="button" className="chatx-filter-btn" onClick={() => setPinnedOnly(v => !v)} title="Filter chats" aria-label="Filter chats"><ChevronDownIcon /></button>
         </div>
       </div>
 
