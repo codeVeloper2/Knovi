@@ -979,3 +979,622 @@
 .ar-save-explanation { margin-top: 11px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); color: #b9c6ff; border-radius: 8px; padding: 7px 10px; font-size: 11px; font-weight: 800; cursor: pointer; }
 .ar-save-explanation:hover { background: rgba(255,255,255,.08); }
 .ar-save-explanation.saved { color: #67e8a5; border-color: rgba(103,232,165,.28); }
+
+
+/* ==========================================================================
+   MOBILE LEARNING ROOM — rebuilt
+   Goal: conversation first, controls second, readable type, safe-area aware.
+   This intentionally overrides the earlier compact mobile rules.
+   ========================================================================== */
+
+@media (max-width: 760px) {
+  .ar-room {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+    background:
+      radial-gradient(120% 35% at 50% 0%, rgba(73,104,244,.15), transparent 65%),
+      var(--ar-bg);
+  }
+
+  /* ---------- Header ---------- */
+  .ar-header {
+    height: 64px;
+    flex: 0 0 64px;
+    padding:
+      max(8px, env(safe-area-inset-top))
+      12px
+      8px
+      12px;
+    grid-template-columns: minmax(0,1fr) auto;
+    gap: 8px;
+    background: rgba(5,16,32,.96);
+    border-bottom: 1px solid rgba(123,168,224,.14);
+    backdrop-filter: blur(20px);
+  }
+
+  .ar-header-left {
+    min-width: 0;
+    gap: 9px;
+  }
+
+  .ar-icon-btn {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+    border-radius: 11px;
+    font-size: 20px;
+  }
+
+  .ar-brand-avatar { display: none; }
+
+  .ar-header-copy {
+    min-width: 0;
+    max-width: calc(100vw - 220px);
+  }
+
+  .ar-header-title {
+    font-size: 14px;
+    line-height: 1.15;
+    letter-spacing: -.015em;
+  }
+
+  .ar-header-sub {
+    margin-top: 3px;
+    font-size: 10px;
+    color: #7893b5;
+  }
+
+  .ar-header-center { display: none; }
+
+  .ar-header-right {
+    gap: 5px;
+    flex: 0 0 auto;
+  }
+
+  .ar-header-right .ar-header-action {
+    min-height: 36px;
+    padding: 0 9px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  /* Voice becomes a simple icon control. Plan/Tools stay explicit. */
+  .ar-header-right .ar-voice {
+    width: 36px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    font-size: 0;
+  }
+
+  .ar-header-right .ar-voice::before {
+    content: "◉";
+    font-size: 13px;
+    color: #9eb4d2;
+  }
+
+  .ar-header-right .ar-voice.active::before {
+    content: "◉";
+    color: #8f9cff;
+  }
+
+  .ar-header-right .ar-mobile-only {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ar-end,
+  .ar-desktop-toggle { display: none !important; }
+
+  /* ---------- Main layout ---------- */
+  .ar-layout,
+  .ar-layout.ar-left-open.ar-right-open,
+  .ar-layout.ar-left-open.ar-right-collapsed,
+  .ar-layout.ar-left-collapsed.ar-right-open,
+  .ar-layout.ar-left-collapsed.ar-right-collapsed {
+    display: block;
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    height: calc(100dvh - 64px);
+  }
+
+  .ar-main {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+  }
+
+  /* ---------- Context bar ---------- */
+  .ar-context-strip {
+    min-height: 52px;
+    height: 52px;
+    flex: 0 0 52px;
+    padding: 8px 14px;
+    gap: 12px;
+    background: rgba(7,22,42,.78);
+  }
+
+  .ar-context-strip .ar-eyebrow {
+    font-size: 8px;
+    letter-spacing: .13em;
+  }
+
+  .ar-context-strip strong {
+    margin-top: 3px;
+    font-size: 11px;
+    line-height: 1.15;
+  }
+
+  .ar-context-progress {
+    width: min(35vw, 132px);
+    flex: 0 0 auto;
+  }
+
+  .ar-context-progress span {
+    margin-bottom: 5px;
+    font-size: 8px;
+  }
+
+  .ar-context-progress > div { height: 5px; }
+
+  /* ---------- Conversation ---------- */
+  .ar-conversation {
+    padding: 18px 12px 20px;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ar-message {
+    width: 100%;
+    max-width: none;
+    gap: 8px;
+    margin: 0 auto 18px;
+  }
+
+  .ar-message-avatar,
+  .ar-user-avatar {
+    width: 30px;
+    height: 30px;
+    flex-basis: 30px;
+    border-radius: 9px;
+  }
+
+  .ar-message-column {
+    max-width: calc(100% - 38px);
+  }
+
+  .ar-message-meta {
+    gap: 5px;
+    margin: 0 0 5px 2px;
+    font-size: 8px;
+  }
+
+  .ar-message-card {
+    padding: 13px 14px;
+    border-radius: 15px;
+    background: rgba(11,29,53,.88);
+    box-shadow: 0 5px 18px rgba(0,0,0,.08);
+  }
+
+  .ar-message-user .ar-message-card {
+    background: linear-gradient(145deg, rgba(66,80,194,.34), rgba(29,71,113,.34));
+    border-color: rgba(123,145,246,.24);
+  }
+
+  .ar-rich {
+    font-size: 14px;
+    line-height: 1.68;
+    overflow-wrap: anywhere;
+  }
+
+  .ar-rich p { margin: 0 0 11px; }
+  .ar-rich p:last-child { margin-bottom: 0; }
+
+  .ar-rich h2 {
+    margin: 0 0 9px;
+    font-size: 19px;
+    line-height: 1.25;
+  }
+
+  .ar-rich h3 {
+    margin: 0 0 8px;
+    font-size: 17px;
+    line-height: 1.3;
+  }
+
+  .ar-rich h4 {
+    margin: 0 0 7px;
+    font-size: 15px;
+  }
+
+  .ar-rich ul,
+  .ar-rich ol {
+    padding-left: 21px;
+    margin: 7px 0 11px;
+  }
+
+  .ar-rich li + li { margin-top: 6px; }
+
+  .ar-code-wrap {
+    margin: 10px 0;
+    border-radius: 11px;
+    overflow: hidden;
+  }
+
+  .ar-code-head {
+    padding: 7px 9px;
+    font-size: 9px;
+  }
+
+  .ar-code-wrap pre {
+    padding: 12px;
+    font-size: 11px;
+    line-height: 1.55;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ar-save-explanation {
+    margin-top: 12px;
+    min-height: 34px;
+    padding: 7px 10px;
+    font-size: 10px;
+  }
+
+  .ar-transition-actions {
+    gap: 7px;
+    margin-top: 13px;
+    padding-top: 11px;
+  }
+
+  .ar-transition-actions button {
+    min-height: 38px;
+    padding: 8px 11px;
+    font-size: 10px;
+  }
+
+  /* ---------- Teaching / practice artifacts ---------- */
+  .ar-practice-banner {
+    margin: 10px 12px 0;
+    padding: 11px 12px;
+    border-radius: 13px;
+  }
+
+  .ar-practice-banner strong { font-size: 9px; }
+  .ar-practice-banner span { font-size: 10px; }
+
+  .ar-thinking,
+  .ar-preparing-card,
+  .ar-agent-checkpoint,
+  .ar-study-card,
+  .ar-quiz-artifact,
+  .ar-summary-artifact {
+    margin-bottom: 14px;
+  }
+
+  .ar-thinking,
+  .ar-preparing-card {
+    border-radius: 15px;
+  }
+
+  .ar-agent-checkpoint,
+  .ar-study-card,
+  .ar-quiz-artifact {
+    padding: 14px;
+    border-radius: 15px;
+  }
+
+  .ar-study-card {
+    align-items: flex-start;
+    gap: 13px;
+  }
+
+  .ar-study-orbit {
+    width: 72px;
+    height: 72px;
+    flex-basis: 72px;
+  }
+
+  .ar-study-orbit span { font-size: 17px; }
+  .ar-study-copy h3 { font-size: 15px; }
+  .ar-study-copy p { font-size: 11px; line-height: 1.55; }
+
+  .ar-artifact-head h2 {
+    font-size: 17px;
+    line-height: 1.25;
+  }
+
+  .ar-quiz-count { font-size: 10px; }
+  .ar-quiz-question {
+    margin-top: 14px;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+
+  .ar-option {
+    min-height: 48px;
+    padding: 10px 11px;
+    border-radius: 11px;
+  }
+
+  .ar-option b {
+    font-size: 12px;
+    line-height: 1.4;
+    text-align: left;
+  }
+
+  .ar-answer-box {
+    min-height: 130px;
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .ar-quiz-foot {
+    gap: 10px;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ar-quiz-foot span {
+    font-size: 10px;
+    line-height: 1.45;
+  }
+
+  .ar-quiz-foot button {
+    width: 100%;
+    min-height: 44px;
+    border-radius: 11px;
+    font-size: 11px;
+  }
+
+  /* ---------- Composer ---------- */
+  .ar-composer-wrap {
+    flex: 0 0 auto;
+    padding: 8px 10px max(9px, env(safe-area-inset-bottom));
+    border-top: 1px solid rgba(123,168,224,.12);
+    background:
+      linear-gradient(180deg, rgba(6,18,37,.72), rgba(6,18,37,.98) 24%);
+    box-shadow: 0 -12px 35px rgba(0,0,0,.14);
+    z-index: 20;
+  }
+
+  .ar-command-row {
+    display: flex;
+    gap: 7px;
+    margin: 0 0 7px;
+    overflow-x: auto;
+    padding: 1px 1px 2px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ar-command-row::-webkit-scrollbar { display: none; }
+  .ar-command-label { display: none; }
+
+  .ar-command-chip {
+    flex: 0 0 auto;
+    min-height: 32px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .ar-composer {
+    min-height: 48px;
+    padding: 6px 7px 6px 10px;
+    gap: 7px;
+    border-radius: 15px;
+    background: #0b1d35;
+    border-color: rgba(123,168,224,.22);
+    box-shadow: 0 7px 24px rgba(0,0,0,.2);
+  }
+
+  .ar-composer-icon { display: none; }
+
+  .ar-composer textarea {
+    min-height: 34px;
+    max-height: 120px;
+    padding: 7px 2px;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .ar-composer textarea::placeholder { color: #6f87a6; }
+
+  .ar-send {
+    width: 36px;
+    height: 36px;
+    flex: 0 0 36px;
+    border-radius: 11px;
+    font-size: 17px;
+  }
+
+  .ar-composer-foot { display: none; }
+
+  /* ---------- Mobile drawers ---------- */
+  .ar-sidebar {
+    display: block;
+    position: fixed;
+    top: 64px;
+    bottom: 0;
+    width: min(390px, 94vw);
+    max-height: calc(100dvh - 64px);
+    z-index: 120;
+    overflow-y: auto;
+    border: 0;
+    background: #08182d;
+    box-shadow: 28px 0 65px rgba(0,0,0,.42);
+    transform: translateX(-105%);
+    transition: transform .22s cubic-bezier(.2,.8,.2,1);
+  }
+
+  .ar-work-sidebar {
+    right: 0;
+    left: auto;
+    transform: translateX(105%);
+    border-left: 1px solid var(--ar-border);
+    box-shadow: -28px 0 65px rgba(0,0,0,.42);
+  }
+
+  .ar-sidebar.ar-mobile-open { transform: translateX(0); }
+
+  .ar-panel-inner {
+    padding: 20px 16px max(26px, env(safe-area-inset-bottom));
+  }
+
+  .ar-panel-head {
+    margin-bottom: 16px;
+  }
+
+  .ar-panel-head h2 { font-size: 18px; }
+  .ar-mobile-close {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    font-size: 18px;
+  }
+
+  .ar-plan-progress {
+    padding: 14px;
+    border-radius: 15px;
+  }
+
+  .ar-plan-ring {
+    width: 52px;
+    height: 52px;
+    flex-basis: 52px;
+  }
+
+  .ar-plan-progress strong { font-size: 12px; }
+  .ar-plan-progress small { font-size: 10px; }
+
+  .ar-task-list { gap: 8px; }
+  .ar-task {
+    grid-template-columns: 34px minmax(0,1fr);
+    gap: 10px;
+    padding: 12px 10px;
+    border-radius: 13px;
+  }
+
+  .ar-task-number {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    font-size: 11px;
+  }
+
+  .ar-task-copy b {
+    font-size: 12px;
+    white-space: normal;
+  }
+
+  .ar-task-copy small {
+    font-size: 10px;
+    line-height: 1.45;
+  }
+
+  .ar-task-copy em {
+    font-size: 9px;
+    margin-top: 5px;
+  }
+
+  .ar-current-card {
+    padding: 15px;
+    border-radius: 15px;
+  }
+
+  .ar-current-card h3 {
+    font-size: 17px;
+    line-height: 1.3;
+  }
+
+  .ar-current-card p {
+    font-size: 11px;
+    line-height: 1.55;
+  }
+
+  .ar-stats-card {
+    gap: 7px;
+  }
+
+  .ar-stats-card > div {
+    padding: 11px 8px;
+    border-radius: 11px;
+  }
+
+  .ar-stats-card b { font-size: 17px; }
+  .ar-stats-card span { font-size: 9px; }
+
+  .ar-study-tool {
+    min-height: 56px;
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .ar-study-tool b { font-size: 11px; }
+  .ar-study-tool small { font-size: 9px; }
+
+  .ar-tool-tip {
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .ar-tool-tip b { font-size: 10px; }
+  .ar-tool-tip span { font-size: 10px; }
+
+  .ar-mobile-backdrop {
+    display: block;
+    position: fixed;
+    inset: 64px 0 0;
+    z-index: 110;
+    background: rgba(0,0,0,.56);
+    backdrop-filter: blur(2px);
+  }
+
+  .ar-toast {
+    left: 12px;
+    right: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    min-width: 0;
+  }
+}
+
+@media (max-width: 390px) {
+  .ar-header {
+    padding-left: 9px;
+    padding-right: 7px;
+  }
+
+  .ar-header-copy { max-width: calc(100vw - 205px); }
+  .ar-header-title { font-size: 13px; }
+  .ar-header-sub { display: none; }
+
+  .ar-header-right .ar-header-action {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .ar-context-progress { width: 92px; }
+
+  .ar-conversation { padding-left: 9px; padding-right: 9px; }
+
+  .ar-rich { font-size: 13.5px; }
+  .ar-message-card { padding: 12px 13px; }
+}
+
+@media (max-width: 340px) {
+  .ar-header-right .ar-voice { display: none; }
+  .ar-header-right .ar-header-action { font-size: 9px; padding: 0 7px; }
+  .ar-context-progress { width: 78px; }
+}
