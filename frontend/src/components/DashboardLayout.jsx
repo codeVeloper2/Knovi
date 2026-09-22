@@ -88,12 +88,11 @@ export default function DashboardLayout() {
     if (!isMobile) return;
 
     function onTouchStart(e) {
-      const x = e.touches[0].clientX;
-      if (x <= 44) {
-        edgeTouchStart.current = { x, y: e.touches[0].clientY };
-      } else {
-        edgeTouchStart.current = null;
-      }
+      // Accept swipe from anywhere on screen
+      edgeTouchStart.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+      };
     }
 
     function onTouchMove(e) {
