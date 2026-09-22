@@ -57,6 +57,7 @@ export default function AILearningRoom() {
     try { return localStorage.getItem("peerup.learningRoom.rightOpen") !== "false"; } catch { return true; }
   });
   const [copiedId, setCopiedId] = useState(null);
+  const [savedMessageIds, setSavedMessageIds] = useState(() => new Set());
 
   const bottomRef = useRef(null);
   const timerRef = useRef(null);
@@ -172,6 +173,7 @@ export default function AILearningRoom() {
         if (Array.isArray(serverMessages)) msgs = serverMessages;
       } catch {}
       applySession(sess, msgs);
+      try { const saved = await api.getSaved(); setSavedMessageIds(new Set((saved?.explanations || []).map(item => Number(item.messageId)))); } catch {}
       if (sess.status === "created") {
         await prepareSession();
       } else {
@@ -687,7 +689,7 @@ export default function AILearningRoom() {
             {messages
               .filter(m => !["welcome", "system", "timer_start", "timer_end", "summary"].includes(m.messageType))
               .map((msg, index) => (
-                <MessageCard key={msg.id || index} msg={msg} onCopy={setCopiedId} copiedId={copiedId} onTutorAction={sendMessage} />
+                <MessageCard key={msg.id || index} msg={msg} onCopy={setCopiedId} copiedId={copiedId} onTutorAction={sendMessage} isSaved={savedMessageIds.has(Number(msg.id))} onSave={handleSaveExplanation} />
               ))}
 
             {aiWorking && <AgentThinking phase={phase} />}
@@ -791,14 +793,14 @@ function WorkspacePanel({ session, task, phase, progress, familiarity, intent, a
   </div>;
 }
 
-function MessageCard({ msg, onCopy, copiedId, onTutorAction }) {
+function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave }) {
   const ai = msg.role === "ai";
   const locked = ai && msg.extra?.locked;
   const action = msg.extra?.action;
   return <article className={`ar-message ${ai ? "ar-message-ai" : "ar-message-user"} ${locked ? "ar-message-locked" : ""}`}>
     {ai ? <div className="ar-message-avatar"><TutorAvatar size={34} /></div> : <div className="ar-user-avatar">You</div>}
     <div className="ar-message-column"><div className="ar-message-meta"><span>{ai ? "UPRAD" : "You"}</span>{ai && <span className="ar-meta-dot">·</span>}{ai && <span>{locked ? "Practice lock" : msg.messageType === "reteach" ? "Reteach" : "Tutor"}</span>}<time>{formatClock(msg.createdAt)}</time></div>
-      <div className="ar-message-card">{locked && <div className="ar-locked-label">🔒 Teaching temporarily hidden</div>}{action && <div className="ar-agent-badge"><span>✦</span>{activityLabel(action)}</div>}<RichText content={msg.content} onCopy={onCopy} copiedId={copiedId} />{msg.extra?.taskTransition && <div className="ar-transition-actions"><button type="button" onClick={() => onTutorAction("Yes, I’m ready for the next task.")}>Yes, move to next task →</button><button type="button" className="secondary" onClick={() => onTutorAction("No, please explain this task again.")}>Explain it again</button></div>}</div>
+      <div className="ar-message-card">{locked && <div className="ar-locked-label">🔒 Teaching temporarily hidden</div>}{action && <div className="ar-agent-badge"><span>✦</span>{activityLabel(action)}</div>}<RichText content={msg.content} onCopy={onCopy} copiedId={copiedId} />{ai && !locked && msg.messageType === "teaching" || msg.messageType === "reteach" && <button type="button" className={`ar-save-explanation ${isSaved ? "saved" : ""}`} onClick={() => onSave(msg)}>{isSaved ? "✓ Saved explanation" : "🔖 Save explanation"}</button>}{msg.extra?.taskTransition && <div className="ar-transition-actions"><button type="button" onClick={() => onTutorAction("Yes, I’m ready for the next task.")}>Yes, move to next task →</button><button type="button" className="secondary" onClick={() => onTutorAction("No, please explain this task again.")}>Explain it again</button></div>}</div>
     </div>
   </article>;
 }

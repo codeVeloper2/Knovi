@@ -7,6 +7,7 @@ const META = {
   course: ["COURSE", "▣", "#4f7cff"],
   lesson: ["LESSON", "▤", "#1fb89a"],
   tutorial: ["TUTORIAL", "▶", "#c267ff"],
+  explanation: ["EXPLANATION", "✦", "#ffb84d"],
 };
 
 function Icon({ name, size = 20 }) {
@@ -28,6 +29,7 @@ function normalize(data) {
     courses: Array.isArray(data?.courses) ? data.courses : [],
     tutorials: Array.isArray(data?.tutorials) ? data.tutorials : [],
     lessons: Array.isArray(data?.lessons) ? data.lessons : [],
+    explanations: Array.isArray(data?.explanations) ? data.explanations : [],
   };
 }
 
@@ -55,6 +57,7 @@ function ResourceCard({ item, type, onOpen, onRemove }) {
   const description = item.description || (
     type === "course" ? `${item.lessonsCount || 0} lessons · ${item.subject || "General study"}` :
     type === "tutorial" ? "A student-created tutorial saved for later." :
+    type === "explanation" ? "A tutor explanation saved from your Learning Room." :
     "A saved lesson ready to revisit."
   );
 
@@ -68,10 +71,11 @@ function ResourceCard({ item, type, onOpen, onRemove }) {
           <div className="sv2-card-top"><span className="sv2-type">{label}</span><span className="sv2-date">{dateLabel(item.createdAt)}</span></div>
           <h3>{item.title || "Untitled resource"}</h3>
           <p>{description}</p>
-          <div className="sv2-tags">{item.subject && <span>{item.subject}</span>}{item.topic && <span>{item.topic}</span>}</div>
+          <div className="sv2-tags">{item.subject && <span>{item.subject}</span>}{item.classLevel && <span>{item.classLevel}</span>}{item.topic && <span>{item.topic}</span>}</div>
         </div>
         <span className="sv2-arrow"><Icon name="arrow" size={17}/></span>
       </button>
+      {type === "explanation" && <button type="button" className="sv2-read-aloud" onClick={() => { if (window.speechSynthesis) { window.speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(item.content || ""); u.rate = 0.95; window.speechSynthesis.speak(u); } }}>🔊 Read aloud</button>}
       <div className="sv2-menu" ref={ref}>
         <button type="button" onClick={() => setOpen(v => !v)} aria-label={`More options for ${item.title || "resource"}`}><Icon name="more" size={17}/></button>
         {open && <div className="sv2-menu-pop"><button onClick={onOpen}>Open</button><button className="danger" onClick={() => { setOpen(false); onRemove(type, item.id); }}>Remove</button></div>}
@@ -83,7 +87,7 @@ function ResourceCard({ item, type, onOpen, onRemove }) {
 export default function SavedPage() {
   const navigate = useNavigate();
   const toast = useToast();
-  const [saved, setSaved] = useState({ courses: [], tutorials: [], lessons: [] });
+  const [saved, setSaved] = useState({ courses: [], tutorials: [], lessons: [], explanations: [] });
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("all");
   const [search, setSearch] = useState("");
@@ -103,6 +107,7 @@ export default function SavedPage() {
     ...saved.courses.map(item => ({ item, type: "course" })),
     ...saved.lessons.map(item => ({ item, type: "lesson" })),
     ...saved.tutorials.map(item => ({ item, type: "tutorial" })),
+    ...saved.explanations.map(item => ({ item, type: "explanation" })),
   ], [saved]);
 
   const subjects = useMemo(() => ["All", ...Array.from(new Set(all.map(x => x.item.subject).filter(Boolean))).sort()], [all]);
@@ -126,12 +131,13 @@ export default function SavedPage() {
     course: saved.courses.length,
     lesson: saved.lessons.length,
     tutorial: saved.tutorials.length,
+    explanation: saved.explanations.length,
   };
 
   async function removeResource(type, id) {
     try {
       await api.toggleSaved(type, id);
-      const key = type === "course" ? "courses" : type === "tutorial" ? "tutorials" : "lessons";
+      const key = type === "course" ? "courses" : type === "tutorial" ? "tutorials" : type === "explanation" ? "explanations" : "lessons";
       setSaved(prev => ({ ...prev, [key]: prev[key].filter(item => item.id !== id) }));
       toast.success("Removed from saved resources.");
     } catch { toast.error("Couldn't remove this resource."); }
@@ -140,6 +146,7 @@ export default function SavedPage() {
   function openResource(item, type) {
     if (type === "course") return navigate(`/app/learn/courses/${item.id}`);
     if (type === "tutorial") return navigate(`/app/learn/tutorials/${item.id}`);
+    if (type === "explanation") return navigate(`/app/learn/ai/session/${item.sessionId}`);
     if (item.courseId) return navigate(`/app/learn/courses/${item.courseId}/lessons/${item.id}`);
     toast.error("This saved lesson is missing its course.");
   }
@@ -149,6 +156,7 @@ export default function SavedPage() {
     ["course", "Courses", counts.course],
     ["lesson", "Lessons", counts.lesson],
     ["tutorial", "Tutorials", counts.tutorial],
+    ["explanation", "Explanations", counts.explanation],
   ];
 
   return (
@@ -201,7 +209,7 @@ export default function SavedPage() {
           ) : filtered.length ? (
             <div className="sv2-grid">{filtered.map(({ item, type }) => <ResourceCard key={`${type}-${item.id}`} item={item} type={type} onOpen={() => openResource(item,type)} onRemove={removeResource}/>)}</div>
           ) : (
-            <div className="sv2-empty"><div className="sv2-empty-icon"><Icon name="bookmark" size={30}/></div><h3>{search || subject !== "All" ? "Nothing matches your filters" : "Your library is empty"}</h3><p>{search || subject !== "All" ? "Try a different search, subject, or filter." : "Save courses, lessons, and tutorials while you explore Learn."}</p><button onClick={() => navigate("/app/learn")}>Explore Learn <Icon name="arrow" size={16}/></button></div>
+            <div className="sv2-empty"><div className="sv2-empty-icon"><Icon name="bookmark" size={30}/></div><h3>{search || subject !== "All" ? "Nothing matches your filters" : "Your library is empty"}</h3><p>{search || subject !== "All" ? "Try a different search, subject, or filter." : "Save courses, lessons, tutorials, and tutor explanations while you learn."}</p><button onClick={() => navigate("/app/learn")}>Explore Learn <Icon name="arrow" size={16}/></button></div>
           )}
         </main>
       </div>

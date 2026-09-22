@@ -35,7 +35,7 @@ class CommentBody(StrictModel):
 
 
 class SaveBody(StrictModel):
-    contentType: str     # "course" | "tutorial" | "lesson"
+    contentType: str     # "course" | "tutorial" | "lesson" | "explanation"
     contentId:   int
 
 

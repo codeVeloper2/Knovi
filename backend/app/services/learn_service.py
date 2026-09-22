@@ -14,6 +14,8 @@ from app.models.learn import (
     SavedContent, Tutorial, VideoProgress,
 )
 from app.models.user import User
+from app.models.ai_learning import AISessionMessage, AILearningSession
+from app.models.curriculum import Subject, Topic, Concept
 
 
 def _now() -> datetime:
@@ -296,6 +298,23 @@ async def create_tutorial(
 async def toggle_saved(
     session: AsyncSession, user_id: int, content_type: str, content_id: int
 ) -> dict:
+    allowed = {"course", "tutorial", "lesson", "explanation"}
+    if content_type not in allowed:
+        raise HTTPException(400, "Unsupported saved resource type.")
+
+    if content_type == "explanation":
+        message = (await session.execute(
+            select(AISessionMessage).join(AILearningSession, AISessionMessage.session_id == AILearningSession.id).where(
+                AISessionMessage.id == content_id,
+                AILearningSession.user_id == user_id,
+                AISessionMessage.role == "ai",
+            )
+        )).scalar_one_or_none()
+        if not message:
+            raise HTTPException(404, "AI explanation not found.")
+        if message.message_type in {"system", "welcome", "timer_start", "timer_end", "summary"}:
+            raise HTTPException(400, "This tutor message cannot be saved as an explanation.")
+
     existing = (await session.execute(
         select(SavedContent).where(
             SavedContent.user_id == user_id,
@@ -307,11 +326,49 @@ async def toggle_saved(
     if existing:
         await session.delete(existing)
         await session.commit()
-        return {"saved": False}
-    else:
-        session.add(SavedContent(user_id=user_id, content_type=content_type, content_id=content_id))
-        await session.commit()
-        return {"saved": True}
+        return {"saved": False, "contentType": content_type, "contentId": content_id}
+
+    session.add(SavedContent(user_id=user_id, content_type=content_type, content_id=content_id))
+    await session.commit()
+    return {"saved": True, "contentType": content_type, "contentId": content_id}
+
+
+async def _serialize_saved_explanation(
+    session: AsyncSession, saved_row: SavedContent
+) -> Optional[dict]:
+    message = (await session.execute(
+        select(AISessionMessage).where(AISessionMessage.id == saved_row.content_id)
+    )).scalar_one_or_none()
+    if not message:
+        return None
+
+    learning_session = (await session.execute(
+        select(AILearningSession).where(AILearningSession.id == message.session_id)
+    )).scalar_one_or_none()
+    if not learning_session:
+        return None
+
+    subject = (await session.execute(select(Subject).where(Subject.id == learning_session.subject_id))).scalar_one_or_none()
+    topic = (await session.execute(select(Topic).where(Topic.id == learning_session.topic_id))).scalar_one_or_none()
+    concept = (await session.execute(select(Concept).where(Concept.id == learning_session.concept_id))).scalar_one_or_none()
+    extra = message.extra or {}
+    task_title = extra.get("taskTitle") or extra.get("taskName") or extra.get("task")
+
+    return {
+        "id": saved_row.id,
+        "messageId": message.id,
+        "sessionId": message.session_id,
+        "contentType": "explanation",
+        "title": task_title or (concept.name if concept else "Saved tutor explanation"),
+        "content": message.content,
+        "subject": subject.name if subject else "",
+        "classLevel": subject.class_level if subject else "",
+        "topic": topic.name if topic else "",
+        "concept": concept.name if concept else "",
+        "taskIndex": extra.get("taskIndex"),
+        "savedAt": saved_row.saved_at.isoformat(),
+        "createdAt": message.created_at.isoformat(),
+    }
 
 
 async def get_saved_content(session: AsyncSession, user_id: int) -> dict:
@@ -342,10 +399,18 @@ async def get_saved_content(session: AsyncSession, user_id: int) -> dict:
         )).scalars().all()
     )
 
+    explanation_rows = [r for r in rows if r.content_type == "explanation"]
+    explanations = []
+    for row in explanation_rows:
+        item = await _serialize_saved_explanation(session, row)
+        if item:
+            explanations.append(item)
+
     return {
-        "courses":   [c.serialize(enrolled=c.id in enrolled_set, progress_pct=prog_c.get(c.id, 0)) for c in courses],
-        "tutorials": [t.serialize(prog_t_map.get(f"tutorial:{t.id}")) for t in tutorials],
-        "lessons":   [l.serialize(prog_l_map.get(f"lesson:{l.id}")) for l in lessons],
+        "courses":      [c.serialize(enrolled=c.id in enrolled_set, progress_pct=prog_c.get(c.id, 0)) for c in courses],
+        "tutorials":    [t.serialize(prog_t_map.get(f"tutorial:{t.id}")) for t in tutorials],
+        "lessons":      [l.serialize(prog_l_map.get(f"lesson:{l.id}")) for l in lessons],
+        "explanations": explanations,
     }
 
 
