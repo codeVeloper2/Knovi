@@ -387,6 +387,7 @@ function MessageBubble({ msg, myId, partnerName, partnerUrl, onDelete, onReport,
   const mine = msg.senderId === myId;
   const [showPicker, setShowPicker] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showActionModal, setShowActionModal] = useState(false);
   const [swipeX, setSwipeX] = useState(0);
 
   const bubbleRef = useRef(null);
@@ -399,26 +400,28 @@ function MessageBubble({ msg, myId, partnerName, partnerUrl, onDelete, onReport,
 
   // Close menu when clicking outside
   useEffect(() => {
-    if (!showMenu) return;
+    if (!showMenu && !showActionModal) return;
     const h = e => {
-      if (rowRef.current && !rowRef.current.contains(e.target)) setShowMenu(false);
+      if (rowRef.current && !rowRef.current.contains(e.target)) {
+        setShowMenu(false);
+        setShowActionModal(false);
+      }
     };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
-  }, [showMenu]);
+  }, [showMenu, showActionModal]);
 
-  // Double-tap → highlight flash + emoji picker (mobile, WhatsApp style)
+  // Double-tap → highlight flash + full action modal (WhatsApp style)
   function handlePointerUp(e) {
     if (e.pointerType !== "touch") return;
     const now = Date.now();
     if (now - lastTapRef.current < 350) {
       e.preventDefault();
-      // Flash highlight like WhatsApp
       setHighlighted(true);
       setTimeout(() => {
         setHighlighted(false);
-        setShowPicker(true);
-      }, 180);
+        setShowActionModal(true);
+      }, 150);
       lastTapRef.current = 0;
     } else {
       lastTapRef.current = now;
@@ -644,13 +647,80 @@ function MessageBubble({ msg, myId, partnerName, partnerUrl, onDelete, onReport,
         )}
       </div>
 
-      {/* Emoji picker portal */}
+      {/* Emoji picker portal (desktop hover) */}
       {showPicker && (
         <EmojiPickerPortal
           anchor={bubbleRef.current}
           onPick={em => onReact(msg.id, em)}
           onClose={() => setShowPicker(false)}
         />
+      )}
+
+      {/* Double-tap action modal (mobile WhatsApp style) */}
+      {showActionModal && createPortal(
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            background: "rgba(0,0,0,0.55)", backdropFilter: "blur(2px)",
+            display: "flex", flexDirection: "column",
+            alignItems: mine ? "flex-end" : "flex-start",
+            justifyContent: "center", padding: "0 12px",
+          }}
+          onClick={() => setShowActionModal(false)}
+        >
+          {/* Emoji bar */}
+          <div
+            style={{
+              display: "flex", gap: 4, marginBottom: 8,
+              background: "#1a2a3f", borderRadius: 999,
+              padding: "8px 12px", boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {EMOJIS.map(em => (
+              <button
+                key={em}
+                type="button"
+                style={{ background: "none", border: "none", fontSize: "1.5rem", cursor: "pointer", padding: "2px 4px", borderRadius: 8 }}
+                onPointerDown={e => { e.preventDefault(); onReact(msg.id, em); setShowActionModal(false); }}
+              >{em}</button>
+            ))}
+          </div>
+          {/* Action buttons */}
+          <div
+            style={{
+              background: "#1a2a3f", borderRadius: 16, overflow: "hidden",
+              width: "100%", maxWidth: 280,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {[
+              { label: "Reply", icon: "↩️", action: () => { onReply(msg); setShowActionModal(false); } },
+              { label: "Copy", icon: "📋", action: () => { onCopy?.(msg); setShowActionModal(false); } },
+              mine
+                ? { label: "Delete", icon: "🗑️", danger: true, action: () => { onDelete(msg.id); setShowActionModal(false); } }
+                : { label: "Report", icon: "🚩", danger: true, action: () => { onReport(msg.id); setShowActionModal(false); } },
+            ].filter(Boolean).map((item, i, arr) => (
+              <button
+                key={item.label}
+                type="button"
+                onClick={item.action}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", gap: 12,
+                  padding: "14px 18px", background: "none", border: "none",
+                  borderBottom: i < arr.length - 1 ? "1px solid rgba(255,255,255,0.07)" : "none",
+                  color: item.danger ? "#f87171" : "#e2e8f0",
+                  fontSize: "0.95rem", cursor: "pointer", textAlign: "left",
+                }}
+              >
+                <span style={{ fontSize: "1.1rem" }}>{item.icon}</span>
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
