@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -119,6 +120,22 @@ _CHAT_HISTORY_WINDOW = 12
 # After 100% elapsed the server always accepts.
 _EARLY_FINISH_MIN_FRACTION = 0.20
 
+# Short uncertainty responses are legitimate retrieval evidence. Treat them
+# deterministically as insufficient evidence so an "I don't know" answer can
+# never be mistaken for a successful retrieval because of model ambiguity.
+_UNCERTAINTY_RESPONSE_RE = re.compile(
+    r"^(?:i\s+(?:don['’]?t|do not)\s+know(?:\s+(?:yet|the\s+answer))?|"
+    r"i(?:['’]m|\s+am)\s+(?:not\s+sure|unsure)|"
+    r"i\s+have\s+no\s+idea|"
+    r"not\s+sure|\?+)$",
+    re.IGNORECASE,
+)
+
+
+def _is_uncertainty_response(answer: str) -> bool:
+    normalized = re.sub(r"\s+", " ", (answer or "").strip())
+    return bool(normalized and _UNCERTAINTY_RESPONSE_RE.fullmatch(normalized))
+
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
@@ -134,6 +151,28 @@ def _set_status(session: AILearningSession, new_status: str) -> None:
             f"Cannot transition session from '{current}' to '{new_status}'."
         )
     session.status = new_status
+
+
+def _begin_adaptive_reteach(session: AILearningSession) -> None:
+    """Enter the reteaching stage without ever performing reteaching→reteaching.
+
+    Answer evaluation already moves a failed retrieval into ``reteaching``.
+    The reteach endpoint may therefore be called while the session is already
+    in that state.  Direct reteach requests from teaching/practice/retrieval
+    still enter the state through the normal transition validator.
+    """
+    if session.status != "reteaching":
+        _set_status(session, "reteaching")
+
+
+def _finish_adaptive_reteach(session: AILearningSession) -> None:
+    """Move a completed reteach snapshot into the next retrieval stage."""
+    if session.status != "reteaching":
+        raise HTTPException(
+            409,
+            f"Cannot finish reteaching: session is '{session.status}'."
+        )
+    _set_status(session, "retrieval")
 
 
 def _safe_list(v: Any) -> list:
@@ -1187,9 +1226,10 @@ async def generate_retrieval_questions(
             409,
             f"Cannot generate questions: session is '{session.status}'."
         )
-    # Transition to retrieval state if still in teaching/reteaching
+    # A newly generated retrieval always follows teaching or reteaching.
+    # Use the state machine here rather than assigning the status directly.
     if session.status in ("teaching", "reteaching"):
-        session.status = "retrieval"
+        _set_status(session, "retrieval")
 
     current_teaching = await _get_current_teaching(session_id, db)
     if not current_teaching:
@@ -1549,6 +1589,21 @@ Scoring guide:
         understanding = "partial"
     needs_reteach = bool(parsed.get("needs_reteach", False))
 
+    # Uncertainty is a valid learner response, not an application error. Make
+    # the weak-evidence outcome deterministic even if the evaluator model
+    # returns an inconsistent score for phrases such as "I don't know yet".
+    uncertainty_response = _is_uncertainty_response(student_answer)
+    if uncertainty_response:
+        score_val = 0
+        understanding = "weak"
+        needs_reteach = True
+        parsed["is_correct"] = False
+        if not _safe_str(parsed.get("feedback")):
+            parsed["feedback"] = (
+                "That is useful evidence: you are not confident with this yet. "
+                "I’ll teach it from a different angle and check your understanding again."
+            )
+
     # The learning-room policy is explicit: strong understanding can continue;
     # partial/weak understanding gets a different teaching approach before the
     # next retrieval check. The score guard keeps the model from accidentally
@@ -1661,6 +1716,11 @@ async def generate_adaptive_reteach(
             409,
             f"Cannot reteach: session is '{session.status}'."
         )
+
+    # Failed retrievals already leave the session in ``reteaching``.  Do not
+    # attempt reteaching→reteaching; enter the state only when needed, then
+    # return to retrieval after the new teaching snapshot is persisted.
+    _begin_adaptive_reteach(session)
 
     subject, topic, concept = await _load_curriculum_chain(
         session.subject_id, session.topic_id, session.concept_id, db
@@ -1797,7 +1857,11 @@ Return JSON (all array fields required; may be empty):
         session_id, "ai", "reteach", message_content, db,
         extra={"strategy": new_strategy, "teachingId": teaching.id, "provider": provider},
     )
-    _set_status(session, "reteaching")
+
+    # The reteach content is now persisted and becomes the source for the next
+    # retrieval check.  This is the critical lifecycle transition:
+    # retrieval → reteaching → retrieval, never reteaching → reteaching.
+    _finish_adaptive_reteach(session)
     await db.commit()
 
     # Record that the AI switched strategy — this is itself an observation.
