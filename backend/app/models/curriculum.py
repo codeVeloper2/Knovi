@@ -46,8 +46,9 @@ class Subject(Base):
     __tablename__ = "subjects"
 
     id:          Mapped[int]           = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name:        Mapped[str]           = mapped_column(String(120), unique=True, nullable=False)
-    slug:        Mapped[str]           = mapped_column(String(120), unique=True, nullable=False, index=True)
+    name:        Mapped[str]           = mapped_column(String(120), nullable=False)
+    slug:        Mapped[str]           = mapped_column(String(120), nullable=False, index=True)
+    class_level: Mapped[str]        = mapped_column(String(20), default="ALL", nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     icon:        Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     is_active:   Mapped[bool]          = mapped_column(Boolean, default=True, nullable=False)
@@ -62,6 +63,7 @@ class Subject(Base):
             "id": self.id,
             "name": self.name,
             "slug": self.slug,
+            "classLevel": self.class_level,
             "description": self.description,
             "icon": self.icon,
             "isActive": self.is_active,

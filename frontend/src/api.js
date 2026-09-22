@@ -450,7 +450,7 @@ export const adminMakeStudent = (userId) => request(`/api/admin/users/${userId}/
 // ── Student Curriculum API (read-only) ───────────────────────────────────────
 // Authenticated students reading curriculum content.
 
-export const getSubjects           = ()         => request("/api/subjects",                          { auth: true });
+export const getSubjects           = (classLevel) => request(`/api/subjects${classLevel ? `?class_level=${encodeURIComponent(classLevel)}` : ""}`, { auth: true });
 export const getSubject            = (id)       => request(`/api/subjects/${id}`,                    { auth: true });
 export const getSubjectTopics      = (id)       => request(`/api/subjects/${id}/topics`,             { auth: true });
 export const getTopics             = (subjectId) => request(`/api/subjects/${subjectId}/topics`, { auth: true });

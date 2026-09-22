@@ -68,7 +68,7 @@ async def dashboard_stats(
 
     # Curriculum distribution per subject (topic count)
     subject_rows = (await session.execute(
-        select(Subject).where(Subject.is_active == True).order_by(Subject.name)  # noqa: E712
+        select(Subject).where(Subject.is_active == True).order_by(Subject.class_level, Subject.name)  # noqa: E712
     )).scalars().all()
 
     distribution = []
@@ -125,7 +125,7 @@ async def list_subjects(
     _admin: User = Depends(admin_user),
     session: AsyncSession = Depends(get_session),
 ) -> list[SubjectOut]:
-    stmt = select(Subject).order_by(Subject.name)
+    stmt = select(Subject).order_by(Subject.class_level, Subject.name)
     if active_only:
         stmt = stmt.where(Subject.is_active == True)  # noqa: E712
     rows = (await session.execute(stmt)).scalars().all()
@@ -138,16 +138,20 @@ async def create_subject(
     _admin: User = Depends(admin_user),
     session: AsyncSession = Depends(get_session),
 ) -> SubjectOut:
-    # Check for duplicate name / slug
+    class_level = (body.class_level or "ALL").strip().upper()
+    # Check for duplicate name / slug within the curriculum level.
     existing = (await session.execute(
         select(Subject).where(
-            (Subject.name == body.name) | (Subject.slug == body.slug)
+            Subject.class_level == class_level,
+            (Subject.slug == body.slug) | (Subject.name == body.name)
         )
     )).scalar_one_or_none()
     if existing:
         raise HTTPException(400, "A subject with that name or slug already exists.")
 
-    subj = Subject(**body.model_dump())
+    data = body.model_dump()
+    data["class_level"] = class_level
+    subj = Subject(**data)
     session.add(subj)
     await session.commit()
     await session.refresh(subj)
@@ -173,6 +177,8 @@ async def update_subject(
 ) -> SubjectOut:
     subj = await _get_or_404(session, Subject, subject_id)
     for field, value in body.model_dump(exclude_unset=True).items():
+        if field == "class_level" and value:
+            value = value.strip().upper()
         setattr(subj, field, value)
     await session.commit()
     await session.refresh(subj)

@@ -34,12 +34,22 @@ router = APIRouter()
 
 @router.get("/subjects", response_model=list[SubjectOut])
 async def list_subjects(
+    class_level: str | None = Query(None, max_length=20),
     _user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
 ) -> list[SubjectOut]:
-    rows = (await session.execute(
-        select(Subject).where(Subject.is_active == True).order_by(Subject.name)  # noqa: E712
-    )).scalars().all()
+    requested_level = (class_level or "").strip().upper()
+    if not requested_level:
+        user_level = (getattr(_user, "grade", "") or "").strip().upper()
+        if user_level in {"SS1", "SS2", "SS3"}:
+            requested_level = "SSS" + user_level[-1]
+        elif user_level in {"SSS1", "SSS2", "SSS3"}:
+            requested_level = user_level
+
+    stmt = select(Subject).where(Subject.is_active == True)  # noqa: E712
+    if requested_level in {"SSS1", "SSS2", "SSS3"}:
+        stmt = stmt.where(Subject.class_level.in_([requested_level, "ALL"]))
+    rows = (await session.execute(stmt.order_by(Subject.name))).scalars().all()
     return [SubjectOut(**r.serialize()) for r in rows]
 
 

@@ -25,6 +25,7 @@ from app.models.curriculum import (
 class SubjectCreate(StrictModel):
     name:        str            = Field(min_length=1, max_length=120)
     slug:        str            = Field(min_length=1, max_length=120, pattern=r"^[a-z0-9-]+$")
+    class_level: str         = Field(default="ALL", max_length=20)
     description: Optional[str] = None
     icon:        Optional[str] = None
     is_active:   bool          = True
@@ -33,6 +34,7 @@ class SubjectCreate(StrictModel):
 class SubjectUpdate(StrictModel):
     name:        Optional[str]  = Field(default=None, min_length=1, max_length=120)
     slug:        Optional[str]  = Field(default=None, min_length=1, max_length=120, pattern=r"^[a-z0-9-]+$")
+    class_level: Optional[str] = Field(default=None, max_length=20)
     description: Optional[str] = None
     icon:        Optional[str] = None
     is_active:   Optional[bool] = None
@@ -43,6 +45,7 @@ class SubjectOut(BaseModel):
     id:          int
     name:        str
     slug:        str
+    classLevel: str
     description: Optional[str]
     icon:        Optional[str]
     isActive:    bool

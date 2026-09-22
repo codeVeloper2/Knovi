@@ -405,99 +405,6 @@ def _build_curriculum_context(
     )
 
 
-def _build_curriculum_learning_plan(topic: Topic) -> list[dict]:
-    """Build the Learning Room roadmap deterministically from curriculum objectives.
-
-    The curriculum owns coverage. The AI may adapt presentation, but it must not
-    invent a second task list that can omit or reorder required curriculum work.
-    One roadmap item maps to one ordered LearningObjective.
-    """
-    tasks: list[dict] = []
-    for index, objective in enumerate(topic.learning_objectives or []):
-        description = (objective.description or "").strip()
-        # Keep timing deterministic and proportional to the curriculum text. The
-        # timer is optional; this is only a useful estimate for the roadmap.
-        words = len(description.split())
-        minutes = max(3, min(12, round(words / 24) + 3))
-        tasks.append({
-            "id": f"objective-{objective.id}",
-            "title": objective.title,
-            "description": description,
-            "focus": description,
-            "recommendedMinutes": minutes,
-            "objectiveIds": [int(objective.id)],
-            "order": index + 1,
-        })
-    return tasks
-
-
-def _objective_ids_from_question(question: AISessionQuestion) -> list[int]:
-    """Read internal objective metadata stored in the question rubric."""
-    try:
-        payload = json.loads(question.rubric or "{}")
-        ids = payload.get("objective_ids") or []
-        return [int(x) for x in ids if str(x).isdigit()]
-    except Exception:
-        return []
-
-
-def _objective_coverage(
-    topic: Topic,
-    teaching: list[AISessionTeaching],
-    answers_by_question: Optional[dict[int, AISessionAnswer]] = None,
-    questions_by_id: Optional[dict[int, AISessionQuestion]] = None,
-) -> dict:
-    """Compute curriculum coverage from persisted teaching + retrieval evidence."""
-    plan = _build_curriculum_learning_plan(topic)
-    objective_ids = [int(item["objectiveIds"][0]) for item in plan if item.get("objectiveIds")]
-    taught_ids: set[int] = set()
-    for snapshot in teaching or []:
-        for raw_id in snapshot.objective_ids or []:
-            try:
-                oid = int(raw_id)
-            except (TypeError, ValueError):
-                continue
-            if oid in objective_ids:
-                taught_ids.add(oid)
-
-    practice_scores: dict[int, list[int]] = {oid: [] for oid in objective_ids}
-    if answers_by_question and questions_by_id:
-        for qid, answer in answers_by_question.items():
-            q = questions_by_id.get(qid)
-            if not q:
-                continue
-            for oid in _objective_ids_from_question(q):
-                if oid in practice_scores and answer.score is not None:
-                    practice_scores[oid].append(int(answer.score))
-
-    items = []
-    for index, task in enumerate(plan):
-        oid = int(task["objectiveIds"][0])
-        scores = practice_scores.get(oid) or []
-        best = max(scores) if scores else None
-        if best is not None and best >= 70:
-            status = "mastered"
-        elif scores:
-            status = "needs_reteach"
-        elif oid in taught_ids:
-            status = "taught"
-        else:
-            status = "not_started"
-        items.append({
-            **task,
-            "status": status,
-            "bestScore": best,
-        })
-
-    current_index = next((i for i, item in enumerate(items) if item["status"] != "mastered"), len(items))
-    return {
-        "tasks": items,
-        "currentIndex": current_index,
-        "completedCount": sum(1 for item in items if item["status"] == "mastered"),
-        "allCovered": bool(items) and all(item["status"] == "mastered" for item in items),
-    }
-
-
 def _pick_next_strategy(used_strategies: list[str], intent: str) -> str:
     """Choose the next unused strategy. Seed from intent on first attempt."""
     if not used_strategies:
@@ -623,15 +530,11 @@ async def get_session(session_id: int, user_id: int, db: AsyncSession) -> dict:
     data["conceptExplanation"] = concept.explanation
     data["learningObjectives"] = [
         {
-            "id": int(lo.id),
             "title": lo.title,
             "description": lo.description,
-            "orderIndex": lo.order_index,
         }
         for lo in (topic.learning_objectives or [])
     ]
-    # The roadmap is deterministic curriculum data, never an AI-invented plan.
-    data["learningPlan"] = _build_curriculum_learning_plan(topic)
 
     in_protected_state = session.status in _PROTECTED_STATES
 
@@ -713,12 +616,6 @@ async def get_session(session_id: int, user_id: int, db: AsyncSession) -> dict:
             item["taskIndex"] = (prior_timers[-1].extra or {}).get("taskIndex")
         review_answers.append(item)
     data["answers"] = review_answers
-    data["learningCoverage"] = _objective_coverage(
-        topic,
-        session.teaching,
-        answers_by_question=latest_answers,
-        questions_by_id=question_by_id,
-    )
     data["teachingAttempts"] = [a.serialize() for a in session.teaching_attempts]
     data["summary"]          = session.summary.serialize() if session.summary else None
 
@@ -816,45 +713,25 @@ async def abandon_session(session_id: int, user_id: int, db: AsyncSession) -> di
 
 
 async def complete_session(session_id: int, user_id: int, db: AsyncSession) -> dict:
-    """Complete only after every curriculum objective has sufficient evidence."""
-    session = await _get_session_owned(
-        session_id, user_id, db, load_teaching=True, load_questions=True
-    )
+    """
+    Mark session as completed.
+    Guard: session must have reached retrieval or practice at some point.
+    Early exit from 'created'/'teaching'/'studying' is treated as abandoned, not completed.
+    """
+    session = await _get_session_owned(session_id, user_id, db)
     if session.status in ("completed", "abandoned"):
         return session.serialize()
 
-    # Final completion can happen after the last practice run has restored the
-    # conversation to teaching. Completion is still strictly curriculum-driven.
-    if session.status not in {"teaching", "retrieval", "practice"}:
+    # Completion is only valid after the learner has entered retrieval/practice.
+    # Study mode is optional, but a completed room must contain retrieval evidence.
+    ELIGIBLE_FOR_COMPLETION = {"retrieval", "practice"}
+    if session.status not in ELIGIBLE_FOR_COMPLETION:
+        # Force abandon rather than falsely mark as completed
         raise HTTPException(
             409,
             f"Session cannot be completed from state '{session.status}'. "
             f"Use /abandon to exit, or continue learning first."
         )
-
-    _, topic, _ = await _load_curriculum_chain(
-        session.subject_id, session.topic_id, session.concept_id, db
-    )
-    answers_result = await db.execute(
-        select(AISessionAnswer).where(AISessionAnswer.session_id == session_id)
-    )
-    latest_answers: dict[int, AISessionAnswer] = {}
-    for answer in answers_result.scalars().all():
-        latest_answers.setdefault(answer.question_id, answer)
-    coverage = _objective_coverage(
-        topic, session.teaching,
-        answers_by_question=latest_answers,
-        questions_by_id={q.id: q for q in session.questions},
-    )
-    if coverage["tasks"] and not coverage["allCovered"]:
-        remaining = [item["title"] for item in coverage["tasks"] if item["status"] != "mastered"]
-        raise HTTPException(
-            409,
-            "The learning session is not complete. Finish the remaining curriculum objectives: "
-            + ", ".join(remaining[:5])
-        )
-    if not coverage["tasks"]:
-        raise HTTPException(409, "This topic has no curriculum learning objectives to complete.")
 
     session.status       = "completed"
     session.completed_at = _now()
@@ -889,36 +766,36 @@ async def teach_concept(session_id: int, user_id: int, db: AsyncSession, task_in
     _learner_profile = await lp_svc.get_profile(session.user_id, db)
     curriculum_ctx  = _build_curriculum_context(subject, topic, concept, session, _learner_profile)
 
-    # Build the roadmap deterministically from the curriculum objectives.
-    # Never let the model invent/omit the required curriculum task list.
-    current_plan = _build_curriculum_learning_plan(topic)
+    # Build or reuse the AI-generated learning plan. The plan is persisted inside
+    # the teaching snapshot/message metadata, so no new database table is required.
+    current_plan = []
+    for existing in session.teaching:
+        raw = existing.raw_content or ""
+        try:
+            candidate = parse_json(raw).get("learning_tasks")
+            if isinstance(candidate, list) and candidate:
+                current_plan = candidate
+                break
+        except Exception:
+            pass
 
     task_context = ""
     selected_task = None
     orientation_mode = task_index is None
-    if task_index is not None:
+    if task_index is not None and current_plan:
         if task_index < 0 or task_index >= len(current_plan):
             raise HTTPException(400, "Invalid learning task.")
         selected_task = current_plan[task_index]
-        selected_objectives = selected_task.get("objectiveIds") or []
+        selected_objectives = selected_task.get("objectiveIds") or selected_task.get("objective_ids") or []
         task_context = f"""
-FOCUSED CURRICULUM OBJECTIVE
+FOCUSED LEARNING TASK
 Task number: {task_index + 1}
-Objective ID: {selected_objectives[0] if selected_objectives else 'unknown'}
-Objective title: {selected_task.get('title', 'Learning objective')}
-Objective description: {selected_task.get('description', '')}
-
-TEACHING SCOPE (critical)
-- This response is responsible for teaching this curriculum objective.
-- Cover ALL important aspects contained in the objective description.
-- If the objective involves definitions, cover the definition and meaning.
-- If it involves types/classification, cover the relevant types.
-- If it involves comparison, teach the comparison explicitly.
-- If it involves formulas/calculation, teach the variables, units, formula, method, worked example, and interpretation BEFORE retrieval can test calculation.
-- If it involves application, teach at least one worked application before testing it.
-- Do not assess an aspect that has not been taught.
-- Do not silently skip this objective or replace it with a generic explanation of the overall concept.
-- You may briefly connect prerequisite ideas, but keep the center of the lesson on this objective.
+Task title: {selected_task.get("title", "Learning task")}
+Task focus: {selected_task.get("focus", "")}
+Task description: {selected_task.get("description", "")}
+Curriculum objective IDs this task is mapped to: {selected_objectives or "(not mapped in a legacy plan)"}
+Teach ONLY this task deeply enough for the student to study it and later retrieve it.
+Do not teach the whole concept again. Connect briefly to prerequisite ideas when needed.
 """
 
     system_prompt = (
@@ -977,15 +854,46 @@ Return JSON (all fields required; arrays may be empty []):
         logger.error("AI teaching generation failed: %s", exc)
         raise HTTPException(502, f"AI service error: {exc}")
 
+    if current_plan:
+        parsed["learning_tasks"] = current_plan
     explanation  = _safe_str(parsed.get("explanation"), "Teaching content temporarily unavailable.")
-    learning_tasks = current_plan
+    raw_plan = current_plan if current_plan else _safe_list(parsed.get("learning_tasks"))
+    learning_tasks = []
     valid_objective_ids = {int(lo.id) for lo in (topic.learning_objectives or [])}
+    for idx, task in enumerate(raw_plan, 1):
+        if not isinstance(task, dict):
+            continue
+        try:
+            mins = max(2, min(10, int(task.get("recommended_minutes", task.get("recommendedMinutes", 5)))))
+        except Exception:
+            mins = 5
+        raw_obj_ids = task.get("objective_ids", task.get("objectiveIds", [])) or []
+        mapped_objective_ids: list[int] = []
+        for raw_id in raw_obj_ids:
+            try:
+                oid = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            if oid in valid_objective_ids and oid not in mapped_objective_ids:
+                mapped_objective_ids.append(oid)
+        learning_tasks.append({
+            "id": str(task.get("id") or f"task-{idx}"),
+            "title": _safe_str(task.get("title"), f"Learning task {idx}"),
+            "description": _safe_str(task.get("description"), ""),
+            "focus": _safe_str(task.get("focus"), ""),
+            "recommendedMinutes": mins,
+            "objectiveIds": mapped_objective_ids,
+            "order": idx,
+        })
     summary_text = _safe_str(parsed.get("summary"), "")
     study_prompt = _safe_str(parsed.get("study_prompt"), "Take time to read through the material above carefully.")
 
-    # Only focused curriculum teaching counts as objective coverage. Orientation never
-    # marks objectives taught, and the model cannot claim coverage for another objective.
-    raw_covered = selected_task.get("objectiveIds") if selected_task is not None else []
+    # Only focused teaching counts as objective coverage. The orientation may list
+    # planned tasks, but it does not itself establish that those objectives were taught.
+    if selected_task is not None:
+        raw_covered = selected_task.get("objectiveIds") or selected_task.get("objective_ids") or parsed.get("covered_objective_ids") or []
+    else:
+        raw_covered = []
     covered_objective_ids: list[int] = []
     for raw_id in raw_covered:
         try:
@@ -995,13 +903,14 @@ Return JSON (all fields required; arrays may be empty []):
         if oid in valid_objective_ids and oid not in covered_objective_ids:
             covered_objective_ids.append(oid)
 
-    try:
-        stored_payload = parse_json(raw)
-        stored_payload["learning_tasks"] = learning_tasks
-        stored_payload["curriculum_objective_ids"] = sorted(int(x) for x in valid_objective_ids)
-        stored_raw_content = json.dumps(stored_payload)
-    except Exception:
-        stored_raw_content = raw
+    stored_raw_content = raw
+    if current_plan:
+        try:
+            stored_payload = parse_json(raw)
+            stored_payload["learning_tasks"] = learning_tasks
+            stored_raw_content = json.dumps(stored_payload)
+        except Exception:
+            stored_raw_content = raw
 
     await _retire_current_teaching(session_id, db)
 
@@ -1078,12 +987,6 @@ async def respond_to_student(
     )
 
     current_teaching = await _get_current_teaching(session_id, db)
-    current_objective_ids = [int(x) for x in (current_teaching.objective_ids or []) if str(x).isdigit()] if current_teaching else []
-    curriculum_objective_gate = (
-        "A specific curriculum objective has been taught in the current teaching snapshot; it is valid to ask whether the learner is ready for retrieval."
-        if current_objective_ids else
-        "No curriculum objective has been taught yet. DO NOT ask for a quiz/readiness confirmation. Continue teaching or answer the learner's question."
-    )
     teaching_context = ""
     if current_teaching and not is_post_session:
         teaching_context = (
@@ -1130,7 +1033,6 @@ POST-SESSION FOLLOW-UP RULES:
         agentic_directive = f"""
 AGENTIC PROGRESSION RULES (critical — follow exactly):
 You are the teacher driving this session. You must decide when the student is ready for the quiz.
-{curriculum_objective_gate}
 Current exchange count: {teaching_exchange_count}
 
 action field rules:
@@ -1213,12 +1115,6 @@ Rules:
     valid_actions = {"ask_readiness", "start_quiz", "mark_task_done", "next_task", "complete_session"}
     if is_post_session or action not in valid_actions:
         action      = None
-        action_data = None
-    # Deterministic curriculum gate: no practice readiness before a real curriculum
-    # objective has been taught. This prevents the model from jumping from orientation
-    # or generic concept chat directly into assessment.
-    if not current_objective_ids and action in {"ask_readiness", "start_quiz"}:
-        action = None
         action_data = None
 
     # Deterministic readiness gate: the learner must see a readiness question
@@ -1406,24 +1302,11 @@ async def generate_retrieval_questions(
         session.subject_id, session.topic_id, session.concept_id, db
     )
 
-    current_objective_ids = [int(x) for x in (current_teaching.objective_ids or []) if str(x).isdigit()]
-    if task_index is not None and task_index >= len(topic.learning_objectives or []):
-        raise HTTPException(400, "Invalid curriculum objective task.")
-    if task_index is not None:
-        expected_ids = [int(topic.learning_objectives[task_index].id)]
-        if current_objective_ids != expected_ids:
-            raise HTTPException(409, "This curriculum objective has not been taught yet.")
-    else:
-        expected_ids = current_objective_ids
-
     teaching_summary = (
         f"Strategy used: {current_teaching.strategy}\n"
-        f"Teaching objective IDs: {current_objective_ids}\n"
-        f"Explanation (first 1200 chars): {(current_teaching.explanation or '')[:1200]}\n"
+        f"Explanation (first 800 chars): {(current_teaching.explanation or '')[:800]}\n"
         f"Key points: {', '.join(current_teaching.key_points or [])}\n"
-        f"Examples covered: {', '.join((current_teaching.examples or [])[:3])}\n"
-        f"Formulas: {', '.join((current_teaching.formulas or [])[:5])}\n"
-        f"Worked examples: {', '.join((current_teaching.worked_examples or [])[:3])}"
+        f"Examples covered: {', '.join((current_teaching.examples or [])[:3])}"
     )
 
     task_context = ""
@@ -1461,12 +1344,8 @@ WHAT WAS TAUGHT (ground questions ONLY in this content — do not test knowledge
 STUDENT CONTEXT
 Familiarity: {session.student_familiarity} | Intent: {session.intent}
 
-Generate exactly {count} retrieval questions testing ONLY the curriculum objective(s) actually taught above.
-Every question must be traceable to objective IDs {expected_ids}.
-Do NOT assess an aspect that the teaching snapshot did not cover.
-If an objective involves calculations, calculation questions are allowed ONLY if the teaching included the calculation method, variables/units, and at least one worked example.
-If calculation procedure was not taught, ask a conceptual question instead — never surprise the learner with an untaught calculation.
-Include variety: mix question types where appropriate. At least one must be short_answer or explanation.
+Generate exactly {count} retrieval questions testing understanding of the teaching above.
+Include variety: mix question types. At least one must be short_answer or explanation.
 Do NOT reveal the answer in the question text.
 
 Return JSON:
@@ -1512,18 +1391,13 @@ For multiple_choice: options must be [{{"label":"A","text":"..."}}, ...] and exp
         qtype = q.get("question_type", "short_answer")
         if qtype not in VALID_QTYPES:
             qtype = "short_answer"
-        rubric_payload = {
-            "rubric": _safe_str(q.get("rubric")),
-            "objective_ids": expected_ids,
-            "task_index": task_index,
-        }
         obj = AISessionQuestion(
             session_id=session_id,
             question=_safe_str(q.get("question"), "Question unavailable."),
             question_type=qtype,
             options=q.get("options") if qtype == "multiple_choice" else None,
             expected_answer=_safe_str(q.get("expected_answer")),
-            rubric=json.dumps(rubric_payload),
+            rubric=_safe_str(q.get("rubric")),
             sequence=last_seq + i,
         )
         db.add(obj)
@@ -1732,16 +1606,10 @@ async def submit_answer(
         "You are an AI tutor evaluating a student's answer. "
         "Be fair, constructive, and encouraging. Return JSON only."
     )
-    rubric_text = question.rubric or "{}"
-    try:
-        rubric_payload = json.loads(rubric_text)
-        marking_rubric = rubric_payload.get("rubric") or "(assess understanding and accuracy)"
-    except Exception:
-        marking_rubric = rubric_text or "(assess understanding and accuracy)"
     prompt = f"""QUESTION: {question.question}
 QUESTION TYPE: {question.question_type}
 EXPECTED ANSWER: {question.expected_answer or '(use your knowledge to assess)'}
-MARKING RUBRIC: {marking_rubric}
+MARKING RUBRIC: {question.rubric or '(assess understanding and accuracy)'}
 
 STUDENT ANSWER: {student_answer}
 
@@ -2016,20 +1884,6 @@ async def generate_adaptive_reteach(
             + "\n".join(f"  - {m}" for m in identified_misconceptions[:3])
         )
 
-    # Identify the exact curriculum objective(s) that need reteaching. Do not reteach
-    # the entire concept when only one objective was weak.
-    weak_objective_ids: set[int] = set()
-    for row in recent_rows:
-        ans = row[0]
-        q = row[1]
-        ev = ans.ai_evaluation or {}
-        if ev.get("needsReteach") or (ans.score is not None and ans.score < 70):
-            weak_objective_ids.update(_objective_ids_from_question(q))
-    if not weak_objective_ids:
-        weak_objective_ids.update(int(x) for x in (session.teaching[-1].objective_ids if session.teaching else []) if str(x).isdigit())
-    weak_objectives = [lo for lo in (topic.learning_objectives or []) if int(lo.id) in weak_objective_ids]
-    weak_scope = "\n".join(f"- [{lo.id}] {lo.title}: {lo.description}" for lo in weak_objectives) or "- Rebuild the most recent taught objective only."
-
     _learner_profile_reteach = await lp_svc.get_profile(session.user_id, db)
     curriculum_ctx = _build_curriculum_context(subject, topic, concept, session, _learner_profile_reteach)
 
@@ -2047,12 +1901,8 @@ STUDENT STRUGGLES (recent answers):
 {misconception_note}
 STUDENT REASON: {reason or '(none given)'}
 
-RETEACH ONLY THESE WEAK CURRICULUM OBJECTIVES:
-{weak_scope}
-
-Reteach the weak objective(s) using the '{new_strategy}' strategy.
+Reteach this concept from scratch using the '{new_strategy}' strategy.
 Make it genuinely different — a fresh angle addressing the student's actual struggles.
-Do not reteach unrelated objectives. If the weak objective requires calculation, explicitly teach the calculation method before another calculation retrieval check.
 {f"Specifically address: {identified_misconceptions[0]}" if identified_misconceptions else ""}
 
 Return JSON (all array fields required; may be empty):
@@ -2082,7 +1932,15 @@ Return JSON (all array fields required; may be empty):
     encouragement = _safe_str(parsed.get("encouragement"), "A different perspective can make all the difference!")
 
     valid_objective_ids = {int(lo.id) for lo in (topic.learning_objectives or [])}
-    covered_objective_ids = sorted(int(x) for x in weak_objective_ids if int(x) in valid_objective_ids)
+    covered_objective_ids: list[int] = []
+    raw_covered = parsed.get("covered_objective_ids") or []
+    for raw_id in raw_covered:
+        try:
+            oid = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if oid in valid_objective_ids and oid not in covered_objective_ids:
+            covered_objective_ids.append(oid)
 
     await _retire_current_teaching(session_id, db)
 
