@@ -285,14 +285,14 @@
   .pu-desktop-shell { height: 100%; }
 }
 
-/* Mobile: dash-main--mobile has padding-top:56px (topbar) + padding-bottom:90px (bottom nav).
-   Override so the chat fills between topbar and bottom nav without any extra gap. */
+/* Mobile: topbar is fixed at 56px, bottom nav is fixed at 68px.
+   Add padding-top to clear the topbar, shrink height accordingly. */
 @media (max-width:768px) {
   .dash-main--chat.dash-main--mobile {
     padding: 0 !important;
     margin: 0 !important;
-    /* topbar ~56px + bottom nav ~56px */
-    height: calc(100vh - 56px - 56px);
+    padding-top: 56px !important;   /* clear the fixed mobile topbar */
+    height: 100vh;
     min-height: 0;
     display: flex;
     flex-direction: column;
@@ -301,7 +301,8 @@
   .pu-app {
     flex: 1;
     min-height: 0;
-    height: 100%;
+    /* fill the space between topbar and bottom nav */
+    height: calc(100vh - 56px - 68px);
     overflow: hidden;
   }
   .pu-in-chat .pu-conversation { margin-top: 0; }
@@ -397,7 +398,7 @@
   .pu-desktop-shell > .pu-list-screen.has-selection { display:none; }
   .pu-desktop-shell > .pu-conversation { width:100%; }
   .pu-desktop-shell > .pu-conversation.no-selection { display:none; }
-  .pu-new-chat-btn { display:none; }
+  .pu-new-chat-btn { display:grid; }
 }
 
 /* Override the original mobile-first positioning rules for the desktop workspace. */
