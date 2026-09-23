@@ -30,10 +30,19 @@ function avatarStyle(name) {
   const [a, b] = GRADIENTS[Math.abs(hashName(name)) % GRADIENTS.length];
   return { background: `linear-gradient(135deg, ${a}, ${b})` };
 }
-function Avatar({ name, size = 52, online = false, className = "" }) {
+function Avatar({ name, photoURL = "", size = 52, online = false, className = "" }) {
   return (
     <span className={`pu-avatar-wrap ${className}`}>
-      <span className="pu-avatar" style={{ ...avatarStyle(name), width: size, height: size, fontSize: Math.max(12, size * .36) }}>{initials(name)}</span>
+      {photoURL ? (
+        <img
+          className="pu-avatar pu-avatar-photo"
+          src={photoURL}
+          alt={`${name || "Peer"} profile`}
+          style={{ width: size, height: size }}
+          onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.nextElementSibling.style.display = "grid"; }}
+        />
+      ) : null}
+      <span className="pu-avatar pu-avatar-fallback" style={{ ...avatarStyle(name), width: size, height: size, fontSize: Math.max(12, size * .36), display: photoURL ? "none" : "grid" }}>{initials(name)}</span>
       {online && <span className="pu-online-dot" />}
     </span>
   );
@@ -57,6 +66,7 @@ function mapChat(raw) {
   return {
     id: String(raw.id),
     name: raw.partner?.displayName || "Peer",
+    photoURL: raw.partner?.photoURL || raw.partner?.photoUrl || "",
     online: !!raw.partner?.isOnline,
     verified: false,
     lastMessage: raw.lastMessage?.attachmentUrl
@@ -178,7 +188,7 @@ function MessageBubble({ msg, first, last, onLongPress, onReplyDrag, onImage }) 
 
   return (
     <div className={rowClass}>
-      {!msg.outgoing && <Avatar name={msg.senderName || "Peer"} size={28} className="pu-msg-avatar" />}
+      {!msg.outgoing && <Avatar name={msg.senderName || "Peer"} photoURL={msg.senderPhotoURL} size={28} className="pu-msg-avatar" />}
       <div className="pu-msg-stack">
         <div className="pu-reply-drag-hint"><Reply size={14} /></div>
         <div
@@ -498,6 +508,14 @@ export default function Chat() {
     }
   };
 
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKeyDown = (e) => e.key === "Escape" && setLightbox(null);
+    document.addEventListener("keydown", onKeyDown);
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", onKeyDown); document.body.style.overflow = ""; };
+  }, [lightbox]);
+
   const messageRows = messages.map((m, i) => ({ msg: m, first: !messages[i - 1] || messages[i - 1].outgoing !== m.outgoing, last: !messages[i + 1] || messages[i + 1].outgoing !== m.outgoing }));
 
   return (
@@ -522,7 +540,7 @@ export default function Chat() {
           <div className="pu-chat-list">
             {list.map(chat => (
               <button className="pu-chat-item" key={chat.id} onClick={() => openChat(chat.id)}>
-                <Avatar name={chat.name} online={chat.online} size={52} />
+                <Avatar name={chat.name} photoURL={chat.photoURL} online={chat.online} size={52} />
                 <span className="pu-chat-meta">
                   <span className="pu-chat-top"><span className="pu-chat-name">{chat.name}{chat.verified && <span className="pu-verified">✓</span>}</span><time>{chat.time}</time></span>
                   <span className="pu-chat-bottom"><span className={`pu-chat-preview ${chat.typing ? "typing" : ""} ${chat.isVoice ? "voice" : ""}`}>{chat.isVoice ? "🎙 Voice message" : chat.lastMessage}</span>{chat.unread > 0 && <b className="pu-unread">{chat.unread}</b>}{chat.muted && <BellOff size={13} className="pu-muted" />}</span>
@@ -537,13 +555,13 @@ export default function Chat() {
         <main className="pu-conversation">
           <header className="pu-user-header">
             <button className="pu-back" onClick={closeChat} aria-label="Back"><ArrowLeft size={19} /></button>
-            <Avatar name={currentChat?.name || "Peer"} online={currentChat?.online} size={40} />
+            <Avatar name={currentChat?.name || "Peer"} photoURL={currentChat?.photoURL} online={currentChat?.online} size={40} />
             <div className="pu-user-info"><div><strong>{currentChat?.name}</strong>{currentChat?.verified && <span className="pu-verified">✓</span>}</div><span className={currentChat?.online ? "online" : ""}>{currentChat?.online ? "Online" : "Last seen recently"}</span></div>
             <div className="pu-user-actions"><button className="pu-icon-btn"><Phone size={18} /></button><button className="pu-icon-btn"><Video size={18} /></button><button className="pu-icon-btn"><Info size={18} /></button></div>
           </header>
           <div className="pu-messages" ref={messagesRef}>
             <div className="pu-day-divider">Today</div>
-            {messageRows.map(({ msg, first, last }) => <MessageBubble key={msg.id} msg={{ ...msg, senderName: currentChat?.name }} first={first} last={last} onLongPress={m => setModal({ msg: m })} onReplyDrag={m => setReplyTo(m)} onImage={url => setLightbox(url)} />)}
+            {messageRows.map(({ msg, first, last }) => <MessageBubble key={msg.id} msg={{ ...msg, senderName: currentChat?.name, senderPhotoURL: currentChat?.photoURL }} first={first} last={last} onLongPress={m => setModal({ msg: m })} onReplyDrag={m => setReplyTo(m)} onImage={url => setLightbox(url)} />)}
           </div>
           {replyTo && <div className="pu-reply-bar"><span></span><div><b>{replyTo.outgoing ? "You" : currentChat?.name}</b><small>{messagePreview(replyTo)}</small></div><button onClick={() => setReplyTo(null)}><X size={15} /></button></div>}
           {pending && <div className="pu-pending"><div className="pu-pending-thumb">{pending.type === "image" ? <img src={pending.imageUrl} alt="Selected" /> : <FileText size={22} />}</div><div><b>{pending.type === "image" ? "Photo" : pending.fileName}</b><small>{pending.type === "image" ? "Add a caption below, then send" : pending.fileMeta}</small></div><button onClick={removePending}><X size={15} /></button></div>}
@@ -567,7 +585,22 @@ export default function Chat() {
 
       {deleteType && <div className="pu-overlay pu-center"><div className="pu-confirm"><h3>Are you sure?</h3><p>{deleteType === "everyone" ? "This will delete the message for everyone in the chat. Are you sure?" : "This will delete the message only for you. Are you sure?"}</p><div><button onClick={() => { setDeleteType(null); setDeleteMsg(null); }}>Cancel</button><button className="danger" onClick={performDelete}>Delete</button></div></div></div>}
 
-      {lightbox && <div className="pu-lightbox"><div className="pu-lightbox-head"><button onClick={() => setLightbox(null)}><X size={18} /></button><b>Photo</b><button onClick={() => window.open(lightbox, "_blank", "noopener,noreferrer")}><Download size={18} /></button></div><div className="pu-lightbox-body"><img src={lightbox} alt="Full view" /></div><div className="pu-lightbox-foot"><a href={lightbox} download="PeerUP-photo"><Download size={16} />Save photo</a></div></div>}
+      {lightbox && (
+        <div className="pu-lightbox" role="dialog" aria-modal="true" aria-label="Photo preview" onClick={() => setLightbox(null)}>
+          <div className="pu-lightbox-head" onClick={e => e.stopPropagation()}>
+            <button className="pu-lightbox-cancel" onClick={() => setLightbox(null)} aria-label="Cancel photo preview">Cancel</button>
+            <b>Photo</b>
+            <button onClick={() => window.open(lightbox, "_blank", "noopener,noreferrer")} aria-label="Open photo"><Download size={18} /></button>
+          </div>
+          <div className="pu-lightbox-body" onClick={e => e.stopPropagation()}>
+            <img src={lightbox} alt="Full view" />
+          </div>
+          <div className="pu-lightbox-foot" onClick={e => e.stopPropagation()}>
+            <a href={lightbox} download="PeerUP-photo"><Download size={16} />Save photo</a>
+            <button className="pu-lightbox-close-bottom" onClick={() => setLightbox(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
