@@ -1371,11 +1371,14 @@ async def create_idle_nudge(session_id: int, user_id: int, db: AsyncSession, nud
         "- Return ONLY the nudge message text, nothing else."
     )
     try:
-        content, _ = await call_with_fallback(nudge_prompt, temperature=0.8)
+        # json_mode=False: nudge is plain text — JSON mode causes Gemini to wrap
+        # the response in a JSON object instead of returning the message directly.
+        content, _ = await call_with_fallback(nudge_prompt, temperature=0.8, json_mode=False)
         content = content.strip().strip('"').strip()
         if not content:
-            raise ValueError("empty response")
-    except Exception:
+            raise ValueError("empty nudge response")
+    except Exception as exc:
+        logger.warning("Nudge AI call failed (session %s, nudge %s): %s", session_id, nudge_number, exc)
         content = (
             "I haven’t seen your reply yet — are you still with me? Take your time, "
             "and feel free to ask me to explain it a different way."
