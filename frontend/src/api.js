@@ -47,7 +47,11 @@ async function request(path, { method = "GET", body, auth = false, timeoutMs = 6
   } catch (err) {
     clearTimeout(timer);
     if (err.name === "AbortError") {
-      throw new Error("Connection timed out. Please check your internet and try again.");
+      // Distinguish an AI-prep timeout (long but normal) from a short standard timeout
+      const label = timeoutMs >= AI_TIMEOUT
+        ? "This is taking longer than expected. Please try again."
+        : "Connection timed out. Please check your internet and try again.";
+      throw new Error(label);
     }
     throw new Error("Can't connect right now. Please check your internet connection.");
   }
@@ -72,12 +76,25 @@ async function request(path, { method = "GET", body, auth = false, timeoutMs = 6
   return data;
 }
 
+// ── Timeout constants ─────────────────────────────────────────
+// Standard requests: 60 s.
+// AI-heavy endpoints (lesson prep, message generation, question
+// generation, summary, reteach) can legitimately take 2–3 min on
+// a cold Railway container, so we give them 5 minutes before
+// surfacing an error to the user.
+const AI_TIMEOUT = 300_000; // 5 minutes
+
 // ── Generic HTTP helpers (authenticated) ──────────────────────
 export function get(path) {
   return request(path, { auth: true });
 }
 export function post(path, body = {}) {
   return request(path, { method: "POST", body, auth: true });
+}
+/** POST with the extended AI timeout — use for any endpoint that
+ *  calls an LLM before responding. */
+function aiPost(path, body = {}) {
+  return request(path, { method: "POST", body, auth: true, timeoutMs: AI_TIMEOUT });
 }
 export function put(path, body = {}) {
   return request(path, { method: "PUT", body, auth: true });
@@ -600,15 +617,15 @@ export function completeLearningSession(sessionId) {
 }
 
 export function teachConcept(sessionId, taskIndex = null) {
-  return post(`/api/learning/sessions/${sessionId}/teach`, taskIndex == null ? {} : { task_index: taskIndex });
+  return aiPost(`/api/learning/sessions/${sessionId}/teach`, taskIndex == null ? {} : { task_index: taskIndex });
 }
 
 export function prepareAISession(sessionId) {
-  return post(`/api/learning/sessions/${sessionId}/prepare`);
+  return aiPost(`/api/learning/sessions/${sessionId}/prepare`);
 }
 
 export function sendStudentMessage(sessionId, content) {
-  return post(`/api/learning/sessions/${sessionId}/message`, { content });
+  return aiPost(`/api/learning/sessions/${sessionId}/message`, { content });
 }
 
 export function createLearningIdleNudge(sessionId, nudgeNumber = 1) {
@@ -628,11 +645,11 @@ export function finishStudyPeriod(sessionId, studyPeriodId) {
 
 export function generateRetrievalQuestions(sessionId, count = 3, taskIndex = null) {
   const suffix = taskIndex == null ? "" : `&task_index=${taskIndex}`;
-  return post(`/api/learning/sessions/${sessionId}/questions?count=${count}${suffix}`);
+  return aiPost(`/api/learning/sessions/${sessionId}/questions?count=${count}${suffix}`);
 }
 
 export function submitAnswer(sessionId, questionId, studentAnswer, responseTimeSeconds = null) {
-  return post(`/api/learning/sessions/${sessionId}/answers`, {
+  return aiPost(`/api/learning/sessions/${sessionId}/answers`, {
     question_id: questionId,
     student_answer: studentAnswer,
     response_time_seconds: responseTimeSeconds,
@@ -644,11 +661,11 @@ export function completePracticeRun(sessionId, questionIds) {
 }
 
 export function requestReteach(sessionId, reason = null) {
-  return post(`/api/learning/sessions/${sessionId}/reteach`, { reason });
+  return aiPost(`/api/learning/sessions/${sessionId}/reteach`, { reason });
 }
 
 export function generateSessionSummary(sessionId) {
-  return post(`/api/learning/sessions/${sessionId}/summary`);
+  return aiPost(`/api/learning/sessions/${sessionId}/summary`);
 }
 
 export function recordIntegrityEvent(sessionId, eventType, meta = null) {
@@ -707,7 +724,7 @@ export function declineChallenge(challengeId) {
 }
 
 export function prepareChallenge(challengeId) {
-  return post(`/api/challenges/${challengeId}/prepare`);
+  return aiPost(`/api/challenges/${challengeId}/prepare`);
 }
 
 export function startChallenge(challengeId) {
