@@ -1,12 +1,12 @@
 /**
- * AI Learning Room — one continuous conversation.
- * Mobile-first rebuild:
- *   - Character-by-character typewriter reveal for AI messages
- *   - Tap-to-reveal action buttons (save + read-aloud) per AI message
- *   - Rebuilt typing indicator (streaming feel)
- *   - Idle nudge fix (correct role check)
+ * AI Learning Room — mobile-first rebuild v2
+ * - Chat layout: AI messages plain, student messages in card
+ * - Icon row under each AI message: copy · play · save
+ * - Read aloud: robust voice loading (handles mobile async voiceschanged)
+ * - Idle nudge: simplified guard, console logging for debug
+ * - Typewriter animation for new AI messages
  */
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import * as api from "../../api";
 import { TutorAvatar } from "./AISessionSetup";
@@ -26,42 +26,32 @@ function statusToPhase(status, hasMessages) {
   }
 }
 
-/* ─── Typewriter hook ──────────────────────────────────────────────────── */
+/* ─── Typewriter hook ─────────────────────────────────────────────────── */
 function useTypewriter(targetText, active) {
   const [displayed, setDisplayed] = useState("");
   const [done, setDone] = useState(false);
   const frameRef = useRef(null);
   const indexRef = useRef(0);
-  const textRef = useRef(targetText);
 
   useEffect(() => {
-    textRef.current = targetText;
+    cancelAnimationFrame(frameRef.current);
     if (!active) {
-      setDisplayed(targetText);
+      setDisplayed(targetText || "");
       setDone(true);
       return;
     }
-    // reset when new text arrives
     indexRef.current = 0;
     setDisplayed("");
     setDone(false);
-
     const target = targetText || "";
-
     function tick() {
       const i = indexRef.current;
-      if (i >= target.length) {
-        setDone(true);
-        return;
-      }
-      // Burst characters for speed: 3 chars per frame (≈180 chars/sec at 60fps)
-      const burst = Math.min(3, target.length - i);
-      const chunk = target.slice(i, i + burst);
-      setDisplayed(prev => prev + chunk);
+      if (i >= target.length) { setDone(true); return; }
+      const burst = Math.min(4, target.length - i);
+      setDisplayed(target.slice(0, i + burst));
       indexRef.current += burst;
       frameRef.current = requestAnimationFrame(tick);
     }
-
     frameRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frameRef.current);
   }, [targetText, active]);
@@ -69,6 +59,46 @@ function useTypewriter(targetText, active) {
   return { displayed, done };
 }
 
+/* ─── Robust TTS (handles mobile async voice loading) ────────────────── */
+function speakText(text) {
+  if (!text || !window.speechSynthesis) return;
+  const clean = String(text)
+    .replace(/```[\s\S]*?```/g, " code ")
+    .replace(/[#*_`~>]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!clean) return;
+
+  function doSpeak() {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(clean);
+    const voices = window.speechSynthesis.getVoices();
+    const english = voices.filter(v => /^en/i.test(v.lang));
+    const pool = english.length ? english : voices;
+    const preferred = ["Aria", "Jenny", "Guy", "Samantha", "Karen", "Daniel", "Google UK", "Google US"];
+    const voice = pool.find(v => preferred.some(n => v.name.includes(n)))
+      || pool.find(v => /natural|neural|enhanced|premium/i.test(v.name))
+      || pool[0];
+    if (voice) { u.voice = voice; u.lang = voice.lang; }
+    u.rate = 0.95; u.pitch = 1; u.volume = 1;
+    window.speechSynthesis.speak(u);
+  }
+
+  // Voices may not be loaded yet on mobile Chrome
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length) {
+    doSpeak();
+  } else {
+    window.speechSynthesis.onvoiceschanged = () => {
+      window.speechSynthesis.onvoiceschanged = null;
+      doSpeak();
+    };
+    // Fallback: try anyway after short delay
+    setTimeout(doSpeak, 300);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════ */
 export default function AILearningRoom() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
@@ -102,10 +132,7 @@ export default function AILearningRoom() {
   });
   const [copiedId, setCopiedId] = useState(null);
   const [savedMessageIds, setSavedMessageIds] = useState(() => new Set());
-  // Track which message is being "typed in" right now (for typewriter)
   const [typingMessageId, setTypingMessageId] = useState(null);
-  // Tapped message for action reveal
-  const [tappedMessageId, setTappedMessageId] = useState(null);
 
   const bottomRef = useRef(null);
   const timerRef = useRef(null);
@@ -114,23 +141,22 @@ export default function AILearningRoom() {
   const typingDebounceRef = useRef(null);
   const idleNudgeRef = useRef(0);
   const spokenGroupsRef = useRef(new Set());
-  const lastActivitySeqRef = useRef(null);
+  const lastAiSeqRef = useRef(null);
   const revealTimersRef = useRef([]);
+  const aiWorkingRef = useRef(false);
+  const isTypingRef = useRef(false);
+  const phaseRef = useRef(phase);
+
+  // Keep refs in sync so idle timer closure is always fresh
+  useEffect(() => { aiWorkingRef.current = aiWorking; }, [aiWorking]);
+  useEffect(() => { isTypingRef.current = isTyping; }, [isTyping]);
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
 
   function toggleLeftSidebar() {
-    setLeftOpen(prev => {
-      const next = !prev;
-      try { localStorage.setItem("peerup.learningRoom.leftOpen", String(next)); } catch {}
-      return next;
-    });
+    setLeftOpen(prev => { const n = !prev; try { localStorage.setItem("peerup.learningRoom.leftOpen", String(n)); } catch {} return n; });
   }
-
   function toggleRightSidebar() {
-    setRightOpen(prev => {
-      const next = !prev;
-      try { localStorage.setItem("peerup.learningRoom.rightOpen", String(next)); } catch {}
-      return next;
-    });
+    setRightOpen(prev => { const n = !prev; try { localStorage.setItem("peerup.learningRoom.rightOpen", String(n)); } catch {} return n; });
   }
 
   const conceptName = session?.conceptName || "Learning session";
@@ -158,51 +184,61 @@ export default function AILearningRoom() {
     try { localStorage.setItem("peerup.learningRoom.ttsEnabled", String(ttsEnabled)); } catch {}
   }, [ttsEnabled]);
 
-  // ── Idle nudge ────────────────────────────────────────────────────────
-  // Fires when the last message was from the AI and the student hasn't replied
+  /* ── Idle nudge ─────────────────────────────────────────────────────── */
   useEffect(() => {
     clearTimeout(idleTimerRef.current);
-    if (!session || aiWorking || isTyping || !["teaching", "reteaching"].includes(phase) || mobilePanel === "plan" || mobilePanel === "tools") return;
+
+    if (!session) return;
+    if (!["teaching", "reteaching"].includes(phase)) return;
+    if (aiWorking || isTyping) return;
 
     const ordered = [...messages].sort((a, b) => Number(a.sequence || 0) - Number(b.sequence || 0));
     const latest = ordered[ordered.length - 1];
 
-    // Only start idle timer when the LAST message was from the AI (student hasn't replied)
+    // Only fire when the last message is from AI (student hasn't replied yet)
     if (!latest || latest.role !== "ai" || latest.messageType === "feedback") return;
 
     const latestSeq = Number(latest.sequence || 0);
     const isNudge = latest.messageType === "idle_nudge";
 
     if (isNudge) {
-      const existingNudge = Number(latest.extra?.idleNudgeNumber || idleNudgeRef.current || 1);
-      idleNudgeRef.current = existingNudge;
-      lastActivitySeqRef.current = latestSeq;
-      if (existingNudge >= 2) return;
-    } else if (lastActivitySeqRef.current !== latestSeq) {
-      lastActivitySeqRef.current = latestSeq;
+      const n = Number(latest.extra?.idleNudgeNumber || 1);
+      idleNudgeRef.current = n;
+      lastAiSeqRef.current = latestSeq;
+      if (n >= 2) return; // Already sent max nudges
+    } else if (lastAiSeqRef.current !== latestSeq) {
+      lastAiSeqRef.current = latestSeq;
       idleNudgeRef.current = 0;
     }
 
-    const delay = idleNudgeRef.current === 0 ? 30000 : 45000; // 30s first, 45s second
+    const delay = idleNudgeRef.current === 0 ? 30000 : 45000;
+    console.log(`[IdleNudge] Scheduling nudge #${idleNudgeRef.current + 1} in ${delay / 1000}s`);
 
-    const fireIdleNudge = async () => {
-      if (window.speechSynthesis?.speaking || aiWorking || isTyping) {
+    async function fireIdleNudge() {
+      // Re-check live refs at fire time
+      if (aiWorkingRef.current || isTypingRef.current) {
         idleTimerRef.current = setTimeout(fireIdleNudge, 5000);
         return;
       }
+      if (!["teaching", "reteaching"].includes(phaseRef.current)) return;
+
       const nextNudge = idleNudgeRef.current + 1;
       if (nextNudge > 2) return;
+      console.log(`[IdleNudge] Firing nudge #${nextNudge}`);
       try {
         const nudge = await api.createLearningIdleNudge(sessionId, nextNudge);
         idleNudgeRef.current = nextNudge;
         setMessages(prev => prev.some(m => m.id === nudge.id) ? prev : [...prev, nudge]);
-        speak(nudge.content || "");
-      } catch {}
-    };
+        if (ttsRef.current) speakText(nudge.content || "");
+        console.log(`[IdleNudge] Nudge #${nextNudge} added`);
+      } catch (e) {
+        console.warn("[IdleNudge] Failed:", e?.message);
+      }
+    }
 
     idleTimerRef.current = setTimeout(fireIdleNudge, delay);
     return () => clearTimeout(idleTimerRef.current);
-  }, [sessionId, session, messages, aiWorking, isTyping, phase, mobilePanel]);
+  }, [sessionId, session, messages, aiWorking, isTyping, phase]);
 
   useEffect(() => {
     loadSession();
@@ -211,7 +247,6 @@ export default function AILearningRoom() {
       clearTimeout(idleTimerRef.current);
       clearTimeout(typingDebounceRef.current);
       revealTimersRef.current.forEach(clearTimeout);
-      revealTimersRef.current = [];
       window.speechSynthesis?.cancel();
     };
   }, [sessionId]);
@@ -220,205 +255,106 @@ export default function AILearningRoom() {
     if (!aiWorking) bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages.length, phase, currentQuestion?.id]);
 
-  // Close tapped message actions when tapping elsewhere
-  useEffect(() => {
-    if (!tappedMessageId) return;
-    function onOutside(e) {
-      if (!e.target.closest(".ar-message-card")) setTappedMessageId(null);
-    }
-    document.addEventListener("pointerdown", onOutside);
-    return () => document.removeEventListener("pointerdown", onOutside);
-  }, [tappedMessageId]);
-
   async function handleSaveExplanation(msg) {
     const messageId = Number(msg?.id);
-    if (!Number.isInteger(messageId) || messageId <= 0) {
-      setError("This tutor explanation cannot be saved yet.");
-      return;
-    }
+    if (!Number.isInteger(messageId) || messageId <= 0) { setError("This explanation cannot be saved yet."); return; }
     try {
       const result = await api.toggleSaved("explanation", messageId);
       setSavedMessageIds(prev => {
         const next = new Set(prev);
-        if (result?.saved) next.add(messageId);
-        else next.delete(messageId);
+        if (result?.saved) next.add(messageId); else next.delete(messageId);
         return next;
       });
-    } catch (err) {
-      setError(err?.message || "Couldn't save this explanation.");
-    }
+    } catch (err) { setError(err?.message || "Couldn't save."); }
   }
 
   async function loadSession() {
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
       const sess = await api.getAISession(sessionId);
       let msgs = Array.isArray(sess?.messages) ? sess.messages : [];
-      try {
-        const serverMessages = await api.getSessionMessages(sessionId);
-        if (Array.isArray(serverMessages)) msgs = serverMessages;
-      } catch {}
+      try { const s = await api.getSessionMessages(sessionId); if (Array.isArray(s)) msgs = s; } catch {}
       applySession(sess, msgs);
-      try { const saved = await api.getSaved(); setSavedMessageIds(new Set((saved?.explanations || []).map(item => Number(item.messageId)))); } catch {}
+      try { const saved = await api.getSaved(); setSavedMessageIds(new Set((saved?.explanations || []).map(i => Number(i.messageId)))); } catch {}
       if (sess.status === "created") {
         await prepareSession();
       } else {
         const persistedIndex = Number(sess?.learningState?.currentTaskIndex);
         const taughtIndexes = msgs
           .filter(m => m?.role === "ai" && (m?.messageType === "teaching" || m?.messageType === "reteach") && m?.extra?.taskIndex != null)
-          .map(m => Number(m.extra.taskIndex))
-          .filter(Number.isInteger);
+          .map(m => Number(m.extra.taskIndex)).filter(Number.isInteger);
         if (sess.status === "teaching" && Number.isInteger(persistedIndex) && persistedIndex > -1 && !taughtIndexes.includes(persistedIndex)) {
           setAiWorking(true);
           try {
             await api.teachConcept(sessionId, persistedIndex);
             const fresh = await api.getAISession(sessionId);
-            let freshMsgs = fresh?.messages || [];
-            try {
-              const serverMessages = await api.getSessionMessages(sessionId);
-              if (Array.isArray(serverMessages)) freshMsgs = serverMessages;
-            } catch {}
-            applySession(fresh, freshMsgs);
-          } finally {
-            setAiWorking(false);
-          }
+            let fMsgs = fresh?.messages || [];
+            try { const s = await api.getSessionMessages(sessionId); if (Array.isArray(s)) fMsgs = s; } catch {}
+            applySession(fresh, fMsgs);
+          } finally { setAiWorking(false); }
         }
       }
-    } catch (err) {
-      setError(err.message || "Could not open this learning room.");
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { setError(err.message || "Could not open this learning room."); }
+    finally { setLoading(false); }
   }
 
   async function prepareSession() {
-    setAiWorking(true);
-    setPhase("preparing");
+    setAiWorking(true); setPhase("preparing");
     try {
       await api.prepareAISession(sessionId);
       const fresh = await api.getAISession(sessionId);
       let msgs = fresh?.messages || [];
-      try {
-        const serverMessages = await api.getSessionMessages(sessionId);
-        if (Array.isArray(serverMessages)) msgs = serverMessages;
-      } catch {}
+      try { const s = await api.getSessionMessages(sessionId); if (Array.isArray(s)) msgs = s; } catch {}
       applySession(fresh, msgs);
       const firstGroup = msgs.find(m => m.role === "ai" && m.extra?.responseGroupId)?.extra?.responseGroupId;
-      if (firstGroup) speakNewAiMessages(msgs, firstGroup);
-    } catch (err) {
-      setError(err.message || "The AI tutor could not prepare this lesson.");
-    } finally {
-      setAiWorking(false);
-    }
+      if (firstGroup && ttsRef.current) speakGroupMessages(msgs, firstGroup);
+    } catch (err) { setError(err.message || "The AI tutor could not prepare this lesson."); }
+    finally { setAiWorking(false); }
   }
 
   function applySession(sess, msgs) {
     setSession(sess);
     const safe = Array.isArray(msgs) ? msgs : [];
     setMessages(safe);
-
     const plan = sess?.teaching?.learningPlan || safe.slice().reverse().map(m => m?.extra?.learningPlan).find(p => Array.isArray(p) && p.length) || [];
     if (Array.isArray(plan)) setLearningPlan(plan);
-
     const state = sess?.learningState || null;
     if (state && Number.isInteger(Number(state.currentTaskIndex))) {
       setCurrentTaskIndex(Number(state.currentTaskIndex));
     } else {
-      const taskMarkers = safe
-        .filter(m => m?.extra?.currentTaskIndex != null || ((m?.messageType === "teaching" || m?.messageType === "reteach" || m?.messageType === "timer_start") && m?.extra?.taskIndex != null))
-        .slice(-1);
-      const marker = taskMarkers[0];
+      const marker = safe.filter(m => m?.extra?.currentTaskIndex != null || ((m?.messageType === "teaching" || m?.messageType === "reteach" || m?.messageType === "timer_start") && m?.extra?.taskIndex != null)).slice(-1)[0];
       const idx = marker?.extra?.currentTaskIndex ?? marker?.extra?.taskIndex;
       if (idx != null) setCurrentTaskIndex(Number(idx));
     }
-
     const nextPhase = statusToPhase(sess?.status, safe.some(m => m.messageType === "teaching" || m.messageType === "reteach"));
     setPhase(nextPhase);
-
     if (Array.isArray(sess?.answers)) {
       const restored = {};
-      sess.answers.forEach(item => {
-        if (item?.questionId != null) restored[Number(item.questionId)] = item;
-      });
+      sess.answers.forEach(item => { if (item?.questionId != null) restored[Number(item.questionId)] = item; });
       setCheckResults(restored);
     }
-
     const persistedCompleted = Array.isArray(state?.completedTaskIndexes)
       ? state.completedTaskIndexes.map(Number).filter(Number.isInteger)
-      : safe
-        .filter(m => m?.role === "ai" && m?.extra?.taskCompleted === true && Number.isInteger(Number(m.extra.taskIndex)))
-        .map(m => Number(m.extra.taskIndex));
+      : safe.filter(m => m?.role === "ai" && m?.extra?.taskCompleted === true && Number.isInteger(Number(m.extra.taskIndex))).map(m => Number(m.extra.taskIndex));
     setCompletedTaskIndexes([...new Set(persistedCompleted)]);
-
     if (["practice", "summary"].includes(nextPhase) && sess?.questions?.length) {
       const qs = sess.questions;
       setQuestions(qs);
       const answered = new Set((sess.answers || []).map(a => Number(a.questionId)));
       const next = qs.findIndex(q => !answered.has(Number(q.id)));
       setQIndex(next === -1 ? Math.max(0, qs.length - 1) : next);
-    } else if (nextPhase !== "practice") {
-      setQuestions([]);
-      setQIndex(0);
-      setAnswerInput("");
-    }
+    } else if (nextPhase !== "practice") { setQuestions([]); setQIndex(0); setAnswerInput(""); }
   }
 
-  function pickTutorVoice() {
-    const voices = window.speechSynthesis?.getVoices?.() || [];
-    if (!voices.length) return null;
-    const english = voices.filter(v => /^en(?:-|$)/i.test(v.lang));
-    const pool = english.length ? english : voices;
-    const preferred = ["Microsoft Aria", "Microsoft Jenny", "Microsoft Guy", "Google UK English Female", "Google US English", "Samantha", "Karen", "Daniel", "Alex"];
-    return pool.find(v => preferred.some(name => v.name.toLowerCase().includes(name.toLowerCase()))) || pool.find(v => /natural|neural|online|enhanced|premium/i.test(v.name)) || pool[0];
-  }
-
-  function speak(text, options = {}) {
-    if (!ttsRef.current || !text || !window.speechSynthesis) return;
-    const clean = String(text).replace(/```[\s\S]*?```/g, " code ").replace(/[#*_`~>-]+/g, " ").replace(/\s+/g, " ").trim();
-    if (!clean) return;
-    if (options.groupId && spokenGroupsRef.current.has(options.groupId)) return;
-    if (options.groupId) spokenGroupsRef.current.add(options.groupId);
-    const utterance = new SpeechSynthesisUtterance(clean);
-    const voice = pickTutorVoice();
-    if (voice) { utterance.voice = voice; utterance.lang = voice.lang; } else { utterance.lang = "en-NG"; }
-    utterance.rate = 0.96;
-    utterance.pitch = 1.0;
-    utterance.volume = 1;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
-  }
-
-  function speakMessage(msg) {
-    if (!window.speechSynthesis) return;
-    const clean = String(msg.content || "").replace(/```[\s\S]*?```/g, " code ").replace(/[#*_`~>-]+/g, " ").replace(/\s+/g, " ").trim();
-    if (!clean) return;
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(clean);
-    const voice = pickTutorVoice();
-    if (voice) { u.voice = voice; u.lang = voice.lang; } else { u.lang = "en-NG"; }
-    u.rate = 0.96; u.pitch = 1; u.volume = 1;
-    window.speechSynthesis.speak(u);
-  }
-
-  function speakNewAiMessages(msgs, onlyGroupId = null) {
-    if (!ttsRef.current) return;
-    const fresh = (msgs || []).filter(m => m?.role === "ai" && (!onlyGroupId || m?.extra?.responseGroupId === onlyGroupId));
-    if (!fresh.length) return;
-    const chunks = fresh.sort((a, b) => Number(a.sequence || 0) - Number(b.sequence || 0));
-    const groupId = onlyGroupId || chunks[0]?.extra?.responseGroupId;
-    if (groupId && spokenGroupsRef.current.has(groupId)) return;
-    if (groupId) spokenGroupsRef.current.add(groupId);
-    window.speechSynthesis.cancel();
-    const voice = pickTutorVoice();
-    chunks.forEach(m => {
-      const clean = String(m.content || "").replace(/```[\s\S]*?```/g, " code ").replace(/[#*_`~>-]+/g, " ").replace(/\s+/g, " ").trim();
-      if (!clean) return;
-      const u = new SpeechSynthesisUtterance(clean);
-      if (voice) { u.voice = voice; u.lang = voice.lang; } else { u.lang = "en-NG"; }
-      u.rate = 0.96; u.pitch = 1; u.volume = 1;
-      window.speechSynthesis.speak(u);
-    });
+  function speakGroupMessages(msgs, groupId) {
+    const chunks = (msgs || [])
+      .filter(m => m?.role === "ai" && m?.extra?.responseGroupId === groupId)
+      .sort((a, b) => Number(a.sequence || 0) - Number(b.sequence || 0));
+    if (!chunks.length) return;
+    if (spokenGroupsRef.current.has(groupId)) return;
+    spokenGroupsRef.current.add(groupId);
+    const full = chunks.map(m => m.content || "").join(" ");
+    speakText(full);
   }
 
   function toggleTts() {
@@ -432,75 +368,54 @@ export default function AILearningRoom() {
   function addLocalMessage(role, content, extra = {}, messageType = "teaching") {
     setMessages(prev => [...prev, {
       id: `local-${Date.now()}-${Math.random()}`,
-      role,
-      content,
-      extra,
-      messageType,
+      role, content, extra, messageType,
       sequence: prev.length + 1,
       createdAt: new Date().toISOString(),
     }]);
   }
 
   function revealCanonicalMessages(canonical, groupId = null) {
-    if (!groupId) {
-      setMessages(canonical);
-      return Promise.resolve();
-    }
-    const chunks = canonical.filter(m => m?.role === "ai" && m?.extra?.responseGroupId === groupId)
+    if (!groupId) { setMessages(canonical); return Promise.resolve(); }
+    const chunks = canonical
+      .filter(m => m?.role === "ai" && m?.extra?.responseGroupId === groupId)
       .sort((a, b) => Number(a.sequence || 0) - Number(b.sequence || 0));
     if (chunks.length <= 1) {
       setMessages(canonical);
-      // Mark first chunk for typewriter
-      if (chunks.length === 1) setTypingMessageId(chunks[0].id);
+      if (chunks[0]) setTypingMessageId(chunks[0].id);
       return Promise.resolve();
     }
-    const withoutGroup = canonical.filter(m => m?.extra?.responseGroupId !== groupId);
+    const rest = canonical.filter(m => m?.extra?.responseGroupId !== groupId);
     revealTimersRef.current.forEach(clearTimeout);
     revealTimersRef.current = [];
-
-    // Show first chunk immediately with typewriter
-    setMessages([...withoutGroup, chunks[0]]);
+    setMessages([...rest, chunks[0]]);
     setTypingMessageId(chunks[0].id);
-
-    // Reveal subsequent chunks with a delay
-    const perChunkDelay = 900;
-    chunks.slice(1).forEach((chunk, index) => {
-      const timer = setTimeout(() => {
-        setMessages(prev => [...prev, chunk]);
-        setTypingMessageId(chunk.id);
-      }, perChunkDelay * (index + 1));
-      revealTimersRef.current.push(timer);
+    const delay = 950;
+    chunks.slice(1).forEach((chunk, i) => {
+      const t = setTimeout(() => { setMessages(prev => [...prev, chunk]); setTypingMessageId(chunk.id); }, delay * (i + 1));
+      revealTimersRef.current.push(t);
     });
-
-    // Clear typing indicator after all done
-    const total = perChunkDelay * chunks.length + 200;
-    const clearTimer = setTimeout(() => setTypingMessageId(null), total);
-    revealTimersRef.current.push(clearTimer);
-
-    return new Promise(resolve => setTimeout(resolve, total));
+    const total = delay * chunks.length + 300;
+    const ct = setTimeout(() => setTypingMessageId(null), total);
+    revealTimersRef.current.push(ct);
+    return new Promise(res => setTimeout(res, total));
   }
 
   async function sendMessage(raw) {
     const content = (raw || msgInput).trim();
     if (!content || aiWorking || !canType) return;
-    setMsgInput("");
-    setError(null);
-    setAiWorking(true);
-    setTypingMessageId(null);
+    setMsgInput(""); setError(null); setAiWorking(true); setTypingMessageId(null);
     addLocalMessage("student", content, {}, "question");
     try {
       const msg = await api.sendStudentMessage(sessionId, content);
       const fresh = await api.getAISession(sessionId);
       let canonical = fresh?.messages || [];
-      try {
-        const serverMessages = await api.getSessionMessages(sessionId);
-        if (Array.isArray(serverMessages)) canonical = serverMessages;
-      } catch {}
+      try { const s = await api.getSessionMessages(sessionId); if (Array.isArray(s)) canonical = s; } catch {}
       setSession(fresh);
       await revealCanonicalMessages(canonical, msg.extra?.responseGroupId || null);
-      if (msg.extra?.responseGroupId) speakNewAiMessages(canonical, msg.extra.responseGroupId);
-      else speak(msg.content || "");
-
+      if (ttsRef.current) {
+        if (msg.extra?.responseGroupId) speakGroupMessages(canonical, msg.extra.responseGroupId);
+        else speakText(msg.content || "");
+      }
       if (msg.extra?.action === "start_quiz") {
         await beginPractice(msg.extra?.actionData?.task_index ?? currentTaskIndex);
       } else if (msg.extra?.action === "reteach_task") {
@@ -511,100 +426,54 @@ export default function AILearningRoom() {
           setAiWorking(true);
           try {
             await api.teachConcept(sessionId, nextIndex);
-            const fresh = await api.getAISession(sessionId);
-            let msgs = fresh?.messages || [];
-            try {
-              const serverMessages = await api.getSessionMessages(sessionId);
-              if (Array.isArray(serverMessages)) msgs = serverMessages;
-            } catch {}
-            setSession(fresh);
-            setMessages(msgs);
-            setCurrentTaskIndex(nextIndex);
-            const persistedState = fresh?.learningState;
-            if (Array.isArray(persistedState?.completedTaskIndexes)) {
-              setCompletedTaskIndexes(
-                persistedState.completedTaskIndexes.map(Number).filter(Number.isInteger)
-              );
-            }
+            const f = await api.getAISession(sessionId);
+            let fMsgs = f?.messages || [];
+            try { const s = await api.getSessionMessages(sessionId); if (Array.isArray(s)) fMsgs = s; } catch {}
+            setSession(f); setMessages(fMsgs); setCurrentTaskIndex(nextIndex);
+            const ps = f?.learningState;
+            if (Array.isArray(ps?.completedTaskIndexes)) setCompletedTaskIndexes(ps.completedTaskIndexes.map(Number).filter(Number.isInteger));
             setPhase("teaching");
-            const newTaskMessages = msgs.filter(m => m.role === "ai" && Number(m.extra?.taskIndex) === nextIndex);
-            const group = newTaskMessages.find(m => m.extra?.responseGroupId)?.extra?.responseGroupId;
-            if (group) speakNewAiMessages(newTaskMessages, group);
-            else if (newTaskMessages.length) speakNewAiMessages(newTaskMessages);
-          } finally {
-            setAiWorking(false);
-          }
+            const nm = fMsgs.filter(m => m.role === "ai" && Number(m.extra?.taskIndex) === nextIndex);
+            const g = nm.find(m => m.extra?.responseGroupId)?.extra?.responseGroupId;
+            if (ttsRef.current) { if (g) speakGroupMessages(nm, g); else if (nm.length) speakText(nm.map(m => m.content).join(" ")); }
+          } finally { setAiWorking(false); }
         }
       }
-    } catch (err) {
-      setError(err.message || "The tutor could not respond.");
-    } finally {
-      setAiWorking(false);
-    }
+    } catch (err) { setError(err.message || "The tutor could not respond."); }
+    finally { setAiWorking(false); }
   }
 
   async function beginPractice(taskIndex = currentTaskIndex) {
-    setAiWorking(true);
-    setError(null);
+    setAiWorking(true); setError(null);
     try {
       const qs = await api.generateRetrievalQuestions(sessionId, 3, taskIndex);
       const arr = Array.isArray(qs) ? qs : (qs?.questions || []);
       if (!arr.length) throw new Error("The tutor could not prepare a practice check.");
       const fresh = await api.getAISession(sessionId);
       let msgs = fresh?.messages || [];
-      try {
-        const serverMessages = await api.getSessionMessages(sessionId);
-        if (Array.isArray(serverMessages)) msgs = serverMessages;
-      } catch {}
-      setSession(fresh);
-      setMessages(msgs);
-      setQuestions(arr);
-      setQIndex(0);
-      setAnswerInput("");
-      setPhase("practice");
-    } catch (err) {
-      setError(err.message || "Could not start practice mode.");
-    } finally {
-      setAiWorking(false);
-    }
+      try { const s = await api.getSessionMessages(sessionId); if (Array.isArray(s)) msgs = s; } catch {}
+      setSession(fresh); setMessages(msgs); setQuestions(arr); setQIndex(0); setAnswerInput(""); setPhase("practice");
+    } catch (err) { setError(err.message || "Could not start practice mode."); }
+    finally { setAiWorking(false); }
   }
 
   async function submitAnswer() {
     if (!answerInput.trim() || submitting || !currentQuestion) return;
     const answer = answerInput.trim();
-    setSubmitting(true);
-    setError(null);
+    setSubmitting(true); setError(null);
     try {
       const evaluation = await api.submitAnswer(sessionId, currentQuestion.id, answer, null);
-      const result = {
-        ...evaluation,
-        questionId: currentQuestion.id,
-        studentAnswer: answer,
-        question: currentQuestion.question,
-        questionType: currentQuestion.questionType,
-        options: currentQuestion.options || null,
-      };
-      setCheckResults(prev => ({ ...prev, [currentQuestion.id]: result }));
+      setCheckResults(prev => ({ ...prev, [currentQuestion.id]: { ...evaluation, questionId: currentQuestion.id, studentAnswer: answer, question: currentQuestion.question, questionType: currentQuestion.questionType, options: currentQuestion.options || null } }));
       const fresh = await api.getAISession(sessionId);
       let canonical = fresh?.messages || [];
-      try {
-        const serverMessages = await api.getSessionMessages(sessionId);
-        if (Array.isArray(serverMessages)) canonical = serverMessages;
-      } catch {}
-      setSession(fresh);
-      setMessages(canonical);
+      try { const s = await api.getSessionMessages(sessionId); if (Array.isArray(s)) canonical = s; } catch {}
+      setSession(fresh); setMessages(canonical);
       const next = qIndex + 1;
       setAnswerInput("");
-      if (next < questions.length) {
-        setQIndex(next);
-        return;
-      }
+      if (next < questions.length) { setQIndex(next); return; }
       await finishPracticeRun();
-    } catch (err) {
-      setError(err.message || "Could not evaluate that answer.");
-    } finally {
-      setSubmitting(false);
-    }
+    } catch (err) { setError(err.message || "Could not evaluate that answer."); }
+    finally { setSubmitting(false); }
   }
 
   async function finishPracticeRun() {
@@ -613,31 +482,13 @@ export default function AILearningRoom() {
       const result = await api.completePracticeRun(sessionId, questions.map(q => q.id));
       const fresh = await api.getAISession(sessionId);
       let msgs = fresh?.messages || [];
-      try {
-        const serverMessages = await api.getSessionMessages(sessionId);
-        if (Array.isArray(serverMessages)) msgs = serverMessages;
-      } catch {}
-      setSession(fresh);
-      setMessages(msgs);
-      setPhase("teaching");
-      setQuestions([]);
-      setQIndex(0);
-      setAnswerInput("");
-      const completedFromServer = msgs
-        .filter(m => m?.role === "ai" && m?.extra?.taskCompleted === true)
-        .map(m => Number(m.extra.taskIndex))
-        .filter(Number.isInteger);
-      if (completedFromServer.length) {
-        setCompletedTaskIndexes([...new Set(completedFromServer)]);
-      }
-      if (result?.needsReteach) {
-        await reteachAfterPractice();
-      }
-    } catch (err) {
-      setError(err.message || "Practice could not be completed.");
-    } finally {
-      setAiWorking(false);
-    }
+      try { const s = await api.getSessionMessages(sessionId); if (Array.isArray(s)) msgs = s; } catch {}
+      setSession(fresh); setMessages(msgs); setPhase("teaching"); setQuestions([]); setQIndex(0); setAnswerInput("");
+      const done = msgs.filter(m => m?.role === "ai" && m?.extra?.taskCompleted === true).map(m => Number(m.extra.taskIndex)).filter(Number.isInteger);
+      if (done.length) setCompletedTaskIndexes([...new Set(done)]);
+      if (result?.needsReteach) await reteachAfterPractice();
+    } catch (err) { setError(err.message || "Practice could not be completed."); }
+    finally { setAiWorking(false); }
   }
 
   async function reteachAfterPractice() {
@@ -646,34 +497,23 @@ export default function AILearningRoom() {
       await api.generateAdaptiveReteach(sessionId, reason);
       const fresh = await api.getAISession(sessionId);
       let msgs = fresh?.messages || [];
-      try {
-        const serverMessages = await api.getSessionMessages(sessionId);
-        if (Array.isArray(serverMessages)) msgs = serverMessages;
-      } catch {}
-      setSession(fresh);
-      setMessages(msgs);
-      setPhase("teaching");
-      const group = msgs.find(m => m.role === "ai" && m.messageType === "reteach" && m.extra?.responseGroupId)?.extra?.responseGroupId;
-      if (group) speakNewAiMessages(msgs, group);
-    } catch (err) {
-      setError(err.message || "The tutor could not start adaptive reteaching.");
-    }
+      try { const s = await api.getSessionMessages(sessionId); if (Array.isArray(s)) msgs = s; } catch {}
+      setSession(fresh); setMessages(msgs); setPhase("teaching");
+      const g = msgs.find(m => m.role === "ai" && m.messageType === "reteach" && m.extra?.responseGroupId)?.extra?.responseGroupId;
+      if (ttsRef.current && g) speakGroupMessages(msgs, g);
+    } catch (err) { setError(err.message || "The tutor could not start adaptive reteaching."); }
   }
 
   async function startStudyMode() {
-    setError(null);
-    setAiWorking(true);
+    setError(null); setAiWorking(true);
     try {
       const period = await api.startStudyPeriod(sessionId, 300, currentTaskIndex);
       setSession(prev => ({ ...prev, status: "studying" }));
       setPhase("studying");
       setTimerSeconds(Number(period.durationSeconds || 300));
       runTimer(Number(period.durationSeconds || 300), period.id);
-    } catch (err) {
-      setError(err.message || "Could not start study mode.");
-    } finally {
-      setAiWorking(false);
-    }
+    } catch (err) { setError(err.message || "Could not start study mode."); }
+    finally { setAiWorking(false); }
   }
 
   const [timerSeconds, setTimerSeconds] = useState(0);
@@ -693,13 +533,9 @@ export default function AILearningRoom() {
   }
 
   async function endSession() {
-    if (!window.confirm("End this session? Your progress will be saved, but the session will not be completed.")) return;
-    try {
-      await api.abandonAISession(sessionId);
-      navigate("/app/learn/ai");
-    } catch (err) {
-      setError(err.message || "Could not end the session.");
-    }
+    if (!window.confirm("End this session? Your progress will be saved.")) return;
+    try { await api.abandonAISession(sessionId); navigate("/app/learn/ai"); }
+    catch (err) { setError(err.message || "Could not end the session."); }
   }
 
   const quickActions = [
@@ -717,7 +553,7 @@ export default function AILearningRoom() {
     <div className="ar-room">
       <header className="ar-header">
         <div className="ar-header-left">
-          <button className="ar-icon-btn" onClick={() => navigate("/app/learn/ai")} aria-label="Back to AI Learning">←</button>
+          <button className="ar-icon-btn" onClick={() => navigate("/app/learn/ai")} aria-label="Back">←</button>
           <div className="ar-brand-avatar"><TutorAvatar size={34} /><span /></div>
           <div className="ar-header-copy">
             <div className="ar-header-title">{conceptName}</div>
@@ -726,12 +562,7 @@ export default function AILearningRoom() {
         </div>
         <div className="ar-header-center"><span className="ar-live-dot" /><span>{aiWorking ? "UPRAD is working…" : phaseLabel}</span></div>
         <div className="ar-header-right">
-          <button
-            className={`ar-icon-btn ar-voice-btn ${ttsEnabled ? "active" : ""}`}
-            onClick={toggleTts}
-            title={ttsEnabled ? "Tutor voice: On" : "Tutor voice: Off"}
-            aria-label="Toggle tutor voice"
-          >
+          <button className={`ar-icon-btn ar-voice-btn ${ttsEnabled ? "active" : ""}`} onClick={toggleTts} title={ttsEnabled ? "Voice on" : "Voice off"} aria-label="Toggle voice">
             {ttsEnabled ? "🔊" : "🔇"}
           </button>
           <button className="ar-header-action ar-desktop-toggle" onClick={toggleLeftSidebar}>{leftOpen ? "Hide plan" : "Show plan"}</button>
@@ -746,18 +577,16 @@ export default function AILearningRoom() {
         {leftOpen && (
           <aside className={`ar-sidebar ar-plan-sidebar ${mobilePanel === "plan" ? "ar-mobile-open" : ""}`}>
             <SidebarPlan plan={learningPlan} current={currentTaskIndex} completed={completedTaskIndexes} progress={planProgress} onClose={() => setMobilePanel(null)} />
-            <button type="button" className="ar-sidebar-edge-toggle ar-left-edge-toggle" onClick={toggleLeftSidebar} aria-label="Collapse learning plan">‹</button>
+            <button type="button" className="ar-sidebar-edge-toggle ar-left-edge-toggle" onClick={toggleLeftSidebar}>‹</button>
           </aside>
         )}
-        {!leftOpen && (
-          <button type="button" className="ar-sidebar-restore ar-left-restore" onClick={toggleLeftSidebar} aria-label="Show learning plan">›</button>
-        )}
+        {!leftOpen && <button type="button" className="ar-sidebar-restore ar-left-restore" onClick={toggleLeftSidebar}>›</button>}
 
         <main className="ar-main">
           <div className="ar-context-strip">
             <div><span className="ar-eyebrow">LEARNING ROOM</span><strong>{phaseLabel}</strong></div>
             <div className="ar-context-progress">
-              <span>{learningPlan.length ? `${completedCount}/${learningPlan.length} steps` : "Continuous conversation"}</span>
+              <span>{learningPlan.length ? `${completedCount}/${learningPlan.length} steps` : "Continuous"}</span>
               <div><i style={{ width: `${planProgress}%` }} /></div>
             </div>
           </div>
@@ -778,27 +607,15 @@ export default function AILearningRoom() {
                   isSaved={savedMessageIds.has(Number(msg.id))}
                   onSave={handleSaveExplanation}
                   isTypingNow={typingMessageId === msg.id}
-                  tapped={tappedMessageId === (msg.id || index)}
-                  onTap={() => setTappedMessageId(prev => prev === (msg.id || index) ? null : (msg.id || index))}
-                  onReadAloud={() => speakMessage(msg)}
+                  onReadAloud={() => speakText(msg.content || "")}
                 />
               ))}
 
-            {aiWorking && <AgentThinking phase={phase} />}
+            {aiWorking && <AgentThinking />}
             {phase === "preparing" && <PreparingCard />}
             {phase === "studying" && <StudyCard seconds={timerSeconds} task={currentTask} />}
-
             {phase === "practice" && currentQuestion && (
-              <QuizArtifact
-                question={currentQuestion}
-                index={qIndex}
-                total={questions.length}
-                answer={answerInput}
-                setAnswer={setAnswerInput}
-                onSubmit={submitAnswer}
-                submitting={submitting}
-                results={checkResults}
-              />
+              <QuizArtifact question={currentQuestion} index={qIndex} total={questions.length} answer={answerInput} setAnswer={setAnswerInput} onSubmit={submitAnswer} submitting={submitting} results={checkResults} />
             )}
             <div ref={bottomRef} />
           </section>
@@ -812,7 +629,6 @@ export default function AILearningRoom() {
               </div>
             )}
             <form className="ar-composer" onSubmit={e => { e.preventDefault(); sendMessage(); }}>
-              <div className="ar-composer-icon"><TutorAvatar size={30} /></div>
               <textarea
                 value={msgInput}
                 onChange={e => {
@@ -820,30 +636,25 @@ export default function AILearningRoom() {
                   clearTimeout(idleTimerRef.current);
                   setIsTyping(Boolean(e.target.value.trim()));
                   clearTimeout(typingDebounceRef.current);
-                  if (e.target.value.trim()) {
-                    typingDebounceRef.current = setTimeout(() => setIsTyping(false), 3000);
-                  }
+                  if (e.target.value.trim()) typingDebounceRef.current = setTimeout(() => setIsTyping(false), 3000);
                 }}
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                 disabled={!canType}
                 rows={1}
-                placeholder={phase === "practice" ? "Practice mode is active — answer the question above…" : "Talk to UPRAD about what you're learning…"}
+                placeholder={phase === "practice" ? "Answer the question above…" : "Talk to UPRAD about what you're learning…"}
               />
               <button className="ar-send" type="submit" disabled={!msgInput.trim() || !canType}>↑</button>
             </form>
-            <div className="ar-composer-foot"><span>Enter to send · Shift + Enter for a new line</span><span>The conversation is your Learning Room</span></div>
           </div>
         </main>
 
         {rightOpen && (
           <aside className={`ar-sidebar ar-work-sidebar ${mobilePanel === "tools" ? "ar-mobile-open" : ""}`}>
             <WorkspacePanel session={session} task={currentTask} phase={phase} progress={planProgress} familiarity={session?.studentFamiliarity} intent={session?.intent} answeredCount={answeredCount} questionCount={questions.length} onStudy={startStudyMode} onClose={() => setMobilePanel(null)} />
-            <button type="button" className="ar-sidebar-edge-toggle ar-right-edge-toggle" onClick={toggleRightSidebar} aria-label="Collapse session tools">›</button>
+            <button type="button" className="ar-sidebar-edge-toggle ar-right-edge-toggle" onClick={toggleRightSidebar}>›</button>
           </aside>
         )}
-        {!rightOpen && (
-          <button type="button" className="ar-sidebar-restore ar-right-restore" onClick={toggleRightSidebar} aria-label="Show session tools">‹</button>
-        )}
+        {!rightOpen && <button type="button" className="ar-sidebar-restore ar-right-restore" onClick={toggleRightSidebar}>‹</button>}
       </div>
 
       {mobilePanel && <button className="ar-mobile-backdrop" onClick={() => setMobilePanel(null)} aria-label="Close panel" />}
@@ -851,105 +662,137 @@ export default function AILearningRoom() {
   );
 }
 
-/* ─── MessageCard with tap-to-reveal, typewriter, read-aloud ──────────── */
-function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave, isTypingNow, tapped, onTap, onReadAloud }) {
+/* ─── MessageCard: plain AI, carded student ──────────────────────────── */
+function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave, isTypingNow, onReadAloud }) {
   const ai = msg.role === "ai";
   const locked = ai && msg.extra?.locked;
   const action = msg.extra?.action;
+  const msgKey = String(msg.id || "");
 
   const { displayed, done } = useTypewriter(msg.content || "", ai && isTypingNow);
   const shownContent = (ai && isTypingNow) ? displayed : (msg.content || "");
 
-  return (
-    <article
-      className={`ar-message ${ai ? "ar-message-ai" : "ar-message-user"} ${locked ? "ar-message-locked" : ""}`}
-      onClick={ai ? onTap : undefined}
-    >
-      {ai
-        ? <div className="ar-message-avatar"><TutorAvatar size={34} /></div>
-        : <div className="ar-user-avatar">You</div>
-      }
-      <div className="ar-message-column">
-        <div className="ar-message-meta">
-          <span>{ai ? "UPRAD" : "You"}</span>
-          {ai && <span className="ar-meta-dot">·</span>}
-          {ai && <span>{locked ? "Practice lock" : msg.messageType === "reteach" ? "Reteach" : "Tutor"}</span>}
-          <time>{formatClock(msg.createdAt)}</time>
-        </div>
-        <div className="ar-message-card">
-          {locked && <div className="ar-locked-label">🔒 Teaching temporarily hidden</div>}
-          {action && <div className="ar-agent-badge"><span>✦</span>{activityLabel(action)}</div>}
-          <RichText content={shownContent} onCopy={onCopy} copiedId={copiedId} />
-          {ai && isTypingNow && !done && <span className="ar-cursor-blink">▍</span>}
+  async function handleCopy() {
+    try {
+      await navigator.clipboard?.writeText(msg.content || "");
+      onCopy(msgKey);
+      setTimeout(() => onCopy(null), 1400);
+    } catch {}
+  }
 
-          {/* Action row: only visible when tapped on mobile, always visible on desktop */}
-          {ai && !locked && (
-            <div className={`ar-msg-actions ${tapped ? "ar-msg-actions--visible" : ""}`}>
-              <button
-                type="button"
-                className="ar-msg-action-btn ar-read-btn"
-                onClick={e => { e.stopPropagation(); onReadAloud(); }}
-                title="Read aloud"
-              >
-                🔊 Read
-              </button>
-              <button
-                type="button"
-                className={`ar-msg-action-btn ar-save-btn ${isSaved ? "saved" : ""}`}
-                onClick={e => { e.stopPropagation(); onSave(msg); }}
-              >
-                {isSaved ? "✓ Saved" : "🔖 Save"}
-              </button>
-            </div>
-          )}
-
-          {msg.extra?.taskTransition && (
-            <div className="ar-transition-actions">
-              <button type="button" onClick={() => onTutorAction("Yes, I'm ready for the next task.")}>Yes, move to next task →</button>
-              <button type="button" className="secondary" onClick={() => onTutorAction("No, please explain this task again.")}>Explain it again</button>
-            </div>
-          )}
+  if (!ai) {
+    // Student message — bubble/card on the right
+    return (
+      <div className="ar-msg-student">
+        <div className="ar-msg-student-bubble">
+          <RichText content={msg.content} onCopy={onCopy} copiedId={copiedId} />
         </div>
+        <time className="ar-msg-time ar-msg-time-right">{formatClock(msg.createdAt)}</time>
       </div>
-    </article>
+    );
+  }
+
+  // AI message — plain, full-width, icon row below
+  return (
+    <div className={`ar-msg-ai ${locked ? "ar-msg-ai-locked" : ""}`}>
+      <div className="ar-msg-ai-header">
+        <div className="ar-msg-ai-avatar"><TutorAvatar size={26} /></div>
+        <span className="ar-msg-ai-name">UPRAD</span>
+        <span className="ar-msg-ai-role">{locked ? "Practice lock" : msg.messageType === "reteach" ? "Reteach" : msg.messageType === "idle_nudge" ? "Nudge" : "Tutor"}</span>
+        <time className="ar-msg-time">{formatClock(msg.createdAt)}</time>
+      </div>
+
+      <div className="ar-msg-ai-body">
+        {locked && <div className="ar-locked-label">🔒 Teaching temporarily hidden</div>}
+        {action && <div className="ar-agent-badge"><span>✦</span>{activityLabel(action)}</div>}
+        <RichText content={shownContent} onCopy={onCopy} copiedId={copiedId} />
+        {isTypingNow && !done && <span className="ar-cursor-blink">▍</span>}
+      </div>
+
+      {/* Icon row: copy · play · save */}
+      {!locked && (
+        <div className="ar-msg-icons">
+          <button
+            className={`ar-msg-icon-btn ${copiedId === msgKey ? "ar-icon-active" : ""}`}
+            onClick={handleCopy}
+            title="Copy"
+            aria-label="Copy message"
+          >
+            {copiedId === msgKey
+              ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="20 6 9 17 4 12"/></svg>
+              : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            }
+          </button>
+          <button
+            className="ar-msg-icon-btn"
+            onClick={onReadAloud}
+            title="Read aloud"
+            aria-label="Read aloud"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+            </svg>
+          </button>
+          <button
+            className={`ar-msg-icon-btn ${isSaved ? "ar-icon-saved" : ""}`}
+            onClick={() => onSave(msg)}
+            title={isSaved ? "Saved" : "Save"}
+            aria-label={isSaved ? "Remove from saved" : "Save explanation"}
+          >
+            {isSaved
+              ? <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+              : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+            }
+          </button>
+        </div>
+      )}
+
+      {msg.extra?.taskTransition && (
+        <div className="ar-transition-actions">
+          <button type="button" onClick={() => onTutorAction("Yes, I'm ready for the next task.")}>Yes, next task →</button>
+          <button type="button" className="secondary" onClick={() => onTutorAction("No, please explain again.")}>Explain again</button>
+        </div>
+      )}
+    </div>
   );
 }
 
+/* ─── Sidebar components ─────────────────────────────────────────────── */
 function SidebarPlan({ plan, current, completed, progress, onClose }) {
   return <div className="ar-panel-inner">
     <div className="ar-panel-head"><div><span className="ar-eyebrow">ROADMAP</span><h2>Learning plan</h2></div><button className="ar-mobile-close" onClick={onClose}>×</button></div>
     <div className="ar-plan-progress"><div className="ar-plan-ring" style={{ "--p": `${progress * 3.6}deg` }}><span>{progress}%</span></div><div><strong>{completed.length} of {plan.length || 0} complete</strong><small>The roadmap is context. UPRAD drives the conversation.</small></div></div>
-    <div className="ar-task-list">{plan.length ? plan.map((task, index) => <div key={index} className={`ar-task ${completed.includes(index) ? "done" : current === index ? "active" : ""}`}><span className="ar-task-number">{completed.includes(index) ? "✓" : index + 1}</span><span className="ar-task-copy"><b>{taskTitle(task)}</b><small>{taskDescription(task)}</small><em>{completed.includes(index) ? "Completed" : current === index ? "Current focus" : taskMeta(task)}</em></span></div>) : <div className="ar-empty-plan"><span>✦</span><p>Your tutor is building the learning context.</p></div>}</div>
+    <div className="ar-task-list">{plan.length ? plan.map((task, i) => <div key={i} className={`ar-task ${completed.includes(i) ? "done" : current === i ? "active" : ""}`}><span className="ar-task-number">{completed.includes(i) ? "✓" : i + 1}</span><span className="ar-task-copy"><b>{taskTitle(task)}</b><small>{taskDescription(task)}</small><em>{completed.includes(i) ? "Completed" : current === i ? "Current focus" : taskMeta(task)}</em></span></div>) : <div className="ar-empty-plan"><span>✦</span><p>Your tutor is building the learning context.</p></div>}</div>
   </div>;
 }
 
 function WorkspacePanel({ session, task, phase, progress, familiarity, intent, answeredCount, questionCount, onStudy, onClose }) {
   return <div className="ar-panel-inner">
     <div className="ar-panel-head"><div><span className="ar-eyebrow">WORKSPACE</span><h2>Session tools</h2></div><button className="ar-mobile-close" onClick={onClose}>×</button></div>
-    <div className="ar-current-card"><span className="ar-current-kicker">NOW LEARNING</span><h3>{taskTitle(task) || session?.conceptName || "Building your lesson"}</h3><p>{taskDescription(task) || "Talk with UPRAD. It will decide when you are ready for a check."}</p><div className="ar-context-facts">{familiarity && <span>Starting point: {formatFamiliarity(familiarity)}</span>}{intent && <span>Goal: {formatIntent(intent)}</span>}</div><span className={`ar-phase-pill ar-phase-${phase}`}>{phase.replace("_", " ")}</span></div>
-    <div className="ar-stats-card"><div><b>{progress}%</b><span>Roadmap progress</span></div><div><b>{answeredCount}</b><span>Checks answered</span></div><div><b>{questionCount}</b><span>Current run</span></div></div>
-    {(phase === "teaching" || phase === "reteaching") && <button className="ar-study-tool" onClick={onStudy}><span>◷</span><b>Optional study timer</b><small>Focus for 5 minutes before continuing the conversation.</small></button>}
-    <div className="ar-tool-tip"><b>Stay in the conversation.</b><span>Ask for examples, simpler explanations, applications, or anything that helps the idea click. UPRAD decides when to check your understanding.</span></div>
+    <div className="ar-current-card"><span className="ar-current-kicker">NOW LEARNING</span><h3>{taskTitle(task) || session?.conceptName || "Building your lesson"}</h3><p>{taskDescription(task) || "Talk with UPRAD. It decides when you're ready."}</p><div className="ar-context-facts">{familiarity && <span>Starting point: {formatFamiliarity(familiarity)}</span>}{intent && <span>Goal: {formatIntent(intent)}</span>}</div><span className={`ar-phase-pill ar-phase-${phase}`}>{phase.replace("_", " ")}</span></div>
+    <div className="ar-stats-card"><div><b>{progress}%</b><span>Progress</span></div><div><b>{answeredCount}</b><span>Checks</span></div><div><b>{questionCount}</b><span>This run</span></div></div>
+    {(phase === "teaching" || phase === "reteaching") && <button className="ar-study-tool" onClick={onStudy}><span>◷</span><b>Study timer</b><small>5-minute focus before continuing.</small></button>}
+    <div className="ar-tool-tip"><b>Stay in the conversation.</b><span>Ask for examples, simpler explanations, or real-world applications. UPRAD decides when to check you.</span></div>
   </div>;
 }
 
-/* ─── Rebuilt typing indicator ────────────────────────────────────────── */
+/* ─── Rebuilt AgentThinking ──────────────────────────────────────────── */
 function AgentThinking() {
   const steps = ["Understanding your response", "Choosing the next teaching move", "Updating your learning path"];
   const [step, setStep] = useState(0);
-
   useEffect(() => {
-    const t = setInterval(() => setStep(prev => (prev + 1) % steps.length), 1800);
+    const t = setInterval(() => setStep(p => (p + 1) % steps.length), 1800);
     return () => clearInterval(t);
   }, []);
-
   return (
     <div className="ar-thinking">
-      <div className="ar-thinking-avatar"><TutorAvatar size={30} /></div>
+      <div className="ar-thinking-avatar"><TutorAvatar size={28} /></div>
       <div className="ar-thinking-body">
         <div className="ar-thinking-label">UPRAD is working</div>
-        <div className="ar-thinking-step-row">
-          <span className="ar-thinking-step-active">{steps[step]}</span>
+        <div className="ar-thinking-row">
+          <span className="ar-thinking-step" key={step}>{steps[step]}</span>
           <div className="ar-thinking-dots"><i /><i /><i /></div>
         </div>
       </div>
@@ -958,22 +801,20 @@ function AgentThinking() {
 }
 
 function PracticeBanner() {
-  return <div className="ar-practice-banner" role="status"><span className="ar-practice-banner-icon">🔒</span><div><strong>PRACTICE MODE</strong><span>Teaching content is temporarily hidden. Show what you understand without looking back.</span></div></div>;
+  return <div className="ar-practice-banner" role="status"><span>🔒</span><div><strong>PRACTICE MODE</strong><span>Teaching content is hidden. Show what you understand.</span></div></div>;
 }
-
 function PreparingCard() { return <div className="ar-preparing-card"><div className="ar-preparing-orb">✦</div><div><span className="ar-eyebrow">BUILDING YOUR LESSON</span><h3>UPRAD is assembling the right starting point</h3><p>It is combining the concept, your starting level, and the learning goal into a focused conversation.</p><div className="ar-loading-line"><i /><i /><i /></div></div></div>; }
-function StudyCard({ seconds, task }) { return <div className="ar-study-card"><div className="ar-study-orbit"><span>{formatTime(seconds)}</span><small>Focus</small></div><div className="ar-study-copy"><span className="ar-eyebrow">OPTIONAL STUDY MODE</span><h3>{taskTitle(task) || "Study the current idea"}</h3><p>Review what UPRAD taught, then return to the conversation. The timer is server-backed and survives refresh.</p></div></div>; }
+function StudyCard({ seconds, task }) { return <div className="ar-study-card"><div className="ar-study-orbit"><span>{formatTime(seconds)}</span><small>Focus</small></div><div className="ar-study-copy"><span className="ar-eyebrow">STUDY MODE</span><h3>{taskTitle(task) || "Study the current idea"}</h3><p>Review what UPRAD taught, then come back to the conversation.</p></div></div>; }
 
 function QuizArtifact({ question, index, total, answer, setAnswer, onSubmit, submitting, results }) {
   const options = Array.isArray(question.options) ? question.options : [];
   const mc = question.questionType === "multiple_choice" && options.length;
   return <section className="ar-quiz-artifact ar-practice-card">
-    <div className="ar-artifact-head"><div><span className="ar-eyebrow">PRACTICE · QUESTION {index + 1}</span><h2>Show what you understand</h2></div><span className="ar-quiz-count">{index + 1}/{total}</span></div>
+    <div className="ar-artifact-head"><div><span className="ar-eyebrow">PRACTICE · Q{index + 1}</span><h2>Show what you understand</h2></div><span className="ar-quiz-count">{index + 1}/{total}</span></div>
     <div className="ar-quiz-progress">{Array.from({ length: total }, (_, i) => <i key={i} className={i < index ? "done" : i === index ? "current" : ""} />)}</div>
     <div className="ar-quiz-question">{question.question}</div>
     {mc ? <div className="ar-options">{options.map((opt, i) => { const value = typeof opt === "string" ? opt : (opt.value ?? opt.label ?? opt.text); const text = typeof opt === "string" ? opt : (opt.text ?? opt.label ?? opt.value); return <button key={`${question.id}-${i}`} className={`ar-option ${answer === value ? "selected" : ""}`} onClick={() => setAnswer(value)} disabled={submitting}><span>{String.fromCharCode(65 + i)}</span><b>{text}</b></button>; })}</div> : <textarea className="ar-answer-box" rows={5} value={answer} onChange={e => setAnswer(e.target.value)} placeholder="Explain your answer in your own words…" disabled={submitting} />}
-    <div className="ar-quiz-foot"><span>One question at a time. Your answer is saved to this learning session.</span><button onClick={onSubmit} disabled={!answer.trim() || submitting}>{submitting ? "Evaluating…" : index + 1 === total ? "Finish practice" : "Submit answer →"}</button></div>
-    {Object.keys(results).length > 0 && <div className="ar-quiz-note">{Object.keys(results).length} response{Object.keys(results).length > 1 ? "s" : ""} recorded in this run.</div>}
+    <div className="ar-quiz-foot"><span>{Object.keys(results).length} response{Object.keys(results).length !== 1 ? "s" : ""} recorded.</span><button onClick={onSubmit} disabled={!answer.trim() || submitting}>{submitting ? "Evaluating…" : index + 1 === total ? "Finish practice" : "Submit →"}</button></div>
   </section>;
 }
 
@@ -993,15 +834,15 @@ function RichText({ content, onCopy, copiedId }) {
   })}</div>;
 }
 
-function inlineMarkdown(text) { const safe = String(text); return safe.split(/(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\n]+\*|_[^_\n]+_)/g).map((part, i) => { if ((part.startsWith("**") && part.endsWith("**")) || (part.startsWith("__") && part.endsWith("__"))) return <strong key={i}>{part.slice(2, -2)}</strong>; if ((part.startsWith("*") && part.endsWith("*")) || (part.startsWith("_") && part.endsWith("_"))) return <em key={i}>{part.slice(1, -1)}</em>; if (part.startsWith("`") && part.endsWith("`")) return <code key={i}>{part.slice(1, -1)}</code>; return part; }); }
+function inlineMarkdown(text) { return String(text).split(/(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\n]+\*|_[^_\n]+_)/g).map((p, i) => { if ((p.startsWith("**") && p.endsWith("**")) || (p.startsWith("__") && p.endsWith("__"))) return <strong key={i}>{p.slice(2, -2)}</strong>; if ((p.startsWith("*") && p.endsWith("*")) || (p.startsWith("_") && p.endsWith("_"))) return <em key={i}>{p.slice(1, -1)}</em>; if (p.startsWith("`") && p.endsWith("`")) return <code key={i}>{p.slice(1, -1)}</code>; return p; }); }
 async function copyText(text, id, onCopy) { try { await navigator.clipboard?.writeText(text); onCopy(id); setTimeout(() => onCopy(null), 1300); } catch {} }
-function formatFamiliarity(v) { return ({ new: "new to this", seen_before: "seen it before", know_basics: "basics understood", know_well: "confident with it", need_help: "specific help needed" })[v] || v; }
-function formatIntent(v) { return ({ teach_me: "learn the concept", explain_simply: "simple explanation", give_examples: "learn through examples", go_deeper: "go deeper", already_know: "probe existing understanding", quiz_me: "diagnostic first", broaden: "broaden the context", custom: "custom goal" })[v] || v; }
+function formatFamiliarity(v) { return ({ new: "new to this", seen_before: "seen it before", know_basics: "basics understood", know_well: "confident", need_help: "needs help" })[v] || v; }
+function formatIntent(v) { return ({ teach_me: "learn the concept", explain_simply: "simple explanation", give_examples: "learn through examples", go_deeper: "go deeper", already_know: "probe understanding", quiz_me: "diagnostic first", broaden: "broaden context", custom: "custom goal" })[v] || v; }
 function taskTitle(task) { return task?.title || task?.name || task?.concept || task?.task || "Learning step"; }
 function taskDescription(task) { return task?.description || task?.objective || task?.goal || task?.summary || "Build understanding and apply the idea."; }
 function taskMeta(task) { return task?.estimatedMinutes ? `${task.estimatedMinutes} min` : task?.recommended_minutes ? `${task.recommended_minutes} min` : task?.type || "Guided learning"; }
-function activityLabel(action) { return ({ practice_complete: "Practice complete", task_transition: "Ready for the next task", reteach_task: "Re-explaining this task" })[action] || "Tutor action"; }
-function formatClock(value) { if (!value) return ""; const d = new Date(value); return Number.isNaN(d.getTime()) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
-function formatTime(seconds) { const m = Math.floor(Number(seconds || 0) / 60); const s = Math.max(0, Number(seconds || 0) % 60); return `${m}:${String(s).padStart(2, "0")}`; }
+function activityLabel(action) { return ({ practice_complete: "Practice complete", task_transition: "Ready for next task", reteach_task: "Re-explaining" })[action] || "Tutor action"; }
+function formatClock(v) { if (!v) return ""; const d = new Date(v); return isNaN(d) ? "" : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
+function formatTime(s) { const m = Math.floor(Number(s || 0) / 60); return `${m}:${String(Math.max(0, Number(s || 0) % 60)).padStart(2, "0")}`; }
 function RoomSkeleton() { return <div className="ar-room ar-loading"><header className="ar-header"><div className="ar-skeleton ar-sk-circle" /><div className="ar-skeleton ar-sk-title" /></header><div className="ar-loading-layout"><div className="ar-skeleton ar-sk-side" /><div className="ar-sk-chat">{[70, 50, 82, 42].map((w, i) => <div key={i} className="ar-skeleton ar-sk-bubble" style={{ width: `${w}%` }} />)}</div><div className="ar-skeleton ar-sk-side" /></div></div>; }
 function ErrorRoom({ message, onBack }) { return <div className="ar-room ar-error-room"><div className="ar-error-card"><span>!</span><h2>Learning room unavailable</h2><p>{message}</p><button onClick={onBack}>Back to AI Learning</button></div></div>; }
