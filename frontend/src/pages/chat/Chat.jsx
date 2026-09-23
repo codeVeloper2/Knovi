@@ -38,16 +38,6 @@ function Avatar({ name, size = 52, online = false, className = "" }) {
   );
 }
 
-
-function fileSize(bytes) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-function fileExt(name = "") {
-  const e = name.split(".").pop();
-  return e ? e.toUpperCase() : "FILE";
-}
 function formatTime(value) {
   if (!value) return "";
   const d = new Date(value);
