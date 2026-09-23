@@ -70,18 +70,36 @@ function mapChat(raw) {
 }
 function mapMessage(raw, myId, partnerName) {
   const isImage = !!raw.attachmentUrl && /\.(jpe?g|png|webp|gif)(\?|$)/i.test(raw.attachmentUrl);
+  // Compare as strings so "12" === 12 never fails
+  const isMine =
+    myId != null &&
+    raw.senderId != null &&
+    String(raw.senderId) === String(myId);
   return {
     ...raw,
-    text: raw.body || "",
-    outgoing: Number(raw.senderId) === Number(myId),
-    time: formatTime(raw.createdAt),
+    id: raw.id ?? raw.messageId,
+    text: raw.body || raw.text || "",
+    outgoing: isMine,
+    time: formatTime(raw.createdAt || raw.time),
     status: raw.isRead ? "read" : raw.isDelivered ? "delivered" : "sent",
-    type: raw.attachmentUrl ? (isImage ? "image" : "document") : undefined,
-    imageUrl: isImage ? raw.attachmentUrl : undefined,
-    fileName: raw.attachmentName || undefined,
-    fileMeta: raw.attachmentName ? fileExt(raw.attachmentName) : undefined,
-    replyTo: raw.replyToId ? { text: raw.replyToSnapshot || "Message", outgoing: false, name: "Reply" } : null,
-    senderName: Number(raw.senderId) === Number(myId) ? "You" : partnerName,
+    type: raw.attachmentUrl
+      ? isImage
+        ? "image"
+        : "document"
+      : raw.type,
+    imageUrl: isImage ? raw.attachmentUrl : raw.imageUrl,
+    fileName: raw.attachmentName || raw.fileName || undefined,
+    fileMeta: raw.attachmentName
+      ? fileExt(raw.attachmentName)
+      : raw.fileMeta,
+    replyTo: raw.replyToId
+      ? {
+          text: raw.replyToSnapshot || "Message",
+          outgoing: false,
+          name: "Reply",
+        }
+      : raw.replyTo || null,
+    senderName: isMine ? "You" : partnerName,
     reaction: Object.keys(raw.reactions || {})[0] || null,
   };
 }
@@ -244,7 +262,24 @@ export default function Chat() {
       if (event.type === "message" && event.data) {
         const partner = chats.find(c => c.id === String(screen))?.name || "Peer";
         const mapped = mapMessage(event.data, user?.id, partner);
-        setMessages(prev => prev.some(m => String(m.id) === String(mapped.id)) ? prev : [...prev, mapped]);
+        setMessages(prev => {
+          // Already have this exact id
+          if (prev.some(m => String(m.id) === String(mapped.id))) return prev;
+          // Replace our optimistic bubble (same outgoing text / attachment) instead of duplicating
+          const optIdx = prev.findIndex(
+            m =>
+              m._optimistic &&
+              m.outgoing &&
+              (m.text || "") === (mapped.text || "") &&
+              (m.type || "") === (mapped.type || "")
+          );
+          if (optIdx >= 0) {
+            const next = [...prev];
+            next[optIdx] = mapped;
+            return next;
+          }
+          return [...prev, mapped];
+        });
         refreshChats();
       } else if (event.type === "deleted") {
         setMessages(prev => prev.map(m => String(m.id) === String(event.msgId) ? { ...m, deleted: true, text: "This message was deleted", type: undefined, imageUrl: undefined, reaction: null } : m));
@@ -274,21 +309,113 @@ export default function Chat() {
 
   const send = async () => {
     if (!screen) return;
+    // Empty send → thumbs-up (same as reference UI)
+    let text = input.trim();
+    if (!text && !pending) text = "👍";
+
+    // Optimistic message — appears instantly on the right
+    const tempId = `temp-${Date.now()}`;
+    const nowIso = new Date().toISOString();
+    const optimistic = {
+      id: tempId,
+      text: text || "",
+      body: text || "",
+      outgoing: true,
+      time: formatTime(nowIso),
+      createdAt: nowIso,
+      status: "sent",
+      type: pending?.type,
+      imageUrl: pending?.type === "image" ? pending.imageUrl : undefined,
+      fileName: pending?.fileName,
+      fileMeta: pending?.fileMeta,
+      replyTo: replyTo
+        ? {
+            text: messagePreview(replyTo),
+            outgoing: !!replyTo.outgoing,
+            name: replyTo.outgoing ? "You" : (currentChat?.name || "Peer"),
+          }
+        : null,
+      senderName: "You",
+      senderId: user?.id,
+      _optimistic: true,
+    };
+
+    const savedInput = text;
+    const savedPending = pending;
+    const savedReply = replyTo;
+    setMessages((prev) => [...prev, optimistic]);
+    setInput("");
+    setPending(null);
+    setReplyTo(null);
+
+    // Update chat list preview immediately
+    setChats((prev) =>
+      prev.map((c) =>
+        c.id === String(screen)
+          ? {
+              ...c,
+              lastMessage: savedPending?.type === "image"
+                ? (text ? `📷 ${text}` : "📷 Photo")
+                : savedPending?.type === "document"
+                  ? `📄 ${savedPending.fileName || "Document"}`
+                  : text,
+              time: formatListTime(nowIso),
+            }
+          : c
+      )
+    );
+
     try {
-      let attachmentUrl = null, attachmentName = null;
-      if (pending?.file) {
-        const uploaded = await api.uploadAttachment(screen, pending.file);
+      let attachmentUrl = null;
+      let attachmentName = null;
+      if (savedPending?.file) {
+        const uploaded = await api.uploadAttachment(screen, savedPending.file);
         attachmentUrl = uploaded.url;
-        attachmentName = uploaded.name || pending.file.name;
+        attachmentName = uploaded.name || savedPending.file.name;
       }
-      const text = input.trim();
-      if (!text && !attachmentUrl) return;
-      await api.sendMessageRest(screen, text, attachmentUrl, attachmentName, replyTo?.id || null);
-      if (pending?.imageUrl) URL.revokeObjectURL(pending.imageUrl);
-      setPending(null); setInput(""); setReplyTo(null);
+      if (!savedInput && !attachmentUrl) {
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        return;
+      }
+      const created = await api.sendMessageRest(
+        screen,
+        savedInput,
+        attachmentUrl,
+        attachmentName,
+        savedReply?.id || null
+      );
+      // Replace temp bubble with real server message (still outgoing / right side)
+      const partner = currentChat?.name || "Peer";
+      const mapped = mapMessage(created || {}, user?.id, partner);
+      mapped.outgoing = true; // force right side even if senderId shape differs
+      mapped.status = mapped.status || "delivered";
+      if (!mapped.text && savedInput) mapped.text = savedInput;
+      if (savedPending?.type === "image" && !mapped.imageUrl && attachmentUrl) {
+        mapped.type = "image";
+        mapped.imageUrl = attachmentUrl;
+      }
+      setMessages((prev) =>
+        prev.map((m) => (String(m.id) === tempId ? { ...mapped, id: mapped.id || created?.id || tempId } : m))
+      );
+      // Revoke blob URL after a short delay so the optimistic image still paints
+      if (savedPending?.imageUrl?.startsWith("blob:")) {
+        setTimeout(() => URL.revokeObjectURL(savedPending.imageUrl), 30000);
+      }
       await refreshChats();
     } catch (err) {
+      // Roll back optimistic bubble
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setInput(savedInput);
+      if (savedPending) setPending(savedPending);
+      if (savedReply) setReplyTo(savedReply);
       setLoadError(err.message || "Couldn't send message.");
+    }
+  };
+
+  const openDelete = () => {
+    if (modal?.msg) {
+      setDeleteMsg(modal.msg);
+      setModal(null);
     }
   };
   const pickImage = (e) => {
