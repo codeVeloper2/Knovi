@@ -1935,3 +1935,12 @@
   .ar-challenge-actions { flex-direction: column; }
   .ar-challenge-actions button { width: 100%; }
 }
+
+
+/* Rich tutor formatting */
+.ar-rich h2, .ar-rich h3, .ar-rich h4 { margin: 18px 0 8px; line-height: 1.3; }
+.ar-rich h2:first-child, .ar-rich h3:first-child, .ar-rich h4:first-child { margin-top: 0; }
+.ar-math { display: inline-block; vertical-align: -0.12em; margin: 0 0.12em; }
+.ar-math-display { display: block; overflow-x: auto; margin: 12px 0; padding: 4px 0; text-align: center; }
+.ar-math-fallback { white-space: pre-wrap; }
+.ar-rich mark.ar-rich-highlight { padding: 0.08em 0.28em; border-radius: 0.3em; }

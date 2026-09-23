@@ -10,6 +10,8 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import * as api from "../../api";
 import { TutorAvatar } from "./AISessionSetup";
+import katex from "katex";
+import "katex/dist/katex.min.css";
 import "../../styles/ai-room.css";
 
 function statusToPhase(status, hasMessages) {
@@ -1130,12 +1132,15 @@ function RichText({ content, onCopy, copiedId }) {
       continue;
     }
 
-    // Markdown heading.
-    const heading = trimmed.match(/^(#{1,6})\s+(.+?)\s*#*$/);
-    if (heading) {
-      const level = Math.min(4, heading[1].length);
+    // Heading syntax used by the tutor: `=== Heading` (also accepts `=== Heading ===`).
+    // Keep normal Markdown headings working too, but never expose the raw marker.
+    const equalsHeading = trimmed.match(/^={3,6}\s+(.+?)(?:\s+={3,6})?$/);
+    const markdownHeading = trimmed.match(/^(#{1,6})\s+(.+?)\s*#*$/);
+    if (equalsHeading || markdownHeading) {
+      const headingText = equalsHeading ? equalsHeading[1].trim() : markdownHeading[2];
+      const level = equalsHeading ? Math.min(3, Math.max(2, trimmed.match(/^={3,6}/)[0].length - 1)) : Math.min(4, markdownHeading[1].length);
       const Tag = level === 1 ? "h2" : level === 2 ? "h3" : "h4";
-      blocks.push(<Tag key={`heading-${i}`}>{inlineMarkdown(heading[2])}</Tag>);
+      blocks.push(<Tag key={`heading-${i}`}>{inlineMarkdown(headingText)}</Tag>);
       i += 1;
       continue;
     }
@@ -1242,11 +1247,35 @@ function splitTableRow(line) {
   return value.split("|").map(cell => cell.trim());
 }
 
+function renderMath(latex, displayMode = false) {
+  try {
+    return (
+      <span
+        className={displayMode ? "ar-math ar-math-display" : "ar-math"}
+        dangerouslySetInnerHTML={{
+          __html: katex.renderToString(latex.trim(), { displayMode, throwOnError: false, strict: "ignore" })
+        }}
+      />
+    );
+  } catch {
+    return <code className="ar-math-fallback">{latex}</code>;
+  }
+}
+
 function inlineMarkdown(text) {
-  return String(text).split(/(==[^=\n]+==|\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\n]+\*|_[^_\n]+_|~~[^~]+~~)/g).map((p, i) => {
+  const source = String(text);
+  // Parse LaTeX delimiters before Markdown emphasis so `\(AM = MB\)` is
+  // rendered as mathematics instead of exposing the raw `\(` / `\)` markers.
+  const tokens = source.split(/(\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$|\\\([\s\S]*?\\\)|\$[^$\n]+\$|==[^=\n]+==|\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\n]+\*|_[^_\n]+_|~~[^~]+~~)/g);
+  return tokens.map((p, i) => {
+    if (!p) return null;
+    if (p.startsWith("\\[") && p.endsWith("\\]")) return <span key={i}>{renderMath(p.slice(2, -2), true)}</span>;
+    if (p.startsWith("$$") && p.endsWith("$$")) return <span key={i}>{renderMath(p.slice(2, -2), true)}</span>;
+    if (p.startsWith("\\(") && p.endsWith("\\)")) return <span key={i}>{renderMath(p.slice(2, -2))}</span>;
+    if (p.startsWith("$") && p.endsWith("$") && p.length > 2) return <span key={i}>{renderMath(p.slice(1, -1))}</span>;
     if (p.startsWith("==") && p.endsWith("==")) return <mark key={i} className="ar-rich-highlight">{p.slice(2, -2)}</mark>;
     if ((p.startsWith("**") && p.endsWith("**")) || (p.startsWith("__") && p.endsWith("__"))) return <strong key={i}>{p.slice(2, -2)}</strong>;
-    if ((p.startsWith("~~") && p.endsWith("~~"))) return <del key={i}>{p.slice(2, -2)}</del>;
+    if (p.startsWith("~~") && p.endsWith("~~")) return <del key={i}>{p.slice(2, -2)}</del>;
     if ((p.startsWith("*") && p.endsWith("*")) || (p.startsWith("_") && p.endsWith("_"))) return <em key={i}>{p.slice(1, -1)}</em>;
     if (p.startsWith("`") && p.endsWith("`")) return <code key={i}>{p.slice(1, -1)}</code>;
     return p;
