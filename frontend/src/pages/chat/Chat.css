@@ -292,7 +292,7 @@
     padding: 0 !important;
     margin: 0 !important;
     padding-top: 56px !important;   /* clear the fixed mobile topbar */
-    height: 100vh;
+    height: calc(100vh - 68px);     /* full viewport minus fixed bottom nav */
     min-height: 0;
     display: flex;
     flex-direction: column;
@@ -301,9 +301,8 @@
   .pu-app {
     flex: 1;
     min-height: 0;
-    /* fill the space between topbar and bottom nav */
-    height: calc(100vh - 56px - 68px);
     overflow: hidden;
+    /* no fixed height — parent controls it */
   }
   .pu-in-chat .pu-conversation { margin-top: 0; }
 }

@@ -633,7 +633,7 @@ export default function Chat() {
 
       <div className="pu-desktop-shell">
         <main className={`pu-list-screen ${screen ? "has-selection" : ""}`}>
-          <div className="pu-list-title-row"><h1>Chats</h1><button className="pu-new-chat-btn" aria-label="New chat"><PenLine size={17} /></button></div>
+          <div className="pu-list-title-row"><h1>Chats</h1><button className="pu-new-chat-btn" aria-label="New chat" onClick={() => navigate("/app/discover")}><PenLine size={17} /></button></div>
           <label className="pu-search"><Search size={16} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search chats..." /></label>
           <div className="pu-tabs">
             <button className={tab === "all" ? "active" : ""} onClick={() => setTab("all")}>All</button>
