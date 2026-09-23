@@ -606,6 +606,16 @@ export default function AILearningRoom() {
       } else if (msg.extra?.action === "next_task") {
         const nextIndex = Number(msg.extra?.actionData?.task_index);
         if (Number.isInteger(nextIndex) && nextIndex >= 0) {
+          // The transition confirmation is the completion event for the
+          // previous task. Update the roadmap immediately so the UI does not
+          // briefly (or permanently, if a stale session payload is returned)
+          // show the previous task as current. The backend remains the source
+          // of truth and the fresh session state below reconciles it.
+          const completedIndex = nextIndex - 1;
+          if (completedIndex >= 0) {
+            setCompletedTaskIndexes(prev => [...new Set([...prev, completedIndex])]);
+          }
+          setCurrentTaskIndex(nextIndex);
           setAiWorking(true);
           try {
             await api.teachConcept(sessionId, nextIndex);

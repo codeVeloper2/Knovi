@@ -138,6 +138,26 @@ def test_learning_state_does_not_mark_task_complete_until_transition_confirmatio
     assert state["waitingForTaskTransition"] is False
 
 
+
+
+def test_learning_state_accepts_confirmed_transition_as_completion_marker():
+    from app.models.ai_learning import AISessionMessage
+
+    confirmation = AISessionMessage(
+        id=10, session_id=1, role="ai", message_type="teaching",
+        content="Great — let’s move to the next part.",
+        sequence=1,
+        extra={
+            "taskCompleted": False,
+            "taskIndex": 0,
+            "currentTaskIndex": 1,
+            "transitionConfirmed": True,
+        },
+    )
+    state = _derive_learning_state([confirmation])
+    assert state["completedTaskIndexes"] == [0]
+    assert state["currentTaskIndex"] == 1
+
 def test_long_tutor_response_is_split_into_at_most_three_chunks():
     text = " ".join(["This is a teaching sentence that explains the idea clearly."] * 80)
     chunks = _split_ai_response(text)

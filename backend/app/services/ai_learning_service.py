@@ -280,9 +280,20 @@ def _derive_learning_state(messages: list) -> dict:
         if message.role == "ai":
             latest_ai_seq = max(latest_ai_seq, message.sequence)
         extra = message.extra or {}
-        if message.role == "ai" and extra.get("taskCompleted") is True:
-            try: completed.add(int(extra.get("taskIndex")))
-            except (TypeError, ValueError): pass
+        # A confirmed transition is the canonical completion event.
+        # Keep accepting taskCompleted for backwards compatibility with older
+        # persisted transition messages, but do not require both flags.
+        if message.role == "ai" and (
+            extra.get("taskCompleted") is True
+            or extra.get("transitionConfirmed") is True
+        ):
+            try:
+                task_index = int(extra.get("taskIndex"))
+                current_index = int(extra.get("currentTaskIndex"))
+                if task_index >= 0 and current_index == task_index + 1:
+                    completed.add(task_index)
+            except (TypeError, ValueError):
+                pass
         marker = extra.get("currentTaskIndex")
         if marker is None and message.message_type in ("teaching", "reteach", "timer_start"):
             marker = extra.get("taskIndex")
