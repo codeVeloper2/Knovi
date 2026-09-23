@@ -97,6 +97,7 @@ const _tts = {
   charIndex: 0,     // last onboundary charIndex (for mid-word accuracy)
   utterance: null,
   onEnd: null,
+  voice: null,      // pinned voice for the current session — never re-picked on resume
 };
 
 function _speakFrom(wordIndex, { onStart, onEnd } = {}) {
@@ -108,7 +109,9 @@ function _speakFrom(wordIndex, { onStart, onEnd } = {}) {
   _tts.utterance = u;
   _tts.onEnd = onEnd;
 
-  const voice = _pickVoice();
+  // Use the voice pinned when speakText() was first called so resume never
+  // switches to a different voice mid-message.
+  const voice = _tts.voice;
   if (voice) { u.voice = voice; u.lang = voice.lang; }
   u.rate = 0.88;
   u.pitch = 1.05;
@@ -148,6 +151,8 @@ function speakText(text, { onStart, onEnd } = {}) {
   _tts.words = clean.split(/\s+/);
   _tts.wordIndex = 0;
   _tts.charIndex = 0;
+  // Pin the voice now so every _speakFrom call (including resume) uses the same one.
+  _tts.voice = _pickVoice() || null;
 
   function go() { _speakFrom(0, { onStart, onEnd }); }
 
@@ -177,6 +182,7 @@ function _stopSpeech() {
   window.speechSynthesis.cancel();
   _tts.wordIndex = 0;
   _tts.utterance = null;
+  _tts.voice = null;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════ */

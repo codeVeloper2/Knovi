@@ -1350,7 +1350,14 @@ async def create_idle_nudge(session_id: int, user_id: int, db: AsyncSession, nud
         context_lines.append(f"{role_label}: {snippet}")
     context_snippet = "\n".join(context_lines)
 
-    concept_name = getattr(session, "concept_name", None) or ""
+    # Load the concept name from the curriculum chain (session model has no concept_name field)
+    try:
+        _, _, concept_obj = await _load_curriculum_chain(
+            session.subject_id, session.topic_id, session.concept_id, db
+        )
+        concept_name = concept_obj.name or ""
+    except Exception:
+        concept_name = ""
     nudge_prompt = (
         f"You are UPRAD, a warm and encouraging AI tutor.\n"
         f"The student has gone quiet after your last message. Write a short friendly nudge (1-2 sentences max).\n\n"
