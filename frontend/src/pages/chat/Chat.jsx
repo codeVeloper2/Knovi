@@ -263,12 +263,12 @@ export default function Chat() {
 
   const openChat = async (id) => {
     setScreen(String(id));
-    navigate(`/chat/${id}`, { replace: true });
+    navigate(`/app/chat/${id}`, { replace: true });
     setReplyTo(null); setPending(null); setModal(null);
     await loadMessages(String(id));
   };
   const closeChat = () => {
-    setScreen(null); navigate("/chat", { replace: true });
+    setScreen(null); navigate("/app/chat", { replace: true });
     setReplyTo(null); setPending(null); setModal(null);
   };
 
