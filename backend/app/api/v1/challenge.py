@@ -24,6 +24,7 @@ from app.schemas.challenge import (
     ChallengeWSHeartbeatEvent,
     ChallengeWSReadyEvent,
     ChallengeWSReconnectEvent,
+    ChallengeMatchJoinRequest, ChallengeMatchStatusOut, AIChallengeCreateRequest,
 )
 from app.services import challenge_service, challenge_runtime
 from app.services.challenge_ws_manager import manager
@@ -85,6 +86,62 @@ async def create_challenge(
     )
     state = await challenge_service.get_challenge_state(challenge.id, user.id, session)
     return {"challenge": state, "message": "Challenge sent. Waiting for the opponent to accept."}
+
+
+@router.post("/challenges/matchmaking/join", response_model=ChallengeMatchStatusOut)
+async def join_challenge_matchmaking(
+    body: ChallengeMatchJoinRequest,
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    queue, challenge = await challenge_service.join_matchmaking(
+        user_id=user.id,
+        subject_id=body.subject_id,
+        topic_id=body.topic_id,
+        concept_id=body.concept_id,
+        source_session_id=body.source_session_id,
+        class_level=user.grade or "",
+        question_count=body.question_count,
+        db=session,
+    )
+    if challenge is not None:
+        await _broadcast_update(challenge.id, "challenge_match_found")
+    return await challenge_service.matchmaking_status(user.id, session)
+
+
+@router.get("/challenges/matchmaking/status", response_model=ChallengeMatchStatusOut)
+async def challenge_matchmaking_status(
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    return await challenge_service.matchmaking_status(user.id, session)
+
+
+@router.delete("/challenges/matchmaking", response_model=ChallengeMatchStatusOut)
+async def leave_challenge_matchmaking(
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    return {**await challenge_service.leave_matchmaking(user.id, session), "queueId": None, "challengeId": None}
+
+
+@router.post("/challenges/ai", response_model=ChallengeActionOut, status_code=status.HTTP_201_CREATED)
+async def create_ai_challenge(
+    body: AIChallengeCreateRequest,
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    challenge = await challenge_service.create_ai_challenge(
+        user_id=user.id, subject_id=body.subject_id, topic_id=body.topic_id,
+        concept_id=body.concept_id, source_session_id=body.source_session_id,
+        question_count=body.question_count, db=session,
+    )
+    await challenge_service.prepare_challenge(challenge.id, user.id, session)
+    challenge, _ = await challenge_service.mark_ready(challenge.id, user.id, session)
+    state = await challenge_service.get_challenge_state(challenge.id, user.id, session)
+    if state.get("status") == "countdown":
+        await challenge_runtime.schedule_from_state(challenge.id, state)
+    return {"challenge": state, "message": "AI Challenge is ready. Your challenge countdown will begin now."}
 
 
 @router.get("/challenges", response_model=ChallengeListOut)

@@ -220,6 +220,9 @@ export default function AILearningRoom() {
   const [copiedId, setCopiedId] = useState(null);
   const [savedMessageIds, setSavedMessageIds] = useState(() => new Set());
   const [typingMessageId, setTypingMessageId] = useState(null);
+  const [challengeMatch, setChallengeMatch] = useState(null);
+  const [challengeBusy, setChallengeBusy] = useState(false);
+  const [challengeDismissed, setChallengeDismissed] = useState(false);
 
   const bottomRef = useRef(null);
   const timerRef = useRef(null);
@@ -256,6 +259,11 @@ export default function AILearningRoom() {
   const teachingLocked = phase === "practice";
   const canType = ["teaching", "reteaching", "summary"].includes(phase) && !aiWorking;
   const answeredCount = Object.keys(checkResults).length;
+  const finalTaskMessage = messages
+    .filter(m => m?.role === "ai" && m?.extra?.finalTask === true && m?.extra?.taskCompleted === true)
+    .sort((a, b) => Number(a.sequence || 0) - Number(b.sequence || 0))
+    .at(-1) || null;
+  const challengeContextReady = Boolean(finalTaskMessage && session?.status !== "abandoned");
 
   const phaseLabel = {
     preparing: "Preparing lesson",
@@ -270,6 +278,72 @@ export default function AILearningRoom() {
     ttsRef.current = ttsEnabled;
     try { localStorage.setItem("peerup.learningRoom.ttsEnabled", String(ttsEnabled)); } catch {}
   }, [ttsEnabled]);
+
+  /* ── Challenge matchmaking from the completed Learning Room ─────────── */
+  useEffect(() => {
+    if (!challengeContextReady || challengeDismissed || !session) return;
+    let cancelled = false;
+    let pollId = null;
+
+    async function startMatchmaking() {
+      try {
+        const result = await api.joinChallengeMatchmaking({
+          subjectId: session.subjectId,
+          topicId: session.topicId,
+          conceptId: session.conceptId,
+          sourceSessionId: Number(sessionId),
+          questionCount: 5,
+        });
+        if (!cancelled) setChallengeMatch(result || { status: "waiting" });
+      } catch (err) {
+        if (!cancelled) setChallengeMatch({ status: "error", message: err?.message || "Could not start peer matchmaking." });
+      }
+    }
+
+    startMatchmaking();
+
+    pollId = window.setInterval(async () => {
+      try {
+        const result = await api.getChallengeMatchmakingStatus();
+        if (cancelled) return;
+        setChallengeMatch(result || { status: "none" });
+        if (["matched", "cancelled", "expired", "none"].includes(result?.status)) {
+          window.clearInterval(pollId);
+          pollId = null;
+        }
+      } catch (_) { /* keep the existing matchmaking card alive */ }
+    }, 3500);
+
+    return () => {
+      cancelled = true;
+      if (pollId) window.clearInterval(pollId);
+    };
+  }, [challengeContextReady, challengeDismissed, session?.subjectId, session?.topicId, session?.conceptId, sessionId]);
+
+  async function startAIChallengeFromRoom() {
+    if (!session || challengeBusy) return;
+    setChallengeBusy(true);
+    setError(null);
+    try {
+      if (challengeMatch?.status === "waiting" || challengeMatch?.status === "matched") {
+        try { await api.leaveChallengeMatchmaking(); } catch (_) {}
+      }
+      const result = await api.createAIChallenge({
+        subjectId: session.subjectId,
+        topicId: session.topicId,
+        conceptId: session.conceptId,
+        sourceSessionId: Number(sessionId),
+        questionCount: 5,
+      });
+      const id = result?.challenge?.id;
+      if (!id) throw new Error("The AI Challenge was created without a challenge ID.");
+      navigate(`/app/challenge/${id}`);
+    } catch (err) {
+      setError(err?.message || "Could not start the AI Challenge.");
+    } finally {
+      setChallengeBusy(false);
+    }
+  }
 
   /* ── Idle nudge ─────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -715,6 +789,18 @@ export default function AILearningRoom() {
                 />
               ))}
 
+            {challengeContextReady && !challengeDismissed && (
+              <ChallengeMatchCard
+                match={challengeMatch}
+                subjectName={subjectName}
+                topicName={topicName}
+                conceptName={conceptName}
+                busy={challengeBusy}
+                onChallengeAI={startAIChallengeFromRoom}
+                onContinue={() => setChallengeDismissed(true)}
+              />
+            )}
+
             {aiWorking && <AgentThinking />}
             {phase === "preparing" && <PreparingCard />}
             {phase === "studying" && <StudyCard seconds={timerSeconds} task={currentTask} />}
@@ -906,6 +992,29 @@ function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave, is
 }
 
 /* ─── Sidebar components ─────────────────────────────────────────────── */
+function ChallengeMatchCard({ match, subjectName, topicName, conceptName, busy, onChallengeAI, onContinue }) {
+  const status = match?.status || "searching";
+  if (status === "error") {
+    return <div className="ar-challenge-card ar-challenge-card--error">
+      <div className="ar-challenge-icon">⚔️</div>
+      <div className="ar-challenge-copy"><span className="ar-eyebrow">CHALLENGE</span><h3>We couldn't start peer matchmaking</h3><p>{match.message || "You can still challenge UPRAD."}</p></div>
+      <div className="ar-challenge-actions"><button type="button" onClick={onChallengeAI} disabled={busy}>{busy ? "Starting…" : "Challenge with UPRAD"}</button><button type="button" className="secondary" onClick={onContinue}>Continue learning</button></div>
+    </div>;
+  }
+  if (status === "matched" && match.challengeId) {
+    return <div className="ar-challenge-card ar-challenge-card--found">
+      <div className="ar-challenge-icon">⚔️</div>
+      <div className="ar-challenge-copy"><span className="ar-eyebrow">PEER CHALLENGE READY</span><h3>Peers found for your topic</h3><p>Another student has completed the same preparation for <strong>{conceptName}</strong>.</p><small>{subjectName}{topicName ? ` · ${topicName}` : ""}</small></div>
+      <div className="ar-challenge-actions"><button type="button" onClick={() => window.location.assign(`/app/challenge/${match.challengeId}`)}>Start Peer Challenge →</button><button type="button" className="secondary" onClick={onContinue}>Continue learning</button></div>
+    </div>;
+  }
+  return <div className="ar-challenge-card">
+    <div className="ar-challenge-icon">⚔️</div>
+    <div className="ar-challenge-copy"><span className="ar-eyebrow">CHALLENGE MATCHMAKING</span><h3>{status === "waiting" ? "No peer found yet" : "Looking for a peer…"}</h3><p>{status === "waiting" ? "I couldn't find a peer ready for this topic right now. You can keep learning or challenge UPRAD instead." : "UPRAD is looking for a student who completed the same topic."}</p></div>
+    <div className="ar-challenge-actions"><button type="button" onClick={onChallengeAI} disabled={busy}>{busy ? "Starting…" : "Challenge with UPRAD"}</button><button type="button" className="secondary" onClick={onContinue}>Continue learning</button></div>
+  </div>;
+}
+
 function SidebarPlan({ plan, current, completed, progress, onClose }) {
   return <div className="ar-panel-inner">
     <div className="ar-panel-head"><div><span className="ar-eyebrow">ROADMAP</span><h2>Learning plan</h2></div><button className="ar-mobile-close" onClick={onClose}>×</button></div>

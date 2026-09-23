@@ -743,6 +743,35 @@ export function getChallengeReview(challengeId) {
   return get(`/api/challenges/${challengeId}/review`);
 }
 
+export function joinChallengeMatchmaking({ subjectId, topicId, conceptId, sourceSessionId, questionCount = 5 }) {
+  return post("/api/challenges/matchmaking/join", {
+    subject_id: Number(subjectId),
+    topic_id: Number(topicId),
+    concept_id: Number(conceptId),
+    source_session_id: Number(sourceSessionId),
+    question_count: Number(questionCount),
+  });
+}
+
+export function getChallengeMatchmakingStatus() {
+  return get("/api/challenges/matchmaking/status");
+}
+
+export function leaveChallengeMatchmaking() {
+  return request("/api/challenges/matchmaking", { method: "DELETE", auth: true });
+}
+
+export function createAIChallenge({ subjectId, topicId, conceptId, sourceSessionId, questionCount = 5 }) {
+  return post("/api/challenges/ai", {
+    subject_id: Number(subjectId),
+    topic_id: Number(topicId),
+    concept_id: Number(conceptId),
+    source_session_id: Number(sourceSessionId),
+    question_count: Number(questionCount),
+  });
+}
+
+
 export function openChallengeSocket(challengeId, handlers = {}) {
   const wsBase = (API_BASE || "").replace(/^http/, "ws") || `ws://${window.location.host}`;
   const token = getToken();

@@ -21,6 +21,7 @@ from app.models.challenge import (
     ChallengeQuestion,
     ChallengeResult,
     ChallengeSession,
+    ChallengeMatchQueue,
 )
 from app.models.curriculum import Concept, LearningObjective, Subject, Topic
 from app.models.user import User
@@ -99,12 +100,14 @@ def _transition(challenge: ChallengeSession, new_status: str) -> None:
 def _role(challenge: ChallengeSession, user_id: int) -> str:
     if challenge.challenger_id == user_id:
         return "challenger"
-    if challenge.opponent_id == user_id:
+    if challenge.opponent_id is not None and challenge.opponent_id == user_id:
         return "opponent"
     raise HTTPException(403, "You are not a participant in this challenge.")
 
 
-def _participant_ids(challenge: ChallengeSession) -> tuple[int, int]:
+def _participant_ids(challenge: ChallengeSession) -> tuple[int, ...]:
+    if challenge.challenge_mode == "ai" or challenge.opponent_id is None:
+        return (challenge.challenger_id,)
     return challenge.challenger_id, challenge.opponent_id
 
 
@@ -356,6 +359,169 @@ async def create_challenge(
     return challenge
 
 
+async def _load_and_validate_curriculum(
+    *, subject_id: int, topic_id: int, concept_id: int, db: AsyncSession
+) -> tuple[Subject, Topic, Concept]:
+    subject = (await db.execute(select(Subject).where(Subject.id == subject_id, Subject.is_active.is_(True)))).scalar_one_or_none()
+    topic = (await db.execute(select(Topic).options(selectinload(Topic.learning_objectives)).where(Topic.id == topic_id))).scalar_one_or_none()
+    concept = (await db.execute(select(Concept).where(Concept.id == concept_id))).scalar_one_or_none()
+    if not subject or not topic or not concept:
+        raise HTTPException(404, "The selected curriculum item was not found.")
+    if topic.subject_id != subject.id or concept.topic_id != topic.id:
+        raise HTTPException(422, "The supplied curriculum hierarchy is invalid.")
+    return subject, topic, concept
+
+
+async def _load_completed_session(
+    *, user_id: int, session_id: int, subject_id: int, topic_id: int, concept_id: int, db: AsyncSession
+) -> AILearningSession:
+    session = (await db.execute(
+        select(AILearningSession)
+        .options(selectinload(AILearningSession.teaching), selectinload(AILearningSession.questions).selectinload(AISessionQuestion.answers), selectinload(AILearningSession.summary))
+        .where(AILearningSession.id == session_id, AILearningSession.user_id == user_id)
+    )).scalar_one_or_none()
+    if not session:
+        raise HTTPException(404, "The AI learning session was not found.")
+    if (session.subject_id, session.topic_id, session.concept_id) != (subject_id, topic_id, concept_id):
+        raise HTTPException(409, "The learning session does not match the selected curriculum context.")
+    if session.status != "completed":
+        raise HTTPException(409, "You must complete all AI learning checks for this topic before entering a Challenge.")
+    if not session.teaching:
+        raise HTTPException(409, "The completed AI learning session has no teaching evidence.")
+    return session
+
+
+async def create_peer_challenge_from_sessions(
+    *, challenger_id: int, opponent_id: int, subject_id: int, topic_id: int, concept_id: int,
+    source_session_a_id: int, source_session_b_id: int, question_count: int, db: AsyncSession,
+    commit: bool = True,
+) -> ChallengeSession:
+    if challenger_id == opponent_id:
+        raise HTTPException(400, "You cannot challenge yourself.")
+    if question_count < MIN_QUESTION_COUNT or question_count > MAX_QUESTION_COUNT:
+        raise HTTPException(422, f"question_count must be between {MIN_QUESTION_COUNT} and {MAX_QUESTION_COUNT}.")
+    subject, topic, concept = await _load_and_validate_curriculum(
+        subject_id=subject_id, topic_id=topic_id, concept_id=concept_id, db=db
+    )
+    session_a = await _load_completed_session(user_id=challenger_id, session_id=source_session_a_id, subject_id=subject_id, topic_id=topic_id, concept_id=concept_id, db=db)
+    session_b = await _load_completed_session(user_id=opponent_id, session_id=source_session_b_id, subject_id=subject_id, topic_id=topic_id, concept_id=concept_id, db=db)
+    try:
+        await load_challenge_context(challenger_id=challenger_id, opponent_id=opponent_id, subject=subject, topic=topic, concept=concept, session_a=session_a, session_b=session_b)
+    except ChallengePreparationError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    active_statuses = {"pending", "accepted", "preparing", "waiting", "countdown", "question_active", "waiting_for_opponent", "question_reveal", "next_question"}
+    duplicate = (await db.execute(select(ChallengeSession.id).where(
+        or_(and_(ChallengeSession.challenger_id == challenger_id, ChallengeSession.opponent_id == opponent_id), and_(ChallengeSession.challenger_id == opponent_id, ChallengeSession.opponent_id == challenger_id)),
+        ChallengeSession.concept_id == concept_id, ChallengeSession.status.in_(active_statuses)
+    ).limit(1))).scalar_one_or_none()
+    if duplicate is not None:
+        raise HTTPException(409, "These students already have an active challenge for this concept.")
+    challenge = ChallengeSession(
+        challenger_id=challenger_id, opponent_id=opponent_id, challenge_mode="peer",
+        subject_id=subject_id, topic_id=topic_id, concept_id=concept_id,
+        source_session_a_id=session_a.id, source_session_b_id=session_b.id,
+        status="pending", question_count=question_count, current_question=0,
+        expires_at=now_utc() + PENDING_TTL,
+        challenge_metadata={"version": 2, "source": "automatic_matchmaking", "eligibility": "completed_ai_learning"},
+    )
+    db.add(challenge)
+    try:
+        if commit:
+            await db.commit(); await db.refresh(challenge)
+        else:
+            await db.flush()
+    except IntegrityError as exc:
+        await db.rollback(); raise HTTPException(409, "This peer challenge is already being created.") from exc
+    return challenge
+
+
+async def create_ai_challenge(
+    *, user_id: int, subject_id: int, topic_id: int, concept_id: int, source_session_id: int, question_count: int, db: AsyncSession
+) -> ChallengeSession:
+    if question_count < MIN_QUESTION_COUNT or question_count > MAX_QUESTION_COUNT:
+        raise HTTPException(422, f"question_count must be between {MIN_QUESTION_COUNT} and {MAX_QUESTION_COUNT}.")
+    subject, topic, concept = await _load_and_validate_curriculum(subject_id=subject_id, topic_id=topic_id, concept_id=concept_id, db=db)
+    source = await _load_completed_session(user_id=user_id, session_id=source_session_id, subject_id=subject_id, topic_id=topic_id, concept_id=concept_id, db=db)
+    active = (await db.execute(select(ChallengeSession.id).where(
+        ChallengeSession.challenger_id == user_id, ChallengeSession.challenge_mode == "ai", ChallengeSession.concept_id == concept_id,
+        ChallengeSession.status.in_({"accepted", "preparing", "waiting", "countdown", "question_active", "waiting_for_opponent", "question_reveal", "next_question"})
+    ).limit(1))).scalar_one_or_none()
+    if active is not None:
+        raise HTTPException(409, "You already have an active AI Challenge for this concept.")
+    challenge = ChallengeSession(
+        challenger_id=user_id, opponent_id=None, challenge_mode="ai",
+        subject_id=subject_id, topic_id=topic_id, concept_id=concept_id,
+        source_session_a_id=source.id, source_session_b_id=source.id,
+        status="accepted", question_count=question_count, current_question=0,
+        accepted_at=now_utc(), expires_at=now_utc() + ACCEPTED_TTL,
+        challenge_metadata={"version": 2, "source": "ai_fallback", "eligibility": "completed_ai_learning"},
+    )
+    db.add(challenge); await db.commit(); await db.refresh(challenge)
+    return challenge
+
+
+async def join_matchmaking(
+    *, user_id: int, subject_id: int, topic_id: int, concept_id: int, source_session_id: int, class_level: str, question_count: int, db: AsyncSession
+) -> tuple[ChallengeMatchQueue, ChallengeSession | None]:
+    source = await _load_completed_session(user_id=user_id, session_id=source_session_id, subject_id=subject_id, topic_id=topic_id, concept_id=concept_id, db=db)
+    await _load_and_validate_curriculum(subject_id=subject_id, topic_id=topic_id, concept_id=concept_id, db=db)
+    now = now_utc()
+    await db.execute(
+        ChallengeMatchQueue.__table__.update().where(ChallengeMatchQueue.status == "waiting", ChallengeMatchQueue.expires_at <= now).values(status="expired")
+    )
+    existing = (await db.execute(select(ChallengeMatchQueue).where(ChallengeMatchQueue.user_id == user_id, ChallengeMatchQueue.status.in_({"waiting", "matched"})).order_by(ChallengeMatchQueue.created_at.desc()).limit(1))).scalar_one_or_none()
+    if existing:
+        challenge = None
+        if existing.challenge_id:
+            challenge = await db.get(ChallengeSession, existing.challenge_id)
+        return existing, challenge
+
+    candidate = (await db.execute(
+        select(ChallengeMatchQueue).where(
+            ChallengeMatchQueue.status == "waiting", ChallengeMatchQueue.user_id != user_id,
+            ChallengeMatchQueue.subject_id == subject_id, ChallengeMatchQueue.topic_id == topic_id, ChallengeMatchQueue.concept_id == concept_id,
+            ChallengeMatchQueue.class_level == class_level, ChallengeMatchQueue.expires_at > now,
+        ).order_by(ChallengeMatchQueue.created_at.asc()).with_for_update(skip_locked=True).limit(1)
+    )).scalar_one_or_none()
+    if candidate is None:
+        queue = ChallengeMatchQueue(user_id=user_id, subject_id=subject_id, topic_id=topic_id, concept_id=concept_id, source_session_id=source.id, class_level=class_level, status="waiting", expires_at=now + PENDING_TTL)
+        db.add(queue); await db.commit(); await db.refresh(queue)
+        return queue, None
+
+    challenge = await create_peer_challenge_from_sessions(
+        challenger_id=candidate.user_id, opponent_id=user_id, subject_id=subject_id, topic_id=topic_id, concept_id=concept_id,
+        source_session_a_id=candidate.source_session_id, source_session_b_id=source.id, question_count=question_count, db=db, commit=False
+    )
+    matched_at = now_utc()
+    # Matchmaking means both students have already opted into the Challenge;
+    # there is no second manual invitation/acceptance step.
+    challenge.status = "accepted"
+    challenge.accepted_at = matched_at
+    challenge.expires_at = matched_at + ACCEPTED_TTL
+    candidate.status = "matched"; candidate.challenge_id = challenge.id; candidate.matched_at = matched_at
+    queue = ChallengeMatchQueue(user_id=user_id, subject_id=subject_id, topic_id=topic_id, concept_id=concept_id, source_session_id=source.id, class_level=class_level, status="matched", challenge_id=challenge.id, matched_at=matched_at, expires_at=matched_at + PENDING_TTL)
+    db.add(queue); await db.commit(); await db.refresh(candidate); await db.refresh(queue)
+    return queue, challenge
+
+
+async def matchmaking_status(user_id: int, db: AsyncSession) -> dict[str, Any]:
+    row = (await db.execute(select(ChallengeMatchQueue).where(ChallengeMatchQueue.user_id == user_id, ChallengeMatchQueue.status.in_({"waiting", "matched"})).order_by(ChallengeMatchQueue.created_at.desc()).limit(1))).scalar_one_or_none()
+    if not row:
+        return {"status": "none", "queueId": None, "challengeId": None}
+    if row.status == "waiting" and row.expires_at <= now_utc():
+        row.status = "expired"; await db.commit()
+        return {"status": "expired", "queueId": row.id, "challengeId": None}
+    return {"status": row.status, "queueId": row.id, "challengeId": row.challenge_id, "subjectId": row.subject_id, "topicId": row.topic_id, "conceptId": row.concept_id}
+
+
+async def leave_matchmaking(user_id: int, db: AsyncSession) -> dict[str, Any]:
+    rows = (await db.execute(select(ChallengeMatchQueue).where(ChallengeMatchQueue.user_id == user_id, ChallengeMatchQueue.status == "waiting").with_for_update())).scalars().all()
+    for row in rows:
+        row.status = "cancelled"
+    await db.commit()
+    return {"status": "cancelled", "cancelled": len(rows)}
+
+
 async def accept_challenge(
     challenge_id: int,
     user_id: int,
@@ -484,7 +650,7 @@ async def prepare_challenge(
         )
         source_b = await _load_frozen_source_session(
             challenge.source_session_b_id,
-            owner_id=challenge.opponent_id,
+            owner_id=challenge.opponent_id if challenge.opponent_id is not None else challenge.challenger_id,
             concept_id=challenge.concept_id,
             db=db,
         )
@@ -495,7 +661,7 @@ async def prepare_challenge(
 
         context_a, context_b, shared_objectives = await load_challenge_context(
             challenger_id=challenge.challenger_id,
-            opponent_id=challenge.opponent_id,
+            opponent_id=challenge.opponent_id if challenge.opponent_id is not None else challenge.challenger_id,
             subject=subject,
             topic=topic,
             concept=concept,
@@ -1354,7 +1520,12 @@ async def mark_ready(
         raise HTTPException(409, f"Challenge is '{challenge.status}' and cannot be started.")
 
     now = now_utc()
-    if challenge.challenger_id == user_id:
+    if challenge.challenge_mode == "ai":
+        challenge.challenger_ready = True
+        challenge.challenger_ready_at = challenge.challenger_ready_at or now
+        challenge.opponent_ready = True
+        challenge.opponent_ready_at = challenge.opponent_ready_at or now
+    elif challenge.challenger_id == user_id:
         challenge.challenger_ready = True
         challenge.challenger_ready_at = challenge.challenger_ready_at or now
     else:
@@ -1367,7 +1538,7 @@ async def mark_ready(
         challenge.countdown_started_at = now
         challenge.expires_at = now + BATTLE_TTL
         started_countdown = True
-        logger.info("challenge_countdown_started challenge_id=%s", challenge.id)
+        logger.info("challenge_countdown_started challenge_id=%s mode=%s", challenge.id, challenge.challenge_mode)
 
     await db.commit()
     await db.refresh(challenge)
@@ -1643,8 +1814,13 @@ async def get_challenge_state(
     role = _role(challenge, user_id)
 
     subject, topic, concept = await _load_curriculum(challenge, db)
-    users = await _load_users({challenge.challenger_id, challenge.opponent_id}, db)
-    opponent = users[challenge.opponent_id if role == "challenger" else challenge.challenger_id]
+    user_ids = {challenge.challenger_id}
+    if challenge.opponent_id is not None:
+        user_ids.add(challenge.opponent_id)
+    users = await _load_users(user_ids, db)
+    opponent = None
+    if challenge.challenge_mode == "peer" and challenge.opponent_id is not None:
+        opponent = users[challenge.opponent_id if role == "challenger" else challenge.challenger_id]
 
     include_current = challenge.status == "question_reveal"
     if challenge.status in {"completed", "expired"}:
@@ -1709,6 +1885,7 @@ async def get_challenge_state(
     return {
         "id": challenge.id,
         "role": role,
+        "mode": challenge.challenge_mode,
         "status": challenge.status,
         "subjectId": subject.id,
         "topicId": topic.id,
@@ -1735,12 +1912,12 @@ async def get_challenge_state(
             if role == "challenger"
             else challenge.challenger_ready
         ),
-        "opponent": {
+        "opponent": ({
             "id": opponent.id,
             "displayName": opponent.full_name or "PeerUP student",
             "photoURL": opponent.photo_url or "",
             "isOnline": bool(opponent.is_online),
-        },
+        } if opponent is not None else None),
         "currentQuestionData": current_data,
         "scores": score_snapshots,
         "waitingReason": waiting_reason,
@@ -1807,7 +1984,9 @@ async def list_challenges(
     concept_ids = set()
     subject_ids = set()
     for row in rows:
-        user_ids.update((row.challenger_id, row.opponent_id))
+        user_ids.add(row.challenger_id)
+        if row.opponent_id is not None:
+            user_ids.add(row.opponent_id)
         concept_ids.add(row.concept_id)
         subject_ids.add(row.subject_id)
     users = await _load_users(user_ids, db)
@@ -1828,25 +2007,26 @@ async def list_challenges(
     for row in rows:
         role = _role(row, user_id)
         opponent_id = row.opponent_id if role == "challenger" else row.challenger_id
-        opponent = users.get(opponent_id)
+        opponent = users.get(opponent_id) if opponent_id is not None else None
         concept = concepts.get(row.concept_id)
         subject = subjects.get(row.subject_id)
-        if not opponent or not concept or not subject:
+        if not concept or not subject:
             continue
         items.append(
             {
                 "id": row.id,
                 "role": role,
+                "mode": row.challenge_mode,
                 "status": row.status,
                 "conceptId": row.concept_id,
                 "conceptName": concept.name,
                 "subjectName": subject.name,
-                "opponent": {
+                "opponent": ({
                     "id": opponent.id,
                     "displayName": opponent.full_name or "PeerUP student",
                     "photoURL": opponent.photo_url or "",
                     "isOnline": bool(opponent.is_online),
-                },
+                } if opponent is not None else None),
                 "questionCount": row.question_count,
                 "currentQuestion": row.current_question,
                 "createdAt": row.created_at.isoformat(),
@@ -1882,14 +2062,14 @@ async def get_results(
     )
     own = next((row for row in rows if row.user_id == user_id), None)
     opponent = next((row for row in rows if row.user_id != user_id), None)
-    if own is None or opponent is None:
+    if own is None:
+        raise HTTPException(409, "Final results are not ready yet.")
+    if challenge.challenge_mode == "peer" and opponent is None:
         raise HTTPException(409, "Final results are not ready yet.")
 
-    opponent_answered = len(
-        [
-            p for p in opponent.performance
-            if not p.get("timedOut") and p.get("answer") is not None
-        ]
+    opponent_answered = (
+        len([p for p in opponent.performance if not p.get("timedOut") and p.get("answer") is not None])
+        if opponent is not None else 0
     )
 
     return {
@@ -1908,13 +2088,13 @@ async def get_results(
         ),
         "weakAreas": own.weak_areas or [],
         "summary": own.summary,
-        "opponent": {
+        "opponent": ({
             "userId": opponent.user_id,
             "score": opponent.score,
             "accuracy": opponent.accuracy,
             "questionsAnswered": opponent_answered,
             "totalQuestions": len(opponent.performance),
-        },
+        } if opponent is not None else None),
         "perQuestion": own.performance,
         "completedAt": _iso(challenge.completed_at),
     }
@@ -1949,7 +2129,7 @@ async def get_review(
             )
         ).scalars().all()
     )
-    if len(rows) < 2:
+    if len(rows) < (2 if challenge.challenge_mode == "peer" else 1):
         raise HTTPException(409, "Challenge results are not ready yet.")
 
     return {

@@ -9,6 +9,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from app.schemas.base import StrictModel
 
 
+class ChallengeMode(str, Enum):
+    PEER = "peer"
+    AI = "ai"
+
+
 class ChallengeStatus(str, Enum):
     CREATED = "created"
     PENDING = "pending"
@@ -37,6 +42,31 @@ class ChallengeCreateRequest(StrictModel):
     subject_id: int = Field(gt=0)
     topic_id: int = Field(gt=0)
     concept_id: int = Field(gt=0)
+    question_count: int = Field(default=5, ge=3, le=10)
+
+
+class ChallengeMatchJoinRequest(StrictModel):
+    subject_id: int = Field(gt=0)
+    topic_id: int = Field(gt=0)
+    concept_id: int = Field(gt=0)
+    source_session_id: int = Field(gt=0)
+    question_count: int = Field(default=5, ge=3, le=10)
+
+
+class ChallengeMatchStatusOut(BaseModel):
+    status: Literal["none", "waiting", "matched", "expired", "cancelled"]
+    queueId: Optional[int] = None
+    challengeId: Optional[int] = None
+    subjectId: Optional[int] = None
+    topicId: Optional[int] = None
+    conceptId: Optional[int] = None
+
+
+class AIChallengeCreateRequest(StrictModel):
+    subject_id: int = Field(gt=0)
+    topic_id: int = Field(gt=0)
+    concept_id: int = Field(gt=0)
+    source_session_id: int = Field(gt=0)
     question_count: int = Field(default=5, ge=3, le=10)
 
 
@@ -74,6 +104,7 @@ class ChallengeScoreSnapshot(BaseModel):
 class ChallengeOut(BaseModel):
     id: int
     role: Literal["challenger", "opponent"]
+    mode: ChallengeMode
     status: ChallengeStatus
     subjectId: int
     topicId: int
@@ -92,7 +123,7 @@ class ChallengeOut(BaseModel):
     questionDeadlineAt: Optional[str] = None
     ready: bool
     opponentReady: bool
-    opponent: ChallengeOpponentSummary
+    opponent: Optional[ChallengeOpponentSummary] = None
     currentQuestionData: Optional[ChallengeQuestionPublic] = None
     scores: list[ChallengeScoreSnapshot] = Field(default_factory=list)
     waitingReason: Optional[str] = None
@@ -102,11 +133,12 @@ class ChallengeOut(BaseModel):
 class ChallengeListItem(BaseModel):
     id: int
     role: Literal["challenger", "opponent"]
+    mode: ChallengeMode
     status: ChallengeStatus
     conceptId: int
     conceptName: str
     subjectName: str
-    opponent: ChallengeOpponentSummary
+    opponent: Optional[ChallengeOpponentSummary] = None
     questionCount: int
     currentQuestion: int
     createdAt: str
@@ -159,7 +191,7 @@ class ChallengeResultOut(BaseModel):
     totalQuestions: int
     weakAreas: list[dict[str, Any]]
     summary: str
-    opponent: ChallengePlayerResult
+    opponent: Optional[ChallengePlayerResult] = None
     perQuestion: list[dict[str, Any]]
     completedAt: Optional[str] = None
 

@@ -1849,3 +1849,54 @@
 @keyframes ar-spin {
   to { transform: rotate(360deg); }
 }
+
+
+/* Challenge matchmaking cards */
+.ar-challenge-card {
+  margin: 14px 0 18px;
+  padding: 18px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px 14px;
+  border: 1px solid rgba(125, 211, 252, .22);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(30, 41, 59, .96), rgba(15, 23, 42, .98));
+  box-shadow: 0 14px 40px rgba(0,0,0,.2);
+}
+.ar-challenge-card--found { border-color: rgba(74, 222, 128, .32); }
+.ar-challenge-card--error { border-color: rgba(248, 113, 113, .3); }
+.ar-challenge-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(255,255,255,.07);
+  font-size: 22px;
+}
+.ar-challenge-copy { min-width: 0; }
+.ar-challenge-copy .ar-eyebrow { display: block; margin-bottom: 5px; }
+.ar-challenge-copy h3 { margin: 0 0 5px; font-size: 16px; }
+.ar-challenge-copy p { margin: 0; color: var(--text-secondary, #a8b3c7); line-height: 1.5; font-size: 13px; }
+.ar-challenge-copy small { display: block; margin-top: 7px; color: var(--text-muted, #7f8ba3); }
+.ar-challenge-actions { grid-column: 1 / -1; display: flex; gap: 9px; flex-wrap: wrap; }
+.ar-challenge-actions button {
+  border: 0;
+  border-radius: 11px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-weight: 700;
+  color: #07111f;
+  background: #dbeafe;
+}
+.ar-challenge-actions button:disabled { opacity: .6; cursor: wait; }
+.ar-challenge-actions button.secondary {
+  color: var(--text-primary, #e8eef8);
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.1);
+}
+@media (max-width: 640px) {
+  .ar-challenge-card { padding: 15px; border-radius: 16px; }
+  .ar-challenge-actions { flex-direction: column; }
+  .ar-challenge-actions button { width: 100%; }
+}

@@ -32,6 +32,8 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+CHALLENGE_MODES = {"peer", "ai"}
+
 CHALLENGE_STATUSES = {
     "created",
     "pending",
@@ -58,7 +60,7 @@ class ChallengeSession(Base):
     __tablename__ = "challenge_sessions"
     __table_args__ = (
         CheckConstraint(
-            "challenger_id <> opponent_id",
+            "opponent_id IS NULL OR challenger_id <> opponent_id",
             name="ck_challenge_distinct_participants",
         ),
         CheckConstraint(
@@ -75,6 +77,7 @@ class ChallengeSession(Base):
             "'completed','declined','cancelled','expired')",
             name="ck_challenge_status",
         ),
+        CheckConstraint("challenge_mode IN ('peer', 'ai')", name="ck_challenge_mode"),
         Index("idx_challenges_challenger", "challenger_id"),
         Index("idx_challenges_opponent", "opponent_id"),
         Index("idx_challenges_concept", "concept_id"),
@@ -98,8 +101,8 @@ class ChallengeSession(Base):
     challenger_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
-    opponent_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    opponent_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
 
     subject_id: Mapped[int] = mapped_column(
@@ -124,6 +127,7 @@ class ChallengeSession(Base):
         nullable=True,
     )
 
+    challenge_mode: Mapped[str] = mapped_column(String(10), nullable=False, default="peer")
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending")
 
     question_count: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
@@ -172,6 +176,36 @@ class ChallengeSession(Base):
         back_populates="challenge",
         cascade="all, delete-orphan",
     )
+
+
+class ChallengeMatchQueue(Base):
+    """One student's request to be automatically matched for a topic challenge."""
+
+    __tablename__ = "challenge_match_queue"
+    __table_args__ = (
+        Index("idx_challenge_match_queue_context", "subject_id", "topic_id", "concept_id", "status"),
+        Index("idx_challenge_match_queue_user", "user_id", "status"),
+        Index(
+            "uq_challenge_match_queue_active_user",
+            "user_id",
+            unique=True,
+            postgresql_where=text("status = 'waiting'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    subject_id: Mapped[int] = mapped_column(Integer, ForeignKey("subjects.id", ondelete="RESTRICT"), nullable=False)
+    topic_id: Mapped[int] = mapped_column(Integer, ForeignKey("topics.id", ondelete="RESTRICT"), nullable=False)
+    concept_id: Mapped[int] = mapped_column(Integer, ForeignKey("concepts.id", ondelete="RESTRICT"), nullable=False)
+    source_session_id: Mapped[int] = mapped_column(Integer, ForeignKey("ai_learning_sessions.id", ondelete="CASCADE"), nullable=False)
+    class_level: Mapped[str] = mapped_column(String(40), nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="waiting")
+    challenge_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("challenge_sessions.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
+    matched_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
 
 
 class ChallengeQuestion(Base):
