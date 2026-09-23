@@ -871,7 +871,7 @@ async def complete_session(session_id: int, user_id: int, db: AsyncSession) -> d
 
 async def teach_concept(session_id: int, user_id: int, db: AsyncSession, task_index: Optional[int] = None) -> dict:
     session = await _get_session_owned(
-        session_id, user_id, db, load_teaching=True, load_attempts=True
+        session_id, user_id, db, load_teaching=True, load_attempts=True, load_messages=True
     )
     if session.status not in ("created", "teaching", "paused", "retrieval", "practice", "reteaching"):
         raise HTTPException(
@@ -2222,7 +2222,7 @@ async def generate_adaptive_reteach(
     session_id: int, user_id: int, reason: Optional[str], db: AsyncSession
 ) -> dict:
     session = await _get_session_owned(
-        session_id, user_id, db, load_teaching=True, load_attempts=True
+        session_id, user_id, db, load_teaching=True, load_attempts=True, load_messages=True
     )
     if session.status not in ("retrieval", "reteaching", "teaching", "practice"):
         raise HTTPException(
