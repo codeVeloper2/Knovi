@@ -1094,21 +1094,153 @@ function QuizArtifact({ question, index, total, answer, setAnswer, onSubmit, sub
 
 function RichText({ content, onCopy, copiedId }) {
   if (!content) return null;
-  const normalized = String(content).replace(/\r\n/g, "\n").trim();
-  return <div className="ar-rich">{normalized.split(/\n{2,}/).map((block, i) => {
-    const trimmed = block.trim(); if (!trimmed) return null;
-    const fence = trimmed.match(/^```([^\n]*)\n([\s\S]*?)```$/);
-    if (fence) { const id = `code-${i}-${trimmed.length}`; return <div className="ar-code-wrap" key={i}><div className="ar-code-head"><span>{fence[1] || "code"}</span><button onClick={() => copyText(fence[2], id, onCopy)}>{copiedId === id ? "Copied" : "Copy"}</button></div><pre><code>{fence[2]}</code></pre></div>; }
-    const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
-    if (heading) { const Tag = heading[1].length === 1 ? "h2" : heading[1].length === 2 ? "h3" : "h4"; return <Tag key={i}>{inlineMarkdown(heading[2])}</Tag>; }
-    const lines = trimmed.split("\n");
-    if (lines.every(l => /^[-*]\s+/.test(l.trim()))) return <ul key={i}>{lines.map((line, j) => <li key={j}>{inlineMarkdown(line.trim().replace(/^[-*]\s+/, ""))}</li>)}</ul>;
-    if (lines.every(l => /^\d+\.\s+/.test(l.trim()))) return <ol key={i}>{lines.map((line, j) => <li key={j}>{inlineMarkdown(line.trim().replace(/^\d+\.\s+/, ""))}</li>)}</ol>;
-    return <p key={i}>{inlineMarkdown(trimmed)}</p>;
-  })}</div>;
+  const lines = String(content).replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+  const blocks = [];
+  let i = 0;
+
+  const isTableSeparator = (line) => {
+    const cells = splitTableRow(line);
+    return cells.length >= 2 && cells.every(cell => /^:?-{3,}:?$/.test(cell.trim()));
+  };
+
+  while (i < lines.length) {
+    const raw = lines[i] || "";
+    const trimmed = raw.trim();
+    if (!trimmed) { i += 1; continue; }
+
+    // Fenced code block.
+    if (trimmed.startsWith("```")) {
+      const lang = trimmed.slice(3).trim();
+      const codeLines = [];
+      i += 1;
+      while (i < lines.length && !lines[i].trim().startsWith("```")) {
+        codeLines.push(lines[i]);
+        i += 1;
+      }
+      if (i < lines.length) i += 1;
+      const code = codeLines.join("\n");
+      const id = `code-${blocks.length}-${code.length}`;
+      blocks.push(
+        <div className="ar-code-wrap" key={`code-${blocks.length}`}>
+          <div className="ar-code-head">
+            <span>{lang || "code"}</span>
+            <button onClick={() => copyText(code, id, onCopy)}>{copiedId === id ? "Copied" : "Copy"}</button>
+          </div>
+          <pre><code>{code}</code></pre>
+        </div>
+      );
+      continue;
+    }
+
+    // Markdown heading.
+    const heading = trimmed.match(/^(#{1,6})\s+(.+?)\s*#*$/);
+    if (heading) {
+      const level = Math.min(4, heading[1].length);
+      const Tag = level === 1 ? "h2" : level === 2 ? "h3" : "h4";
+      blocks.push(<Tag key={`heading-${i}`}>{inlineMarkdown(heading[2])}</Tag>);
+      i += 1;
+      continue;
+    }
+
+    // Horizontal rule: don't show raw --- / *** / ___.
+    if (/^(?:\*\s*){3,}$/.test(trimmed) || /^(?:-\s*){3,}$/.test(trimmed) || /^(?:_\s*){3,}$/.test(trimmed)) {
+      blocks.push(<hr className="ar-rich-rule" key={`rule-${i}`} />);
+      i += 1;
+      continue;
+    }
+
+    // Markdown table. A table is recognized only when a separator row follows
+    // the header, preventing ordinary pipe-heavy text from becoming a table.
+    if (i + 1 < lines.length && trimmed.includes("|") && isTableSeparator(lines[i + 1])) {
+      const headers = splitTableRow(trimmed);
+      const rows = [];
+      i += 2;
+      while (i < lines.length) {
+        const row = lines[i].trim();
+        if (!row || !row.includes("|")) break;
+        rows.push(splitTableRow(row));
+        i += 1;
+      }
+      blocks.push(
+        <div className="ar-table-wrap" key={`table-${i}`}>
+          <table>
+            <thead><tr>{headers.map((cell, j) => <th key={j}>{inlineMarkdown(cell)}</th>)}</tr></thead>
+            <tbody>{rows.map((row, r) => (
+              <tr key={r}>
+                {headers.map((_, c) => <td key={c}>{inlineMarkdown(row[c] ?? "")}</td>)}
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      );
+      continue;
+    }
+
+    // Consecutive unordered list items.
+    if (/^[-*+]\s+/.test(trimmed)) {
+      const items = [];
+      while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
+        items.push(lines[i].trim().replace(/^[-*+]\s+/, ""));
+        i += 1;
+      }
+      blocks.push(<ul key={`ul-${i}`}>{items.map((item, j) => <li key={j}>{inlineMarkdown(item)}</li>)}</ul>);
+      continue;
+    }
+
+    // Consecutive ordered list items.
+    if (/^\d+[.)]\s+/.test(trimmed)) {
+      const items = [];
+      while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) {
+        items.push(lines[i].trim().replace(/^\d+[.)]\s+/, ""));
+        i += 1;
+      }
+      blocks.push(<ol key={`ol-${i}`}>{items.map((item, j) => <li key={j}>{inlineMarkdown(item)}</li>)}</ol>);
+      continue;
+    }
+
+    // Consecutive blockquote lines.
+    if (/^>\s?/.test(trimmed)) {
+      const quoteLines = [];
+      while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
+        quoteLines.push(lines[i].trim().replace(/^>\s?/, ""));
+        i += 1;
+      }
+      blocks.push(<blockquote key={`quote-${i}`}><p>{inlineMarkdown(quoteLines.join(" "))}</p></blockquote>);
+      continue;
+    }
+
+    // Normal paragraph: join soft-wrapped lines without exposing raw markdown.
+    const paragraphLines = [trimmed];
+    i += 1;
+    while (i < lines.length) {
+      const next = lines[i].trim();
+      if (!next || next.startsWith("```") || /^(#{1,6})\s+/.test(next) ||
+          /^(?:\*\s*){3,}$/.test(next) || /^(?:-\s*){3,}$/.test(next) || /^(?:_\s*){3,}$/.test(next) ||
+          /^[-*+]\s+/.test(next) || /^\d+[.)]\s+/.test(next) || /^>\s?/.test(next)) break;
+      if (next.includes("|") && i + 1 < lines.length && isTableSeparator(lines[i + 1])) break;
+      paragraphLines.push(next);
+      i += 1;
+    }
+    blocks.push(<p key={`p-${i}`}>{inlineMarkdown(paragraphLines.join(" "))}</p>);
+  }
+
+  return <div className="ar-rich">{blocks}</div>;
 }
 
-function inlineMarkdown(text) { return String(text).split(/(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\n]+\*|_[^_\n]+_)/g).map((p, i) => { if ((p.startsWith("**") && p.endsWith("**")) || (p.startsWith("__") && p.endsWith("__"))) return <strong key={i}>{p.slice(2, -2)}</strong>; if ((p.startsWith("*") && p.endsWith("*")) || (p.startsWith("_") && p.endsWith("_"))) return <em key={i}>{p.slice(1, -1)}</em>; if (p.startsWith("`") && p.endsWith("`")) return <code key={i}>{p.slice(1, -1)}</code>; return p; }); }
+function splitTableRow(line) {
+  const value = String(line || "").trim().replace(/^\|/, "").replace(/\|$/, "");
+  return value.split("|").map(cell => cell.trim());
+}
+
+function inlineMarkdown(text) {
+  return String(text).split(/(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\n]+\*|_[^_\n]+_|~~[^~]+~~)/g).map((p, i) => {
+    if ((p.startsWith("**") && p.endsWith("**")) || (p.startsWith("__") && p.endsWith("__"))) return <strong key={i}>{p.slice(2, -2)}</strong>;
+    if ((p.startsWith("~~") && p.endsWith("~~"))) return <del key={i}>{p.slice(2, -2)}</del>;
+    if ((p.startsWith("*") && p.endsWith("*")) || (p.startsWith("_") && p.endsWith("_"))) return <em key={i}>{p.slice(1, -1)}</em>;
+    if (p.startsWith("`") && p.endsWith("`")) return <code key={i}>{p.slice(1, -1)}</code>;
+    return p;
+  });
+}
 async function copyText(text, id, onCopy) { try { await navigator.clipboard?.writeText(text); onCopy(id); setTimeout(() => onCopy(null), 1300); } catch {} }
 function formatFamiliarity(v) { return ({ new: "new to this", seen_before: "seen it before", know_basics: "basics understood", know_well: "confident", need_help: "needs help" })[v] || v; }
 function formatIntent(v) { return ({ teach_me: "learn the concept", explain_simply: "simple explanation", give_examples: "learn through examples", go_deeper: "go deeper", already_know: "probe understanding", quiz_me: "diagnostic first", broaden: "broaden context", custom: "custom goal" })[v] || v; }

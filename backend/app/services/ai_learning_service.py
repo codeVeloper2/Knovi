@@ -2107,7 +2107,16 @@ Scoring guide:
     understanding = parsed.get("understanding", "partial")
     if understanding not in ("strong", "partial", "weak"):
         understanding = "partial"
-    needs_reteach = bool(parsed.get("needs_reteach", False))
+    # The evaluator may suggest reteaching, but the lifecycle must not make
+    # reteaching mandatory merely because the model returned a conservative
+    # flag. A solid answer (70+) should not trigger reteaching.
+    #
+    # Policy:
+    #   - < 50 or explicitly weak -> reteach
+    #   - 50-69 partial -> reteach
+    #   - 70+ -> no reteach for this answer
+    # This keeps the compulsory check from turning into a compulsory reteach.
+    needs_reteach = False
 
     # Uncertainty is a valid learner response, not an application error. Make
     # the weak-evidence outcome deterministic even if the evaluator model
@@ -2124,16 +2133,19 @@ Scoring guide:
                 "I’ll teach it from a different angle and check your understanding again."
             )
 
-    # The learning-room policy is explicit: strong understanding can continue;
-    # partial/weak understanding gets a different teaching approach before the
-    # next retrieval check. The score guard keeps the model from accidentally
-    # marking a low-scoring answer as strong.
-    if understanding in ("weak", "partial"):
-        needs_reteach = True
+    # The learning-room policy is explicit: the score is authoritative for the
+    # reteach gate, with "weak" understanding also treated as a real signal.
+    # A model-provided needs_reteach=true cannot override a 70+ answer.
     if score_val is not None and score_val < 50:
         needs_reteach = True
         if understanding == "strong":
             understanding = "weak"
+    elif understanding == "weak":
+        needs_reteach = True
+    elif understanding == "partial" and score_val is not None and score_val < 70:
+        needs_reteach = True
+    else:
+        needs_reteach = False
 
     answer.is_correct    = bool(parsed.get("is_correct")) if parsed.get("is_correct") is not None else (score_val is not None and score_val >= 70)
     answer.score         = score_val
@@ -2267,11 +2279,18 @@ async def complete_practice_run(
     if {a.question_id for a in answers} != ids:
         raise HTTPException(409, "The practice run contains unanswered questions.")
 
-    needs_reteach = any(
-        bool((a.ai_evaluation or {}).get("needsReteach"))
-        or (a.score is not None and a.score < 70)
+    # A completed quiz is not automatically followed by reteaching. Use the
+    # actual scores/understanding from this run rather than trusting a model
+    # flag from an individual answer. A run needs reteaching when its average
+    # score is below 70, or when there is a clearly weak answer (<50 / weak).
+    scored = [a.score for a in answers if a.score is not None]
+    average_score = (sum(scored) / len(scored)) if scored else 0
+    has_clear_weak_answer = any(
+        (a.score is not None and a.score < 50)
+        or (a.ai_evaluation or {}).get("understanding") == "weak"
         for a in answers
     )
+    needs_reteach = average_score < 70 or has_clear_weak_answer
 
     # Recover the task from the persisted evaluation metadata. This works even
     # when the quiz was started directly without the optional study timer.

@@ -460,6 +460,8 @@
 .ar-rich blockquote p { margin: 0; }
 .ar-rich a { color: #83b8ff; text-decoration: none; }
 .ar-rich a:hover { text-decoration: underline; }
+.ar-rich-rule { border: 0; border-top: 1px solid var(--ar-border); margin: 16px 0; opacity: .7; }
+.ar-rich del { color: #91a1b9; }
 .ar-code-wrap {
   margin: 13px 0;
   overflow: hidden;
