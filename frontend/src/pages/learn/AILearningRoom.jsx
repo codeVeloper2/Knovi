@@ -622,14 +622,12 @@ export default function AILearningRoom() {
             const f = await api.getAISession(sessionId);
             let fMsgs = f?.messages || [];
             try { const s = await api.getSessionMessages(sessionId); if (Array.isArray(s)) fMsgs = s; } catch {}
-            setSession(f); setMessages(fMsgs); setCurrentTaskIndex(nextIndex);
-            const ps = f?.learningState;
-            if (Array.isArray(ps?.completedTaskIndexes)) {
-              setCompletedTaskIndexes(prev => [...new Set([
-                ...prev,
-                ...ps.completedTaskIndexes.map(Number).filter(Number.isInteger),
-              ])]);
-            }
+            // Reconcile the whole roadmap from the server after Task 2 is
+            // created. The backend marks Task 1 complete as part of this
+            // transition, so the UI cannot remain at 0/5 because of a stale
+            // session payload.
+            applySession(f, fMsgs);
+            setCurrentTaskIndex(nextIndex);
             setPhase("teaching");
             const nm = fMsgs.filter(m => m.role === "ai" && Number(m.extra?.taskIndex) === nextIndex);
             const g = nm.find(m => m.extra?.responseGroupId)?.extra?.responseGroupId;
@@ -1209,11 +1207,14 @@ function RichText({ content, onCopy, copiedId }) {
       continue;
     }
 
-    // Normal paragraph: join soft-wrapped lines without exposing raw markdown.
+    // Normal paragraph. Preserve intentional single newlines as visible line breaks
+    // while still treating blank lines as paragraph boundaries. This keeps AI output
+    // readable even when the model uses single newlines instead of blank-line Markdown.
     const paragraphLines = [trimmed];
     i += 1;
     while (i < lines.length) {
-      const next = lines[i].trim();
+      const nextRaw = lines[i];
+      const next = nextRaw.trim();
       if (!next || next.startsWith("```") || /^(#{1,6})\s+/.test(next) ||
           /^(?:\*\s*){3,}$/.test(next) || /^(?:-\s*){3,}$/.test(next) || /^(?:_\s*){3,}$/.test(next) ||
           /^[-*+]\s+/.test(next) || /^\d+[.)]\s+/.test(next) || /^>\s?/.test(next)) break;
@@ -1221,7 +1222,16 @@ function RichText({ content, onCopy, copiedId }) {
       paragraphLines.push(next);
       i += 1;
     }
-    blocks.push(<p key={`p-${i}`}>{inlineMarkdown(paragraphLines.join(" "))}</p>);
+    blocks.push(
+      <p key={`p-${i}`}>
+        {paragraphLines.map((line, lineIndex) => (
+          <React.Fragment key={lineIndex}>
+            {lineIndex > 0 && <br />}
+            {inlineMarkdown(line)}
+          </React.Fragment>
+        ))}
+      </p>
+    );
   }
 
   return <div className="ar-rich">{blocks}</div>;

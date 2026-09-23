@@ -991,6 +991,30 @@ async def teach_concept(session_id: int, user_id: int, db: AsyncSession, task_in
         if not _has_confirmed_task_transition(session.messages, task_index):
             raise HTTPException(409, "This Learning Plan task is locked until the previous task is passed and confirmed.")
 
+        # The Next Task action is the canonical transition event. When the
+        # client asks to teach the next task, make sure the persisted transition
+        # itself also carries the completion marker. This keeps the backend
+        # roadmap authoritative even if the preceding /message response was
+        # stale or the client refreshed between the two calls.
+        previous_task_index = task_index - 1
+        for transition_msg in reversed(sorted(session.messages, key=lambda m: m.sequence)):
+            extra = transition_msg.extra or {}
+            if (
+                transition_msg.role == "ai"
+                and extra.get("taskTransition") is True
+                and str(extra.get("nextTaskIndex")) == str(task_index)
+            ):
+                updated_extra = dict(extra)
+                updated_extra.update({
+                    "taskCompleted": True,
+                    "taskIndex": previous_task_index,
+                    "currentTaskIndex": task_index,
+                    "transitionConfirmed": True,
+                })
+                transition_msg.extra = updated_extra
+                await db.flush()
+                break
+
     if task_index is not None and current_plan:
         if task_index < 0 or task_index >= len(current_plan):
             raise HTTPException(400, "Invalid learning task.")
@@ -1049,6 +1073,23 @@ IMPORTANT-POINT FORMATTING (MANDATORY):
 - Highlight short phrases or key terms, not entire paragraphs. Aim for a few meaningful highlights per response so they are useful for scanning.
 - Never hide, replace, abbreviate, or omit the highlighted words.
 - Do not put highlight markers around headings, whole paragraphs, tables, or code blocks.
+
+READABLE RESPONSE LAYOUT (MANDATORY):
+- Format the explanation for a student reading on a phone. Never return one giant wall of text.
+- Use Markdown headings when introducing a distinct section, for example `### What this means`.
+- Separate distinct paragraphs with a blank line (`\n\n`).
+- When listing steps, examples, rules, or multiple points, use Markdown bullet lists (`- item`) or numbered lists (`1. item`).
+- For worked calculations, put each meaningful step on its own line and use a blank line before the final answer.
+- Keep sentences reasonably short and group related ideas into small paragraphs of about 2–4 sentences.
+- Do not put the entire response into a single paragraph, even when the explanation is short.
+- Markdown is allowed INSIDE the JSON string; encode newlines normally so the Learning Room can render them.
+
+MATHEMATICS TEACHING MODE:
+- For Mathematics/General Mathematics/Mathematics-related topics, do not turn the teaching conversation into an oral quiz.
+- Explain the mathematical idea in plain language first, then demonstrate it with a concrete worked calculation using the exact skill being taught.
+- After the explanation, prefer a worked example such as a substitution, simplification, conversion, equation, graph calculation, or other relevant numerical procedure. Show the steps and final answer clearly.
+- Do not ask the student to verbally define a mathematical concept as a substitute for practicing the calculation. Formal assessment happens separately in Practice Mode.
+
 Adapt depth and language to the student's familiarity ({session.student_familiarity}) and intent ({session.intent}).
 
 Return JSON (all fields required; arrays may be empty []):
@@ -1265,6 +1306,13 @@ IMPORTANT-POINT FORMATTING:
 - For normal educational responses, use `==...==` around the most important terms, definitions, rules, formulas, or conclusions so the Learning Room can render them with a coloured background highlight.
 - Use `**...**` only for ordinary emphasis. Keep highlights short and selective; never highlight an entire paragraph.
 - Highlighted text must remain fully visible and readable.
+
+READABLE RESPONSE LAYOUT:
+- Format normal tutor replies for a student reading on a phone. Avoid a single dense wall of text.
+- Use short paragraphs separated by blank lines (`\n\n`).
+- Use bullets or numbered steps when giving multiple points, instructions, or calculations.
+- Use a heading when changing to a clearly different part of the explanation.
+- For calculations, put meaningful steps on separate lines and make the final answer easy to spot.
 
 action field rules:
 - null         → continue teaching/conversing normally
@@ -1724,7 +1772,16 @@ reasoning application of that content. Do NOT introduce terminology, procedures,
 applications that belong to another task. In particular, merely appearing in the broader concept
 or curriculum does not make a fact testable here.
 
-Include variety: mix question types. At least one must be short_answer or explanation.
+ASSESSMENT FORMAT BY SUBJECT:
+- For Mathematics, General Mathematics, Further Mathematics, or another mathematics subject,
+  do NOT use oral/definition-style questions as the compulsory assessment. Use calculation,
+  worked-problem, numerical multiple-choice, or closely related mathematical application questions.
+  The learner should demonstrate the mathematical skill by calculating/solving, not merely saying
+  what a term means. If a definition matters, it may appear as context for a calculation, but it
+  should not be the main oral question.
+- For non-mathematics subjects, choose question types that fit the task and may include short_answer
+  or explanation when appropriate.
+
 Do NOT reveal the answer in the question text.
 
 Return JSON:
@@ -2516,6 +2573,13 @@ IMPORTANT-POINT FORMATTING:
 - Use `==...==` around the most important terms, definitions, rules, formulas, or conclusions so the Learning Room renders a coloured background highlight.
 - Use `**...**` only for ordinary emphasis. Keep highlights short and selective; do not highlight entire paragraphs.
 - Highlighted text must remain fully visible and readable.
+
+READABLE RESPONSE LAYOUT (MANDATORY):
+- Format the reteaching for a student reading on a phone; never produce one giant wall of text.
+- Use short paragraphs separated by blank lines (`\n\n`).
+- Use Markdown headings for distinct sections and bullets or numbered lists for multiple points.
+- For worked examples, put each calculation step on its own line and separate the final answer clearly.
+- Keep related ideas together in small paragraphs of about 2–4 sentences.
 
 Return JSON (all array fields required; may be empty):
 {{
