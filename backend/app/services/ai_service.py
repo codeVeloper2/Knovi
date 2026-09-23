@@ -104,9 +104,17 @@ async def call_groq(
     *,
     system: str | None = None,
     temperature: float = 0.7,
+    json_mode: bool = True,
     timeout: float | None = None,
 ) -> str:
-    """Async Groq call. Returns raw response text."""
+    """Async Groq call. Returns raw response text.
+
+    GPT-OSS models spend part of their completion budget on reasoning. The old
+    SDK default is too small for PeerUP's JSON tutor payloads, which can cause
+    Groq to stop before a complete JSON document is emitted. Use low reasoning
+    effort and an explicit completion budget, with one larger retry if Groq
+    still reports an incomplete/invalid JSON completion.
+    """
     from app.core.config import settings
     from groq import AsyncGroq
 
@@ -118,13 +126,42 @@ async def call_groq(
         messages.append({"role": "system", "content": system})
     messages.append({"role": "user", "content": prompt})
 
-    response = await client.chat.completions.create(
-        model=settings.GROQ_MODEL,
-        messages=messages,
-        temperature=temperature,
-        response_format={"type": "json_object"},
-    )
-    return response.choices[0].message.content
+    is_gpt_oss = str(settings.GROQ_MODEL).startswith("openai/gpt-oss-")
+    budgets = (4096, 8192) if json_mode else (2048, 4096)
+    last_exc: Exception | None = None
+
+    for max_completion_tokens in budgets:
+        kwargs: dict[str, Any] = {
+            "model": settings.GROQ_MODEL,
+            "messages": messages,
+            "temperature": temperature,
+            "max_completion_tokens": max_completion_tokens,
+        }
+        if json_mode:
+            kwargs["response_format"] = {"type": "json_object"}
+        if is_gpt_oss:
+            kwargs["reasoning_effort"] = "low"
+            kwargs["reasoning_format"] = "hidden"
+
+        try:
+            response = await client.chat.completions.create(**kwargs)
+            content = response.choices[0].message.content or ""
+            if content.strip():
+                return content
+            raise ValueError("Groq returned an empty response")
+        except Exception as exc:
+            last_exc = exc
+            # Retry once with a larger completion budget. This specifically
+            # handles GPT-OSS responses that exhaust the JSON completion budget.
+            if max_completion_tokens != budgets[-1]:
+                logger.warning(
+                    "Groq completion failed at %s tokens; retrying with %s: %s",
+                    max_completion_tokens, budgets[-1], exc,
+                )
+                continue
+            raise
+
+    raise last_exc or RuntimeError("Groq returned no response")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -168,6 +205,7 @@ async def call_with_fallback(
                 prompt,
                 system=system,
                 temperature=temperature,
+                json_mode=json_mode,
                 timeout=timeout,
             )
             return text, "groq"

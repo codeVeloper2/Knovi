@@ -12,6 +12,7 @@ from app.services.ai_learning_service import (
     _filter_protected_messages,
     _VALID_TRANSITIONS,
     _derive_learning_state,
+    _has_confirmed_task_transition,
     _split_ai_response,
     _remove_embedded_quiz_from_teaching,
     _TRANSITION_CONFIRMATION_RE,
@@ -167,3 +168,38 @@ def test_transition_confirmation_accepts_natural_move_to_task_phrase():
     assert _TRANSITION_CONFIRMATION_RE.fullmatch("yes")
     assert _TRANSITION_CONFIRMATION_RE.fullmatch("next task")
     assert not _TRANSITION_CONFIRMATION_RE.fullmatch("I don't want to move to task 2")
+
+
+def test_failed_task_cannot_be_advanced_by_move_to_task_request():
+    from app.models.ai_learning import AISessionMessage
+
+    failed_reteach = AISessionMessage(
+        id=1, session_id=1, role="ai", message_type="reteach",
+        content="We’ll stay on this task and rebuild the weak parts before trying the check again.",
+        sequence=1,
+        extra={
+            "taskCompleted": False,
+            "taskIndex": 0,
+            "currentTaskIndex": 0,
+            "needsReteach": True,
+        },
+    )
+    assert not _has_confirmed_task_transition([failed_reteach], 1)
+
+
+def test_next_task_requires_persisted_completion_and_transition_confirmation():
+    from app.models.ai_learning import AISessionMessage
+
+    confirmed = AISessionMessage(
+        id=1, session_id=1, role="ai", message_type="teaching",
+        content="Great — let’s move to the next part.",
+        sequence=2,
+        extra={
+            "taskCompleted": True,
+            "taskIndex": 0,
+            "currentTaskIndex": 1,
+            "transitionConfirmed": True,
+        },
+    )
+    assert _has_confirmed_task_transition([confirmed], 1)
+    assert not _has_confirmed_task_transition([confirmed], 2)

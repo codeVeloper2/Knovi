@@ -308,6 +308,36 @@ def _current_task_index_from_messages(messages: list) -> int:
     return int(_derive_learning_state(messages).get("currentTaskIndex", 0))
 
 
+def _has_confirmed_task_transition(messages: list, target_task_index: int) -> bool:
+    """Return True only when the immediately preceding task was explicitly completed.
+
+    This is deliberately derived from persisted tutor messages instead of the
+    model's latest action. A client/model cannot jump to Task N merely by saying
+    "move to task N"; the prior task must have a passed practice result followed
+    by an explicit transition confirmation.
+    """
+    if target_task_index <= 0:
+        return True
+    previous_index = target_task_index - 1
+    for message in sorted(messages or [], key=lambda item: item.sequence, reverse=True):
+        if message.role != "ai":
+            continue
+        extra = message.extra or {}
+        try:
+            task_index = int(extra.get("taskIndex", -1))
+            current_index = int(extra.get("currentTaskIndex", -1))
+        except (TypeError, ValueError):
+            continue
+        if (
+            extra.get("taskCompleted") is True
+            and extra.get("transitionConfirmed") is True
+            and task_index == previous_index
+            and current_index == target_task_index
+        ):
+            return True
+    return False
+
+
 # ── Session ownership loader ──────────────────────────────────────────────────
 async def _get_session_owned(
     session_id: int,
@@ -940,6 +970,15 @@ async def teach_concept(session_id: int, user_id: int, db: AsyncSession, task_in
     task_context = ""
     selected_task = None
     orientation_mode = task_index is None
+
+    # Never allow the API caller (including the frontend) to jump forward.
+    # Task N is teachable only after Task N-1 has been explicitly completed by
+    # the persisted transition confirmation. This is the final server-side gate
+    # even if an AI action or stale client state attempts to skip it.
+    if task_index is not None and task_index > 0:
+        if not _has_confirmed_task_transition(session.messages, task_index):
+            raise HTTPException(409, "This Learning Plan task is locked until the previous task is passed and confirmed.")
+
     if task_index is not None and current_plan:
         if task_index < 0 or task_index >= len(current_plan):
             raise HTTPException(400, "Invalid learning task.")
@@ -1305,7 +1344,8 @@ Rules:
     )
 
     # Progression is server-authoritative. The model may suggest an action, but it
-    # cannot skip the persisted quiz/transition gate.
+    # cannot skip the persisted quiz/transition gate. Most importantly, do not
+    # allow the model's prose to say "Task 2" when the action was rejected.
     if action == "next_task" and not previous_task_transition:
         action = None
         action_data = None
@@ -1322,6 +1362,19 @@ Rules:
         action = "reteach_task"
         action_data = {"task_index": current_task_index, "reason": "The learner asked for the current task to be explained again before moving on."}
         response_text = "Absolutely. We’ll stay on this task and I’ll explain it another way before we move on."
+    elif transition_confirmation and not previous_task_transition:
+        # A learner cannot bypass a failed/unattempted compulsory check by
+        # asking to move forward. After reteaching, invite them to take the
+        # compulsory check again; before any pass, remain on the current task.
+        action = "ask_readiness"
+        action_data = {
+            "task_index": current_task_index,
+            "reason": "The current Learning Plan task must be passed before advancing.",
+        }
+        response_text = (
+            "We still need to complete and pass the check for this Learning Plan task "
+            "before moving on. Let’s stay here and make sure you’re ready to try the check again."
+        )
     elif confirmation and previous_asked_readiness:
         action = "start_quiz"
         action_data = {"task_index": current_task_index, "reason": "The learner explicitly confirmed readiness."}
