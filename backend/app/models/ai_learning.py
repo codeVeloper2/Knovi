@@ -81,6 +81,7 @@ MESSAGE_TYPES = {
     "timer_end",
     "reteach",
     "practice",
+    "idle_nudge",
 }
 
 # ── Teaching strategies ───────────────────────────────────────────────────

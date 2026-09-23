@@ -314,10 +314,28 @@ export default function AILearningRoom() {
       console.log(`[IdleNudge] Firing nudge #${nextNudge}`);
       try {
         const nudge = await api.createLearningIdleNudge(sessionId, nextNudge);
+
+        // Guard against safeJson returning {} / missing shape
+        if (!nudge || typeof nudge !== "object" || nudge.id == null || !nudge.content) {
+          console.warn("[IdleNudge] Bad payload from API:", nudge);
+          return;
+        }
+
         idleNudgeRef.current = nextNudge;
-        setMessages(prev => prev.some(m => m.id === nudge.id) ? prev : [...prev, nudge]);
+
+        setMessages(prev => {
+          if (prev.some(m => m.id === nudge.id || m.id === Number(nudge.id))) return prev;
+          return [...prev, {
+            ...nudge,
+            // normalise in case anything is missing
+            role: nudge.role || "ai",
+            messageType: nudge.messageType || "idle_nudge",
+            extra: nudge.extra || { idleNudgeNumber: nextNudge },
+          }];
+        });
+
         if (ttsRef.current) speakText(nudge.content || "");
-        console.log(`[IdleNudge] Nudge #${nextNudge} added`);
+        console.log(`[IdleNudge] Nudge #${nextNudge} added`, nudge.id);
       } catch (e) {
         console.warn("[IdleNudge] Failed:", e?.message);
       }
