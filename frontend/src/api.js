@@ -629,7 +629,7 @@ export function sendStudentMessage(sessionId, content) {
 }
 
 export function createLearningIdleNudge(sessionId, nudgeNumber = 1) {
-  return post(`/api/learning/sessions/${sessionId}/idle-nudge?nudge_number=${encodeURIComponent(nudgeNumber)}`, {});
+  return aiPost(`/api/learning/sessions/${sessionId}/idle-nudge?nudge_number=${encodeURIComponent(nudgeNumber)}`, {});
 }
 
 export function startStudyPeriod(sessionId, durationSeconds = 300, taskIndex = null) {
