@@ -133,7 +133,8 @@ _UNCERTAINTY_RESPONSE_RE = re.compile(
 )
 
 _READINESS_CONFIRMATION_RE = re.compile(
-    r"^(?:yes|yeah|yep|sure|ready|i(?:'|\s*)m ready|let['’]?s do it|go ahead|okay|ok|absolutely|sounds good)[.!\s]*$",
+    r"^(?:yes|yeah|yep|sure|ready|i(?:[\'’]|\s*)m ready|let[\'’]?s do it|go ahead|okay|ok|absolutely|sounds good)(?:\s+(?:bro|please|now))?[.!\s]*$|"
+    r"^(?:yes|yeah)[,.!]?\s+i(?:[\'’]|\s*)m ready(?:\s+(?:bro|please|now))?[.!\s]*$",
     re.IGNORECASE,
 )
 _READINESS_SIGNAL_RE = re.compile(
@@ -149,12 +150,12 @@ _TRANSITION_DECLINE_RE = re.compile(
     re.IGNORECASE,
 )
 _TRANSITION_CONFIRMATION_RE = re.compile(
-    r"^(?:yes|yeah|yep|sure|ready|i(?:['’]|\s*)m ready|okay|ok|absolutely|sounds good|go ahead|"
-    r"let['’]?s\s+(?:move|go)\s+(?:to\s+)?(?:task\s*\d+|the\s+next\s+task|next\s+task)|"
+    r"^(?:let[\'’]?s\s+(?:move|go)\s+(?:to\s+)?(?:task\s*\d+|the\s+next\s+task|next\s+task)|"
     r"(?:move|go)\s+(?:to\s+)?(?:task\s*\d+|the\s+next\s+task|next\s+task)|"
     r"next\s+task)(?:\s+please)?[.!\s]*$",
     re.IGNORECASE,
 )
+
 
 
 def _is_uncertainty_response(answer: str) -> bool:

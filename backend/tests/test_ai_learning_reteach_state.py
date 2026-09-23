@@ -165,10 +165,18 @@ def test_teaching_quiz_cleanup_removes_embedded_question_block():
 
 def test_transition_confirmation_accepts_natural_move_to_task_phrase():
     assert _TRANSITION_CONFIRMATION_RE.fullmatch("Let's move to task 2 please")
-    assert _TRANSITION_CONFIRMATION_RE.fullmatch("yes")
     assert _TRANSITION_CONFIRMATION_RE.fullmatch("next task")
+    assert not _TRANSITION_CONFIRMATION_RE.fullmatch("yes")
+    assert not _TRANSITION_CONFIRMATION_RE.fullmatch("yes bro")
     assert not _TRANSITION_CONFIRMATION_RE.fullmatch("I don't want to move to task 2")
 
+
+
+def test_readiness_confirmation_accepts_natural_short_replies():
+    assert _READINESS_CONFIRMATION_RE.fullmatch("yes")
+    assert _READINESS_CONFIRMATION_RE.fullmatch("Yes bro")
+    assert _READINESS_CONFIRMATION_RE.fullmatch("Yeah. I'm ready")
+    assert _READINESS_CONFIRMATION_RE.fullmatch("yes please")
 
 def test_failed_task_cannot_be_advanced_by_move_to_task_request():
     from app.models.ai_learning import AISessionMessage
