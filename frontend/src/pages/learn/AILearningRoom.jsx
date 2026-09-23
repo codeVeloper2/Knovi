@@ -6,7 +6,7 @@
  * - Idle nudge: simplified guard, console logging for debug
  * - Typewriter animation for new AI messages
  */
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import * as api from "../../api";
 import { TutorAvatar } from "./AISessionSetup";
@@ -1225,10 +1225,10 @@ function RichText({ content, onCopy, copiedId }) {
     blocks.push(
       <p key={`p-${i}`}>
         {paragraphLines.map((line, lineIndex) => (
-          <React.Fragment key={lineIndex}>
+          <Fragment key={lineIndex}>
             {lineIndex > 0 && <br />}
             {inlineMarkdown(line)}
-          </React.Fragment>
+          </Fragment>
         ))}
       </p>
     );
