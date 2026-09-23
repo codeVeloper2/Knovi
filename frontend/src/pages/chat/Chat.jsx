@@ -571,9 +571,9 @@ export default function Chat() {
         </div>
       </header>
 
-      {!screen ? (
-        <main className="pu-list-screen">
-          <div className="pu-list-title-row"><h1>Chats</h1></div>
+      <div className="pu-desktop-shell">
+        <main className={`pu-list-screen ${screen ? "has-selection" : ""}`}>
+          <div className="pu-list-title-row"><h1>Chats</h1><button className="pu-new-chat-btn" aria-label="New chat"><PenLine size={17} /></button></div>
           <label className="pu-search"><Search size={16} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search chats..." /></label>
           <div className="pu-tabs">
             <button className={tab === "all" ? "active" : ""} onClick={() => setTab("all")}>All</button>
@@ -581,7 +581,7 @@ export default function Chat() {
           </div>
           <div className="pu-chat-list">
             {loading ? <ChatListSkeleton /> : list.map(chat => (
-              <button className="pu-chat-item" key={chat.id} onClick={() => openChat(chat.id)}>
+              <button className={`pu-chat-item ${String(screen) === chat.id ? "selected" : ""}`} key={chat.id} onClick={() => openChat(chat.id)}>
                 <Avatar name={chat.name} photoURL={chat.photoURL} online={chat.online} size={52} />
                 <span className="pu-chat-meta">
                   <span className="pu-chat-top"><span className="pu-chat-name">{chat.name}{chat.verified && <span className="pu-verified">✓</span>}</span><time>{chat.time}</time></span>
@@ -593,33 +593,73 @@ export default function Chat() {
             {!loading && !list.length && <div className="pu-empty">No chats match your filter.</div>}
           </div>
         </main>
-      ) : (
-        <main className="pu-conversation">
-          <header className="pu-user-header">
-            <button className="pu-back" onClick={closeChat} aria-label="Back"><ArrowLeft size={19} /></button>
-            <Avatar name={currentChat?.name || "Peer"} photoURL={currentChat?.photoURL} online={currentChat?.online} size={40} />
-            <div className="pu-user-info"><div><strong>{currentChat?.name}</strong>{currentChat?.verified && <span className="pu-verified">✓</span>}</div><span className={currentChat?.online ? "online" : ""}>{currentChat?.online ? "Online" : "Last seen recently"}</span></div>
-            <div className="pu-user-actions"><button className="pu-icon-btn"><Phone size={18} /></button><button className="pu-icon-btn"><Video size={18} /></button><button className="pu-icon-btn"><Info size={18} /></button></div>
-          </header>
-          <div className="pu-messages" ref={messagesRef}>
-            {messagesLoading ? <MessageListSkeleton /> : <>
-              <div className="pu-day-divider">Today</div>
-              {messageRows.map(({ msg, first, last }) => <MessageBubble key={msg.id} msg={{ ...msg, senderName: currentChat?.name, senderPhotoURL: currentChat?.photoURL }} first={first} last={last} onLongPress={m => setModal({ msg: m })} onReplyDrag={m => setReplyTo(m)} onImage={msg => setLightbox(msg)} />)}
-            </>}
-          </div>
-          {replyTo && <div className="pu-reply-bar"><span></span><div><b>{replyTo.outgoing ? "You" : currentChat?.name}</b><small>{messagePreview(replyTo)}</small></div><button onClick={() => setReplyTo(null)}><X size={15} /></button></div>}
-          {pending && <div className="pu-pending"><div className="pu-pending-thumb">{pending.type === "image" ? <img src={pending.imageUrl} alt="Selected" /> : <FileText size={22} />}</div><div><b>{pending.type === "image" ? "Photo" : pending.fileName}</b><small>{pending.type === "image" ? "Add a caption below, then send" : pending.fileMeta}</small></div><button onClick={removePending}><X size={15} /></button></div>}
-          <div className="pu-composer">
-            <button className="pu-composer-btn" onClick={() => setModal({ attach: true })} aria-label="Attach"><Plus size={19} /></button>
-            <button className="pu-composer-btn" onClick={() => imageInput.current?.click()} aria-label="Gallery"><ImageIcon size={18} /></button>
-            <button className="pu-composer-btn" aria-label="Voice"><Mic size={18} /></button>
-            <div className="pu-input-wrap"><input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder={pending ? (pending.type === "image" ? "Add a caption..." : "Add a message...") : "Nhắn tin"} /><button className="pu-emoji-btn"><Smile size={18} /></button></div>
-            <button className="pu-send" onClick={send} aria-label="Send">{input.trim() || pending ? <Send size={18} fill="currentColor" /> : "👍"}</button>
-          </div>
-          <input ref={imageInput} type="file" accept="image/*" hidden onChange={pickImage} />
-          <input ref={fileInput} type="file" accept="*/*" hidden onChange={pickFile} />
+
+        <main className={`pu-conversation ${screen ? "has-selection" : "no-selection"}`}>
+          {!screen ? (
+            <div className="pu-empty-conversation">
+              <div className="pu-empty-chat-icon"><Search size={26} /></div>
+              <h2>Your messages</h2>
+              <p>Select a conversation from the left to start chatting.</p>
+              <button onClick={() => setQuery("")}>Browse chats</button>
+            </div>
+          ) : (
+            <>
+              <header className="pu-user-header">
+                <button className="pu-back" onClick={closeChat} aria-label="Back"><ArrowLeft size={19} /></button>
+                <Avatar name={currentChat?.name || "Peer"} photoURL={currentChat?.photoURL} online={currentChat?.online} size={40} />
+                <div className="pu-user-info"><div><strong>{currentChat?.name}</strong>{currentChat?.verified && <span className="pu-verified">✓</span>}</div><span className={currentChat?.online ? "online" : ""}>{currentChat?.online ? "Online" : "Last seen recently"}</span></div>
+                <div className="pu-user-actions"><button className="pu-icon-btn"><Phone size={18} /></button><button className="pu-icon-btn"><Video size={18} /></button><button className="pu-icon-btn"><Info size={18} /></button></div>
+              </header>
+              <div className="pu-messages" ref={messagesRef}>
+                {messagesLoading ? <MessageListSkeleton /> : <>
+                  <div className="pu-day-divider">Today</div>
+                  {messageRows.map(({ msg, first, last }) => <MessageBubble key={msg.id} msg={{ ...msg, senderName: currentChat?.name, senderPhotoURL: currentChat?.photoURL }} first={first} last={last} onLongPress={m => setModal({ msg: m })} onReplyDrag={m => setReplyTo(m)} onImage={msg => setLightbox(msg)} />)}
+                </>}
+              </div>
+              {replyTo && <div className="pu-reply-bar"><span></span><div><b>{replyTo.outgoing ? "You" : currentChat?.name}</b><small>{messagePreview(replyTo)}</small></div><button onClick={() => setReplyTo(null)}><X size={15} /></button></div>}
+              {pending && <div className="pu-pending"><div className="pu-pending-thumb">{pending.type === "image" ? <img src={pending.imageUrl} alt="Selected" /> : <FileText size={22} />}</div><div><b>{pending.type === "image" ? "Photo" : pending.fileName}</b><small>{pending.type === "image" ? "Add a caption below, then send" : pending.fileMeta}</small></div><button onClick={removePending}><X size={15} /></button></div>}
+              <div className="pu-composer">
+                <button className="pu-composer-btn" onClick={() => setModal({ attach: true })} aria-label="Attach"><Plus size={19} /></button>
+                <button className="pu-composer-btn" onClick={() => imageInput.current?.click()} aria-label="Gallery"><ImageIcon size={18} /></button>
+                <button className="pu-composer-btn" aria-label="Voice"><Mic size={18} /></button>
+                <div className="pu-input-wrap"><input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} placeholder={pending ? (pending.type === "image" ? "Add a caption..." : "Add a message...") : "Write a message..."} /><button className="pu-emoji-btn"><Smile size={18} /></button></div>
+                <button className="pu-send" onClick={send} aria-label="Send">{input.trim() || pending ? <Send size={18} fill="currentColor" /> : "👍"}</button>
+              </div>
+              <input ref={imageInput} type="file" accept="image/*" hidden onChange={pickImage} />
+              <input ref={fileInput} type="file" accept="*/*" hidden onChange={pickFile} />
+            </>
+          )}
         </main>
-      )}
+
+        {screen && (
+          <aside className="pu-profile-panel">
+            <div className="pu-profile-panel-head"><span>Contact</span><button className="pu-icon-btn" aria-label="Close details" onClick={() => {}}><Info size={18} /></button></div>
+            <div className="pu-profile-main">
+              <Avatar name={currentChat?.name || "Peer"} photoURL={currentChat?.photoURL} online={currentChat?.online} size={96} />
+              <h2>{currentChat?.name || "Peer"}</h2>
+              <span className={currentChat?.online ? "pu-profile-online" : "pu-profile-muted"}>{currentChat?.online ? "Online now" : "Last seen recently"}</span>
+            </div>
+            <div className="pu-profile-section">
+              <span className="pu-profile-label">Conversation</span>
+              <div className="pu-profile-row"><span>Subject</span><b>{currentChat?.subject || "PeerUP chat"}</b></div>
+              <div className="pu-profile-row"><span>Messages</span><b>{messages.length}</b></div>
+              <div className="pu-profile-row"><span>Attachments</span><b>{messages.filter(m => m.type === "image" || m.type === "document").length}</b></div>
+            </div>
+            <div className="pu-profile-section">
+              <span className="pu-profile-label">Shared files</span>
+              <div className="pu-shared-files">
+                {messages.filter(m => m.type === "image" || m.type === "document").slice(-4).reverse().map(m => (
+                  <button key={m.id} className="pu-shared-file" onClick={() => m.type === "image" ? setLightbox(m) : null}>
+                    <span className="pu-shared-file-icon">{m.type === "image" ? <ImageIcon size={17} /> : <FileText size={17} />}</span>
+                    <span><b>{m.fileName || (m.type === "image" ? "Photo" : "Document")}</b><small>{m.time}</small></span>
+                  </button>
+                ))}
+                {!messages.some(m => m.type === "image" || m.type === "document") && <p className="pu-profile-empty">No shared files yet.</p>}
+              </div>
+            </div>
+          </aside>
+        )}
+      </div>
 
       {modal?.attach && <div className="pu-overlay pu-bottom" onClick={() => setModal(null)}><div className="pu-sheet" onClick={e => e.stopPropagation()}><div className="pu-sheet-head"><b>Share from device</b><button onClick={() => setModal(null)}><X size={16} /></button></div><button className="pu-action" onClick={() => { setModal(null); imageInput.current?.click(); }}><ImageIcon size={18} /><span>Photo from gallery</span></button><button className="pu-action" onClick={() => { setModal(null); fileInput.current?.click(); }}><FileText size={18} /><span>Document / file</span></button></div></div>}
 
