@@ -150,9 +150,12 @@ _TRANSITION_DECLINE_RE = re.compile(
     re.IGNORECASE,
 )
 _TRANSITION_CONFIRMATION_RE = re.compile(
-    r"^(?:let[\'’]?s\s+(?:move|go)\s+(?:to\s+)?(?:task\s*\d+|the\s+next\s+task|next\s+task)|"
+    r"^(?:"
+    r"yes[,\s]*i(?:[\'’]|\s*)m\s+ready\s+for\s+(?:the\s+)?next\s+task|"
+    r"let[\'’]?s\s+(?:move|go)\s+(?:to\s+)?(?:task\s*\d+|the\s+next\s+task|next\s+task)|"
     r"(?:move|go)\s+(?:to\s+)?(?:task\s*\d+|the\s+next\s+task|next\s+task)|"
-    r"next\s+task)(?:\s+please)?[.!\s]*$",
+    r"next\s+task"
+    r")(?:\s+please)?[.!\s]*$",
     re.IGNORECASE,
 )
 
