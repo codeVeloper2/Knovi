@@ -140,22 +140,39 @@ function fileExt(name = "") {
   return e ? e.toUpperCase() : "FILE";
 }
 
-function MessageBubble({ msg, first, last, onLongPress, onReplyDrag, onImage }) {
+function MessageBubble({ msg, first, last, onLongPress, onReplyDrag, onImage, onReply, onCopy, onReact, onDelete }) {
+  // Touch / drag state (mobile)
   const timer = useRef(null);
   const start = useRef(null);
   const dragging = useRef(false);
   const [dragY, setDragY] = useState(0);
   const [draggingUi, setDraggingUi] = useState(false);
+  // Hover emoji picker state (desktop)
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const emojiRef = useRef(null);
 
+  // Close emoji picker on outside click
+  useEffect(() => {
+    if (!emojiOpen) return;
+    const handler = (e) => {
+      if (emojiRef.current && !emojiRef.current.contains(e.target)) setEmojiOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [emojiOpen]);
+
+  // ── Touch handlers (mobile only) ──────────────────────────────────────────
   const begin = (e) => {
-    const p = e.touches?.[0] || e;
+    if (e.type === "mousedown") return; // desktop uses hover bar
+    const p = e.touches?.[0];
     if (!p) return;
     start.current = { x: p.clientX, y: p.clientY, time: Date.now() };
     timer.current = setTimeout(() => onLongPress(msg), 500);
   };
   const move = (e) => {
     if (!start.current) return;
-    const p = e.touches?.[0] || e;
+    const p = e.touches?.[0];
+    if (!p) return;
     const dx = p.clientX - start.current.x;
     const dy = p.clientY - start.current.y;
     if (Math.abs(dx) > 12 || Math.abs(dy) > 12) clearTimeout(timer.current);
@@ -169,7 +186,8 @@ function MessageBubble({ msg, first, last, onLongPress, onReplyDrag, onImage }) 
   const end = (e) => {
     clearTimeout(timer.current);
     if (!start.current) return;
-    const p = e.changedTouches?.[0] || e;
+    const p = e.changedTouches?.[0];
+    if (!p) return;
     const dy = p.clientY - start.current.y;
     const dx = p.clientX - start.current.x;
     const elapsed = Date.now() - start.current.time;
@@ -184,36 +202,70 @@ function MessageBubble({ msg, first, last, onLongPress, onReplyDrag, onImage }) 
   useEffect(() => () => clearTimeout(timer.current), []);
 
   const bubbleClass = ["pu-bubble", msg.type === "image" || msg.type === "document" ? "media" : "", msg.deleted ? "deleted" : "", last ? "last-in-group" : ""].filter(Boolean).join(" ");
-  const rowClass = [`pu-message-row`, msg.outgoing ? "outgoing" : "incoming", last ? "last-in-group" : "", draggingUi ? "dragging" : ""].filter(Boolean).join(" ");
+  const rowClass = ["pu-message-row", msg.outgoing ? "outgoing" : "incoming", last ? "last-in-group" : "", draggingUi ? "dragging" : "", emojiOpen ? "active-picker" : ""].filter(Boolean).join(" ");
 
   return (
     <div className={rowClass}>
       {!msg.outgoing && <Avatar name={msg.senderName || "Peer"} photoURL={msg.senderPhotoURL} size={28} className="pu-msg-avatar" />}
-      <div className="pu-msg-stack">
-        <div className="pu-reply-drag-hint"><Reply size={14} /></div>
-        <div
-          className={bubbleClass}
-          style={{ transform: `translateY(${dragY}px)` }}
-          onTouchStart={begin} onTouchMove={move} onTouchEnd={end} onTouchCancel={end}
-          onMouseDown={begin} onMouseMove={(e) => e.buttons && move(e)} onMouseUp={end} onMouseLeave={() => clearTimeout(timer.current)}
-          onContextMenu={(e) => e.preventDefault()}
-          onClick={(e) => { if (msg.type === "image" && msg.imageUrl && e.detail === 1) onImage(msg.imageUrl); }}
-        >
-          {msg.replyTo && <div className="pu-bubble-reply"><span>{msg.replyTo.name}</span><small>{msg.replyTo.text}</small></div>}
-          {msg.deleted ? <span>This message was deleted</span> : msg.type === "image" ? (
-            <div className="pu-image-wrap">
-              <img src={msg.imageUrl} alt={msg.text || "Photo"} className="pu-message-image" />
-              {msg.text && <div className="pu-media-caption">{msg.text}</div>}
-            </div>
-          ) : msg.type === "document" ? (
-            <div className="pu-doc">
-              <span className="pu-doc-icon"><FileText size={19} /></span>
-              <span className="pu-doc-info"><b>{msg.fileName || "Document"}</b><small>{msg.fileMeta || "FILE"}</small></span>
-            </div>
-          ) : msg.isVoice ? <span>🎙️ Voice message</span> : <span>{msg.text}</span>}
+      {/* pu-msg-wrapper: hover target on desktop — the padding-bottom creates the flicker-free bridge */}
+      <div className={`pu-msg-wrapper ${msg.outgoing ? "sent" : "received"}`}>
+        <div className="pu-msg-stack">
+          <div className="pu-reply-drag-hint"><Reply size={14} /></div>
+          <div
+            className={bubbleClass}
+            style={{ transform: `translateY(${dragY}px)` }}
+            onTouchStart={begin} onTouchMove={move} onTouchEnd={end} onTouchCancel={end}
+            onContextMenu={(e) => e.preventDefault()}
+            onClick={(e) => { if (msg.type === "image" && msg.imageUrl && e.detail === 1) onImage(msg); }}
+          >
+            {msg.replyTo && <div className="pu-bubble-reply"><span>{msg.replyTo.name}</span><small>{msg.replyTo.text}</small></div>}
+            {msg.deleted ? <span>This message was deleted</span> : msg.type === "image" ? (
+              <div className="pu-image-wrap">
+                <img src={msg.imageUrl} alt={msg.text || "Photo"} className="pu-message-image" />
+                {msg.text && <div className="pu-media-caption">{msg.text}</div>}
+              </div>
+            ) : msg.type === "document" ? (
+              <div className="pu-doc">
+                <span className="pu-doc-icon"><FileText size={19} /></span>
+                <span className="pu-doc-info"><b>{msg.fileName || "Document"}</b><small>{msg.fileMeta || "FILE"}</small></span>
+              </div>
+            ) : msg.isVoice ? <span>🎙️ Voice message</span> : <span>{msg.text}</span>}
+          </div>
+          {msg.reaction && <span className="pu-reaction">{msg.reaction}</span>}
+          <div className="pu-msg-meta"><span>{msg.time}</span>{msg.outgoing && <span className={`pu-ticks ${msg.status === "read" ? "read" : ""}`}><CheckCheck size={13} /></span>}</div>
         </div>
-        {msg.reaction && <span className="pu-reaction">{msg.reaction}</span>}
-        <div className="pu-msg-meta"><span>{msg.time}</span>{msg.outgoing && <span className={`pu-ticks ${msg.status === "read" ? "read" : ""}`}><CheckCheck size={13} /></span>}</div>
+
+        {/* ── Hover Action Bar (desktop only via CSS) ── */}
+        {!msg.deleted && (
+          <div className="pu-hover-bar" ref={emojiOpen ? emojiRef : null}>
+            <button className="pu-hbar-btn" title="Reply" onClick={() => onReply(msg)}>
+              <Reply size={15} />
+            </button>
+            <button className="pu-hbar-btn" title="Copy" onClick={() => onCopy(msg)}>
+              <Copy size={15} />
+            </button>
+            <div className="pu-hbar-emoji-wrap" ref={emojiRef}>
+              <button className="pu-hbar-btn" title="React" onClick={() => setEmojiOpen(v => !v)}>
+                <Smile size={15} />
+              </button>
+              {emojiOpen && (
+                <div className={`pu-hbar-emoji-picker ${msg.outgoing ? "sent" : "received"}`}>
+                  {EMOJIS.map(e => (
+                    <button key={e} className="pu-hbar-emoji-opt" onClick={() => { onReact(msg, e); setEmojiOpen(false); }}>{e}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button className="pu-hbar-btn" title="Forward" onClick={() => {}}>
+              <Forward size={15} />
+            </button>
+            {msg.outgoing && (
+              <button className="pu-hbar-btn danger" title="Delete" onClick={() => onDelete(msg)}>
+                <Trash2 size={15} />
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -515,6 +567,12 @@ export default function Chat() {
     if (modal?.msg?.text) await navigator.clipboard?.writeText(modal.msg.text).catch(() => {});
     setModal(null);
   };
+  const copyMsg = async (msg) => {
+    if (msg?.text) await navigator.clipboard?.writeText(msg.text).catch(() => {});
+  };
+  const openDeleteDirect = (msg) => {
+    setDeleteMsg(msg);
+  };
   const react = async (msg, emoji) => {
     // Optimistic UI update — WS will confirm / sync full reactions map
     setMessages(prev =>
@@ -613,7 +671,7 @@ export default function Chat() {
               <div className="pu-messages" ref={messagesRef}>
                 {messagesLoading ? <MessageListSkeleton /> : <>
                   <div className="pu-day-divider">Today</div>
-                  {messageRows.map(({ msg, first, last }) => <MessageBubble key={msg.id} msg={{ ...msg, senderName: currentChat?.name, senderPhotoURL: currentChat?.photoURL }} first={first} last={last} onLongPress={m => setModal({ msg: m })} onReplyDrag={m => setReplyTo(m)} onImage={msg => setLightbox(msg)} />)}
+                  {messageRows.map(({ msg, first, last }) => <MessageBubble key={msg.id} msg={{ ...msg, senderName: currentChat?.name, senderPhotoURL: currentChat?.photoURL }} first={first} last={last} onLongPress={m => setModal({ msg: m })} onReplyDrag={m => setReplyTo(m)} onImage={m => setLightbox(m)} onReply={m => setReplyTo(m)} onCopy={copyMsg} onReact={react} onDelete={openDeleteDirect} />)}
                 </>}
               </div>
               {replyTo && <div className="pu-reply-bar"><span></span><div><b>{replyTo.outgoing ? "You" : currentChat?.name}</b><small>{messagePreview(replyTo)}</small></div><button onClick={() => setReplyTo(null)}><X size={15} /></button></div>}
@@ -631,34 +689,7 @@ export default function Chat() {
           )}
         </main>
 
-        {screen && (
-          <aside className="pu-profile-panel">
-            <div className="pu-profile-panel-head"><span>Contact</span><button className="pu-icon-btn" aria-label="Close details" onClick={() => {}}><Info size={18} /></button></div>
-            <div className="pu-profile-main">
-              <Avatar name={currentChat?.name || "Peer"} photoURL={currentChat?.photoURL} online={currentChat?.online} size={96} />
-              <h2>{currentChat?.name || "Peer"}</h2>
-              <span className={currentChat?.online ? "pu-profile-online" : "pu-profile-muted"}>{currentChat?.online ? "Online now" : "Last seen recently"}</span>
-            </div>
-            <div className="pu-profile-section">
-              <span className="pu-profile-label">Conversation</span>
-              <div className="pu-profile-row"><span>Subject</span><b>{currentChat?.subject || "PeerUP chat"}</b></div>
-              <div className="pu-profile-row"><span>Messages</span><b>{messages.length}</b></div>
-              <div className="pu-profile-row"><span>Attachments</span><b>{messages.filter(m => m.type === "image" || m.type === "document").length}</b></div>
-            </div>
-            <div className="pu-profile-section">
-              <span className="pu-profile-label">Shared files</span>
-              <div className="pu-shared-files">
-                {messages.filter(m => m.type === "image" || m.type === "document").slice(-4).reverse().map(m => (
-                  <button key={m.id} className="pu-shared-file" onClick={() => m.type === "image" ? setLightbox(m) : null}>
-                    <span className="pu-shared-file-icon">{m.type === "image" ? <ImageIcon size={17} /> : <FileText size={17} />}</span>
-                    <span><b>{m.fileName || (m.type === "image" ? "Photo" : "Document")}</b><small>{m.time}</small></span>
-                  </button>
-                ))}
-                {!messages.some(m => m.type === "image" || m.type === "document") && <p className="pu-profile-empty">No shared files yet.</p>}
-              </div>
-            </div>
-          </aside>
-        )}
+
       </div>
 
       {modal?.attach && <div className="pu-overlay pu-bottom" onClick={() => setModal(null)}><div className="pu-sheet" onClick={e => e.stopPropagation()}><div className="pu-sheet-head"><b>Share from device</b><button onClick={() => setModal(null)}><X size={16} /></button></div><button className="pu-action" onClick={() => { setModal(null); imageInput.current?.click(); }}><ImageIcon size={18} /><span>Photo from gallery</span></button><button className="pu-action" onClick={() => { setModal(null); fileInput.current?.click(); }}><FileText size={18} /><span>Document / file</span></button></div></div>}
