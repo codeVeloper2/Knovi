@@ -16,7 +16,7 @@ const NAV_ITEMS = [
   { to: "/app/progress",  label: "Progress",  Icon: ProgressIcon,  iconMod: "progress" },
 ];
 
-export default function MobileHamburgerMenu({ open, onClose, onLogout }) {
+export default function MobileHamburgerMenu({ open, onClose, onLogout, onNavigate }) {
   const { user, profile } = useAuth();
   const location = useLocation();
   const drawerRef = useRef(null);
@@ -122,6 +122,9 @@ export default function MobileHamburgerMenu({ open, onClose, onLogout }) {
               key={to}
               to={to}
               end={end}
+              onClick={(e) => {
+                if (onNavigate && onNavigate(to) === false) e.preventDefault();
+              }}
               className={({ isActive }) =>
                 `hmenu-item${isActive ? " hmenu-item--active" : ""}`
               }
@@ -141,6 +144,9 @@ export default function MobileHamburgerMenu({ open, onClose, onLogout }) {
 
           <NavLink
             to="/app/settings"
+            onClick={(e) => {
+              if (onNavigate && onNavigate("/app/settings") === false) e.preventDefault();
+            }}
             className={({ isActive }) =>
               `hmenu-item${isActive ? " hmenu-item--active" : ""}`
             }

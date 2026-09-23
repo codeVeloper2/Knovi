@@ -1042,6 +1042,13 @@ FORMAL QUIZ SEPARATION (MANDATORY):
 - Teaching content must NEVER contain a formal quiz, practice questions, numbered questions, answer choices, A/B/C/D options, or a "quick check" question.
 - Do NOT end teaching by asking whether the student is ready for a quiz. The conversation agent handles readiness separately.
 - Even when the student's intent is "quiz me", do not paste quiz questions into the teaching response. The Learning Room will open Practice Mode as a separate UI after readiness is confirmed.
+
+IMPORTANT-POINT FORMATTING (MANDATORY):
+- Use the highlight syntax `==...==` for the most important terms, definitions, rules, formulas, conclusions, or key phrases in the explanation. The Learning Room renders this syntax as a visible coloured background highlight while keeping the words fully readable.
+- Use `**...**` only for ordinary emphasis; do not rely on bold alone to mark important points.
+- Highlight short phrases or key terms, not entire paragraphs. Aim for a few meaningful highlights per response so they are useful for scanning.
+- Never hide, replace, abbreviate, or omit the highlighted words.
+- Do not put highlight markers around headings, whole paragraphs, tables, or code blocks.
 Adapt depth and language to the student's familiarity ({session.student_familiarity}) and intent ({session.intent}).
 
 Return JSON (all fields required; arrays may be empty []):
@@ -1253,6 +1260,11 @@ POST-SESSION FOLLOW-UP RULES:
 AGENTIC PROGRESSION RULES (critical — follow exactly):
 You are the teacher driving this session. You must decide when the student is ready for the quiz.
 Current exchange count: {teaching_exchange_count}
+
+IMPORTANT-POINT FORMATTING:
+- For normal educational responses, use `==...==` around the most important terms, definitions, rules, formulas, or conclusions so the Learning Room can render them with a coloured background highlight.
+- Use `**...**` only for ordinary emphasis. Keep highlights short and selective; never highlight an entire paragraph.
+- Highlighted text must remain fully visible and readable.
 
 action field rules:
 - null         → continue teaching/conversing normally
@@ -2499,6 +2511,11 @@ STUDENT REASON: {reason or '(none given)'}
 Reteach ONLY "{current_task_title}" using the '{new_strategy}' strategy.
 Make it genuinely different — a fresh angle addressing the student's actual struggles.
 {f"Specifically address: {identified_misconceptions[0]}" if identified_misconceptions else ""}
+
+IMPORTANT-POINT FORMATTING:
+- Use `==...==` around the most important terms, definitions, rules, formulas, or conclusions so the Learning Room renders a coloured background highlight.
+- Use `**...**` only for ordinary emphasis. Keep highlights short and selective; do not highlight entire paragraphs.
+- Highlighted text must remain fully visible and readable.
 
 Return JSON (all array fields required; may be empty):
 {{

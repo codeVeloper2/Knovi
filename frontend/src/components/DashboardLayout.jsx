@@ -62,6 +62,8 @@ export default function DashboardLayout() {
   const [drawerOpen,           setDrawerOpen]           = useState(false);
   const [scOpen,               setScOpen]               = useState(false);
   const [logoutOpen,           setLogoutOpen]           = useState(false);
+  const [exitRoomOpen,         setExitRoomOpen]         = useState(false);
+  const [pendingNavigation,    setPendingNavigation]    = useState(null);
   const [loggingOut,           setLoggingOut]           = useState(false);
   const [desktopSettingsHover, setDesktopSettingsHover] = useState(false);
   const settingsLeaveTimer = useRef(null);
@@ -137,10 +139,45 @@ export default function DashboardLayout() {
     });
   }
 
+  // While an AI Learning Room is active, keep the rest of the app visible but
+  // require explicit confirmation before leaving the room. This prevents an
+  // accidental hamburger/top-nav tap from silently interrupting a learning run.
+  function requestNavigation(to) {
+    if (!isAISessionRoom || to === location.pathname) return true;
+    setPendingNavigation(to);
+    setExitRoomOpen(true);
+    return false;
+  }
+
+  function confirmExitRoom() {
+    const target = pendingNavigation;
+    setExitRoomOpen(false);
+    setPendingNavigation(null);
+    if (target === "__logout__") {
+      setLogoutOpen(true);
+      return;
+    }
+    if (target) navigate(target);
+  }
+
+  function cancelExitRoom() {
+    setExitRoomOpen(false);
+    setPendingNavigation(null);
+  }
+
+  function requestLogout() {
+    if (isAISessionRoom) {
+      setPendingNavigation("__logout__");
+      setExitRoomOpen(true);
+      return;
+    }
+    setLogoutOpen(true);
+  }
+
   useKeyboardShortcuts([
-    ...Object.entries(NAV_SHORTCUTS).map(([to, s]) => ({ combo: s.combo, run: () => navigate(to) })),
-    ...Object.entries(SETTINGS_SHORTCUTS).map(([to, s]) => ({ combo: s.combo, run: () => navigate(to) })),
-    { combo: BACK_SHORTCUT.combo, run: () => navigate("/app") },
+    ...Object.entries(NAV_SHORTCUTS).map(([to, s]) => ({ combo: s.combo, run: () => requestNavigation(to) })),
+    ...Object.entries(SETTINGS_SHORTCUTS).map(([to, s]) => ({ combo: s.combo, run: () => requestNavigation(to) })),
+    { combo: BACK_SHORTCUT.combo, run: () => requestNavigation("/app") },
     { combo: "mod+b", run: () => toggle() },
     { combo: "?",     run: () => setScOpen(true), allowInInputs: false },
   ]);
@@ -158,7 +195,10 @@ export default function DashboardLayout() {
     return (
       <NavLink to={to} end={end}
         className={({ isActive }) => `dash-link ${isActive ? "active" : ""}`}
-        onClick={() => setDrawerOpen(false)}
+        onClick={(e) => {
+          if (requestNavigation(to) === false) { e.preventDefault(); return; }
+          setDrawerOpen(false);
+        }}
         title={label}
       >
         <span className="dash-link-icon-wrap"><Icon /></span>
@@ -183,7 +223,8 @@ export default function DashboardLayout() {
           <MobileHamburgerMenu
             open={drawerOpen}
             onClose={closeDrawer}
-            onLogout={() => setLogoutOpen(true)}
+            onLogout={requestLogout}
+            onNavigate={requestNavigation}
           />
         </>
       )}
@@ -202,6 +243,7 @@ export default function DashboardLayout() {
               .map(({ to, label, Icon, end }) => (
                 <NavLink key={to} to={to} end={end}
                   className={({ isActive }) => `desktop-nav-item${isActive ? " active" : ""}`}
+                  onClick={(e) => { if (requestNavigation(to) === false) e.preventDefault(); }}
                   title={label}>
                   <div className="desktop-nav-icon-wrap"><Icon /></div>
                   <span>{label}</span>
@@ -217,6 +259,7 @@ export default function DashboardLayout() {
               onMouseLeave={closeSettings}>
               <NavLink to="/app/settings"
                 className={({ isActive }) => `desktop-nav-item${isActive ? " active" : ""}`}
+                onClick={(e) => { if (requestNavigation("/app/settings") === false) e.preventDefault(); }}
                 title="Settings">
                 <SettingsIcon />
                 <span>Settings</span>
@@ -227,13 +270,16 @@ export default function DashboardLayout() {
                   {SETTINGS_NAV.filter(s => s.to !== "/app/settings").map(({ to, label, Icon }) => (
                     <NavLink key={to} to={to}
                       className={({ isActive }) => `desktop-nav-dropdown-item${isActive ? " active" : ""}`}
-                      onClick={() => setDesktopSettingsHover(false)}>
+                      onClick={(e) => {
+                        if (requestNavigation(to) === false) { e.preventDefault(); return; }
+                        setDesktopSettingsHover(false);
+                      }}>
                       <Icon /><span>{label}</span>
                     </NavLink>
                   ))}
                   <button type="button"
                     className="desktop-nav-dropdown-item logout-item"
-                    onClick={() => { setDesktopSettingsHover(false); setLogoutOpen(true); }}>
+                    onClick={() => { setDesktopSettingsHover(false); requestLogout(); }}>
                     <LogoutIcon /><span>Logout</span>
                   </button>
                 </div>
@@ -252,6 +298,15 @@ export default function DashboardLayout() {
       </main>
 
       <ShortcutsModal open={scOpen} onClose={() => setScOpen(false)} />
+      <ConfirmDialog
+        open={exitRoomOpen}
+        title="Leave the Learning Room?"
+        message="You're in an active AI learning session. Do you want to leave the Learning Room and go to another page?"
+        confirmText="Leave room"
+        cancelText="Stay here"
+        onConfirm={confirmExitRoom}
+        onCancel={cancelExitRoom}
+      />
       <ConfirmDialog
         open={logoutOpen}
         title="Sign out of PeerUP?"

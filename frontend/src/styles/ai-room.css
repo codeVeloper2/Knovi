@@ -435,7 +435,40 @@
 .ar-rich h2 { font-size: 19px; }
 .ar-rich h3 { font-size: 16px; }
 .ar-rich h4 { font-size: 14px; }
-.ar-rich strong { color: #fff; font-weight: 800; }
+.ar-rich strong {
+  color: #f7fbff;
+  font-weight: 800;
+  background: rgba(105, 135, 255, .28);
+  border: 1px solid rgba(105, 135, 255, .38);
+  border-radius: 5px;
+  padding: 1px 4px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.ar-rich-highlight {
+  color: #f7fbff;
+  font-weight: 750;
+  background: rgba(45, 156, 255, .30);
+  border: 1px solid rgba(45, 156, 255, .40);
+  border-radius: 5px;
+  padding: 1px 4px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* Explicit tutor highlights (==important point==): coloured background, not just bold text. */
+.ar-rich mark.ar-rich-highlight {
+  display: inline;
+  color: #ffffff;
+  font-weight: 800;
+  background: linear-gradient(180deg, rgba(72, 154, 255, .34), rgba(72, 154, 255, .24));
+  border: 1px solid rgba(102, 174, 255, .48);
+  border-radius: 6px;
+  padding: 1px 5px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
 .ar-rich em { color: #b9c8df; }
 .ar-rich code {
   padding: 2px 5px;
