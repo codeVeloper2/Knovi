@@ -157,7 +157,7 @@
 .pu-lightbox-body { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:12px; overflow:hidden; }
 .pu-lightbox-body img { max-width:100%; max-height:100%; object-fit:contain; border-radius:8px; user-select:none; }
 .pu-lightbox-foot { padding:12px 16px calc(16px + env(safe-area-inset-bottom,0px)); display:flex; justify-content:center; }
-.pu-lightbox-foot a { display:flex; align-items:center; gap:8px; padding:12px 24px; border-radius:24px; background:var(--pu-accent); color:#fff; font-size:15px; font-weight:600; text-decoration:none; box-shadow:0 4px 16px rgba(96,165,250,.35); }
+.pu-lightbox-foot a, .pu-lightbox-download { display:flex; align-items:center; gap:8px; padding:12px 24px; border-radius:24px; background:var(--pu-accent); color:#fff; font-size:15px; font-weight:600; text-decoration:none; box-shadow:0 4px 16px rgba(96,165,250,.35); }
 
 .pu-avatar-wrap { position:relative; display:inline-flex; flex:0 0 auto; }
 .pu-avatar { border-radius:50%; display:grid; place-items:center; color:#fff; font-weight:700; user-select:none; border:2px solid transparent; }

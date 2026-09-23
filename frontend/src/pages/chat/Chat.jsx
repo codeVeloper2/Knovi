@@ -174,7 +174,7 @@ function MessageBubble({ msg, first, last, onLongPress, onReplyDrag, onImage }) 
     const dx = p.clientX - start.current.x;
     const elapsed = Date.now() - start.current.time;
     if (dragging.current && Math.abs(dy) >= 52 && Math.abs(dy) > Math.abs(dx) * 1.2) onReplyDrag(msg);
-    else if (!dragging.current && elapsed < 400 && msg.type === "image" && msg.imageUrl) onImage(msg.imageUrl);
+    else if (!dragging.current && elapsed < 400 && msg.type === "image" && msg.imageUrl) onImage(msg);
     start.current = null;
     dragging.current = false;
     setDraggingUi(false);
@@ -604,7 +604,7 @@ export default function Chat() {
           <div className="pu-messages" ref={messagesRef}>
             {messagesLoading ? <MessageListSkeleton /> : <>
               <div className="pu-day-divider">Today</div>
-              {messageRows.map(({ msg, first, last }) => <MessageBubble key={msg.id} msg={{ ...msg, senderName: currentChat?.name, senderPhotoURL: currentChat?.photoURL }} first={first} last={last} onLongPress={m => setModal({ msg: m })} onReplyDrag={m => setReplyTo(m)} onImage={url => setLightbox(url)} />)}
+              {messageRows.map(({ msg, first, last }) => <MessageBubble key={msg.id} msg={{ ...msg, senderName: currentChat?.name, senderPhotoURL: currentChat?.photoURL }} first={first} last={last} onLongPress={m => setModal({ msg: m })} onReplyDrag={m => setReplyTo(m)} onImage={msg => setLightbox(msg)} />)}
             </>}
           </div>
           {replyTo && <div className="pu-reply-bar"><span></span><div><b>{replyTo.outgoing ? "You" : currentChat?.name}</b><small>{messagePreview(replyTo)}</small></div><button onClick={() => setReplyTo(null)}><X size={15} /></button></div>}
@@ -634,13 +634,19 @@ export default function Chat() {
           <div className="pu-lightbox-head" onClick={e => e.stopPropagation()}>
             <button className="pu-lightbox-cancel" onClick={() => setLightbox(null)} aria-label="Cancel photo preview">Cancel</button>
             <b>Photo</b>
-            <button onClick={() => window.open(lightbox, "_blank", "noopener,noreferrer")} aria-label="Open photo"><Download size={18} /></button>
+            <button onClick={async () => {
+              try { await api.downloadAttachment(lightbox.id, lightbox.fileName || "PeerUP-photo"); }
+              catch (err) { setLoadError(err.message || "Couldn't download photo."); }
+            }} aria-label="Download photo"><Download size={18} /></button>
           </div>
           <div className="pu-lightbox-body" onClick={e => e.stopPropagation()}>
-            <img src={lightbox} alt="Full view" />
+            <img src={lightbox.imageUrl || lightbox.attachmentUrl} alt="Full view" />
           </div>
           <div className="pu-lightbox-foot" onClick={e => e.stopPropagation()}>
-            <a href={lightbox} download="PeerUP-photo"><Download size={16} />Save photo</a>
+            <button className="pu-lightbox-download" onClick={async () => {
+              try { await api.downloadAttachment(lightbox.id, lightbox.fileName || "PeerUP-photo"); }
+              catch (err) { setLoadError(err.message || "Couldn't download photo."); }
+            }}><Download size={16} />Save photo</button>
             <button className="pu-lightbox-close-bottom" onClick={() => setLightbox(null)}>Cancel</button>
           </div>
         </div>

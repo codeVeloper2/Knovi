@@ -229,6 +229,30 @@ export function getMessages(convId, beforeId = null, limit = 50) {
   if (beforeId) params.set("before_id", beforeId);
   return request(`/api/chat/conversations/${convId}/messages?${params}`, { auth: true });
 }
+export async function downloadAttachment(messageId, filename = "PeerUP-file") {
+  const res = await fetch(`${API_BASE}/api/chat/messages/${messageId}/attachment`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || "Couldn't download file.");
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get("content-disposition") || "";
+  const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)"?/i);
+  const safeName = decodeURIComponent(match?.[1] || filename).replace(/[\\/:*?"<>|]/g, "_");
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = safeName || "PeerUP-file";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return true;
+}
+
 export function sendMessageRest(convId, body, attachmentUrl = null, attachmentName = null, replyToId = null) {
   return request(`/api/chat/conversations/${convId}/messages`, {
     method: "POST", body: { body, attachmentUrl, attachmentName, replyToId }, auth: true,

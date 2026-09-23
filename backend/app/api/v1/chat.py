@@ -7,13 +7,16 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select as sa_select
 
 from app.core.database import get_session
 from app.core.security import current_user, decode_token
 from app.models.user import User
+from app.models.chat import Message
 from app.schemas.base import StrictModel
 from app.services import chat_service, crypto_service, storage_service
 from app.services.ws_manager import manager
+from app.core.config import settings
 
 router = APIRouter()
 
@@ -185,6 +188,8 @@ _ALLOWED_ATTACHMENT_TYPES = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.ms-excel",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 }
 _MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024  # 25 MB
 
@@ -200,6 +205,13 @@ async def upload_attachment(
     await chat_service.get_conversation(session, conv_id, user.id)
 
     content_type = file.content_type or "application/octet-stream"
+    # Some mobile browsers/file pickers report documents as octet-stream or
+    # omit the MIME type entirely. Fall back to the filename extension.
+    if content_type not in _ALLOWED_ATTACHMENT_TYPES:
+        import mimetypes
+        guessed_type, _ = mimetypes.guess_type(file.filename or "")
+        if guessed_type in _ALLOWED_ATTACHMENT_TYPES:
+            content_type = guessed_type
     if content_type not in _ALLOWED_ATTACHMENT_TYPES:
         raise HTTPException(status_code=400, detail="File type not allowed.")
 
@@ -241,6 +253,50 @@ def _upload_attachment(
         from fastapi import HTTPException
         raise HTTPException(status_code=502, detail=f"Attachment upload failed: {resp.text}")
     return f"{base}/storage/v1/object/public/{bucket}/{path}"
+
+
+@router.get("/chat/messages/{msg_id}/attachment")
+async def download_attachment(
+    msg_id: int,
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Download a chat attachment through the authenticated API.
+
+    The browser receives the file as an attachment instead of navigating to
+    the public Supabase storage URL.
+    """
+    from fastapi.responses import Response
+    import httpx
+    from urllib.parse import urlparse
+
+    msg = (await session.execute(
+        sa_select(Message).where(Message.id == msg_id)
+    )).scalar_one_or_none()
+    if msg is None or not msg.attachment_url:
+        raise HTTPException(status_code=404, detail="Attachment not found.")
+
+    # get_conversation also verifies that the requester belongs to the chat.
+    await chat_service.get_conversation(session, msg.conversation_id, user.id)
+
+    parsed = urlparse(msg.attachment_url)
+    expected_host = urlparse(settings.SUPABASE_URL).netloc if 'settings' in globals() else parsed.netloc
+    if parsed.scheme not in {"http", "https"} or parsed.netloc != expected_host:
+        raise HTTPException(status_code=400, detail="Invalid attachment URL.")
+
+    async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+        upstream = await client.get(msg.attachment_url)
+
+    if upstream.status_code != 200:
+        raise HTTPException(status_code=502, detail="Attachment download failed.")
+
+    media_type = upstream.headers.get("content-type", "application/octet-stream").split(";")[0]
+    filename = (msg.attachment_name or "PeerUP-file").replace('"', "_").replace("\\", "_").replace("/", "_")
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Cache-Control": "private, no-store",
+    }
+    return Response(content=upstream.content, media_type=media_type, headers=headers)
 
 
 @router.post("/chat/messages/{msg_id}/report")
