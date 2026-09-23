@@ -1598,3 +1598,187 @@
   .ar-header-right .ar-header-action { font-size: 9px; padding: 0 7px; }
   .ar-context-progress { width: 78px; }
 }
+
+/* ==========================================================================
+   REBUILD ADDITIONS — typewriter, tap-to-reveal, rebuilt thinking indicator
+   ========================================================================== */
+
+/* ── Typewriter cursor ── */
+.ar-cursor-blink {
+  display: inline-block;
+  color: var(--ar-accent);
+  font-weight: 400;
+  animation: ar-blink .55s steps(1) infinite;
+  margin-left: 1px;
+  line-height: 1;
+  vertical-align: baseline;
+}
+@keyframes ar-blink { 0%,49% { opacity:1 } 50%,100% { opacity:0 } }
+
+/* ── Per-message action row (tap-to-reveal on mobile) ── */
+.ar-msg-actions {
+  display: flex;
+  gap: 7px;
+  margin-top: 11px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(123,168,224,.1);
+  /* Desktop: always show */
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity .15s ease;
+}
+
+.ar-msg-action-btn {
+  flex: 1;
+  min-height: 32px;
+  padding: 6px 9px;
+  border: 1px solid rgba(123,168,224,.18);
+  border-radius: 8px;
+  background: rgba(255,255,255,.03);
+  color: #8ea8c8;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: .15s ease;
+  white-space: nowrap;
+}
+
+.ar-msg-action-btn:hover {
+  background: rgba(91,111,246,.1);
+  border-color: rgba(91,111,246,.4);
+  color: #d0d8ff;
+}
+
+.ar-save-btn.saved {
+  color: #67e8a5;
+  border-color: rgba(103,232,165,.28);
+  background: rgba(39,214,163,.05);
+}
+
+.ar-read-btn {
+  color: #8ea8c8;
+}
+
+/* ── Voice icon button ── */
+.ar-voice-btn {
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* ── Rebuilt thinking indicator ── */
+.ar-thinking-label {
+  color: #bfc9ff;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  margin-bottom: 5px;
+}
+
+.ar-thinking-step-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ar-thinking-step-active {
+  color: #aebcff;
+  font-size: 11px;
+  animation: ar-step-fade .4s ease;
+}
+
+@keyframes ar-step-fade {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Mobile overrides for new elements ── */
+@media (max-width: 760px) {
+  /* Tap-to-reveal: hidden by default on mobile, shown when tapped */
+  .ar-msg-actions {
+    opacity: 0;
+    pointer-events: none;
+    max-height: 0;
+    overflow: hidden;
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+    transition: opacity .18s ease, max-height .2s ease, margin-top .2s ease, padding-top .2s ease;
+  }
+
+  .ar-msg-actions.ar-msg-actions--visible {
+    opacity: 1;
+    pointer-events: auto;
+    max-height: 80px;
+    margin-top: 11px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(123,168,224,.1);
+  }
+
+  .ar-msg-action-btn {
+    min-height: 36px;
+    font-size: 11px;
+    border-radius: 9px;
+  }
+
+  /* Rebuilt thinking indicator on mobile */
+  .ar-thinking {
+    padding: 13px 14px;
+    border-radius: 14px;
+    gap: 10px;
+  }
+
+  .ar-thinking-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .ar-thinking-label {
+    font-size: 11px;
+    margin-bottom: 6px;
+  }
+
+  .ar-thinking-step-active {
+    font-size: 12px;
+  }
+
+  .ar-thinking-dots {
+    display: flex;
+    gap: 4px;
+    margin-top: 2px;
+  }
+
+  .ar-thinking-dots i {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #7d8cff;
+    animation: ar-bounce 1s infinite ease-in-out;
+  }
+
+  .ar-thinking-dots i:nth-child(2) { animation-delay: .15s; }
+  .ar-thinking-dots i:nth-child(3) { animation-delay: .3s; }
+
+  /* Remove old save button entirely on mobile (replaced by tap-to-reveal) */
+  .ar-save-explanation { display: none; }
+
+  /* Voice button — icon only on mobile */
+  .ar-voice-btn {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+    font-size: 17px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+  }
+
+  /* Make AI messages feel tappable */
+  .ar-message-ai .ar-message-card {
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .ar-message-ai .ar-message-card:active {
+    background: rgba(13,36,63,.92);
+  }
+}
