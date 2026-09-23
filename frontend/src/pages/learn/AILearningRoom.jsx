@@ -315,16 +315,15 @@ export default function AILearningRoom() {
       try {
         const nudge = await api.createLearningIdleNudge(sessionId, nextNudge);
 
-        // Guard against safeJson returning {} / missing shape
         console.log("[IdleNudge] Raw API response:", JSON.stringify(nudge));
         if (!nudge || typeof nudge !== "object" || nudge.id == null || !nudge.content) {
           console.warn("[IdleNudge] Bad payload from API:", nudge);
           return;
         }
 
+        // Update ref BEFORE setMessages so the effect re-run sees the correct count
         idleNudgeRef.current = nextNudge;
 
-        // Optimistically append to local state
         setMessages(prev => {
           if (prev.some(m => m.id === nudge.id || m.id === Number(nudge.id))) return prev;
           return [...prev, {
@@ -334,14 +333,6 @@ export default function AILearningRoom() {
             extra: nudge.extra || { idleNudgeNumber: nextNudge },
           }];
         });
-
-        // Also re-fetch from server so the nudge survives any subsequent state overwrite
-        try {
-          const fresh = await api.getSessionMessages(sessionId);
-          if (Array.isArray(fresh) && fresh.length) {
-            setMessages(fresh);
-          }
-        } catch (_) { /* ignore — optimistic add is enough */ }
 
         if (ttsRef.current) speakText(nudge.content || "");
         console.log(`[IdleNudge] Nudge #${nextNudge} added`, nudge.id);
