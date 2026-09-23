@@ -60,31 +60,54 @@ function useTypewriter(targetText, active) {
 }
 
 /* ─── Robust TTS (handles mobile async voice loading) ────────────────── */
-function speakText(text) {
-  if (!text || !window.speechSynthesis) return;
+function speakText(text, { onStart, onEnd } = {}) {
+  if (!text || !window.speechSynthesis) { onEnd?.(); return; }
+
+  // Keep punctuation so the voice pauses naturally; strip only markdown noise
   const clean = String(text)
-    .replace(/```[\s\S]*?```/g, " code ")
-    .replace(/[#*_`~>]+/g, " ")
+    .replace(/```[\s\S]*?```/g, ", code block, ")
+    .replace(/#{1,6}\s+/g, "")
+    .replace(/[*_`~>]+/g, "")
+    .replace(/([.!?])\s+/g, "$1  ")   // longer pause after sentences
+    .replace(/:\s+/g, ":  ")           // pause after colons
+    .replace(/;\s+/g, ";  ")           // pause after semicolons
+    .replace(/—/g, ", ")               // em-dash → short pause
     .replace(/\s+/g, " ")
     .trim();
-  if (!clean) return;
+  if (!clean) { onEnd?.(); return; }
 
   function doSpeak() {
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(clean);
+
     const voices = window.speechSynthesis.getVoices();
     const english = voices.filter(v => /^en/i.test(v.lang));
     const pool = english.length ? english : voices;
-    const preferred = ["Aria", "Jenny", "Guy", "Samantha", "Karen", "Daniel", "Google UK", "Google US"];
-    const voice = pool.find(v => preferred.some(n => v.name.includes(n)))
-      || pool.find(v => /natural|neural|enhanced|premium/i.test(v.name))
-      || pool[0];
+
+    // Exact-name matches first, then partial, then neural/natural, then female EN
+    const preferred = [
+      "Google UK English Female", "Google US English",
+      "Samantha", "Karen", "Aria", "Jenny", "Daniel",
+    ];
+    const voice =
+      pool.find(v => preferred.some(n => v.name === n)) ||
+      pool.find(v => preferred.some(n => v.name.includes(n))) ||
+      pool.find(v => /natural|neural|enhanced|premium/i.test(v.name)) ||
+      pool.find(v => /female/i.test(v.name) && /^en/i.test(v.lang)) ||
+      pool[0];
+
     if (voice) { u.voice = voice; u.lang = voice.lang; }
-    u.rate = 0.95; u.pitch = 1; u.volume = 1;
+    u.rate = 0.88;   // slightly slower → clearer on mobile
+    u.pitch = 1.05;
+    u.volume = 1;
+
+    u.onstart = () => onStart?.();
+    u.onend   = () => onEnd?.();
+    u.onerror = () => onEnd?.();
+
     window.speechSynthesis.speak(u);
   }
 
-  // Voices may not be loaded yet on mobile Chrome
   const voices = window.speechSynthesis.getVoices();
   if (voices.length) {
     doSpeak();
@@ -93,10 +116,13 @@ function speakText(text) {
       window.speechSynthesis.onvoiceschanged = null;
       doSpeak();
     };
-    // Fallback: try anyway after short delay
     setTimeout(doSpeak, 300);
   }
 }
+
+function _pauseSpeech()  { window.speechSynthesis?.pause(); }
+function _resumeSpeech() { window.speechSynthesis?.resume(); }
+function _stopSpeech()   { window.speechSynthesis?.cancel(); }
 
 /* ═══════════════════════════════════════════════════════════════════════ */
 export default function AILearningRoom() {
@@ -607,7 +633,6 @@ export default function AILearningRoom() {
                   isSaved={savedMessageIds.has(Number(msg.id))}
                   onSave={handleSaveExplanation}
                   isTypingNow={typingMessageId === msg.id}
-                  onReadAloud={() => speakText(msg.content || "")}
                 />
               ))}
 
@@ -663,11 +688,14 @@ export default function AILearningRoom() {
 }
 
 /* ─── MessageCard: plain AI, carded student ──────────────────────────── */
-function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave, isTypingNow, onReadAloud }) {
+function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave, isTypingNow }) {
   const ai = msg.role === "ai";
   const locked = ai && msg.extra?.locked;
   const action = msg.extra?.action;
   const msgKey = String(msg.id || "");
+
+  // "idle" | "loading" | "playing" | "paused"
+  const [ttsState, setTtsState] = useState("idle");
 
   const { displayed, done } = useTypewriter(msg.content || "", ai && isTypingNow);
   const shownContent = (ai && isTypingNow) ? displayed : (msg.content || "");
@@ -680,8 +708,52 @@ function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave, is
     } catch {}
   }
 
+  function handleReadAloud() {
+    if (ttsState === "playing") {
+      _pauseSpeech();
+      setTtsState("paused");
+      return;
+    }
+    if (ttsState === "paused") {
+      _resumeSpeech();
+      setTtsState("playing");
+      return;
+    }
+    // idle — start fresh
+    setTtsState("loading");
+    speakText(msg.content || "", {
+      onStart: () => setTtsState("playing"),
+      onEnd:   () => setTtsState("idle"),
+    });
+  }
+
+  // Icon shown on the read-aloud button based on current tts state
+  const ReadAloudIcon = () => {
+    if (ttsState === "loading") return (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ animation: "ar-spin 0.8s linear infinite", transformOrigin: "center" }}>
+        <circle cx="12" cy="12" r="9" strokeDasharray="28" strokeDashoffset="10" />
+      </svg>
+    );
+    if (ttsState === "playing") return (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+      </svg>
+    );
+    if (ttsState === "paused") return (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <polygon points="5 3 19 12 5 21 5 3"/>
+      </svg>
+    );
+    return (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+      </svg>
+    );
+  };
+
   if (!ai) {
-    // Student message — bubble/card on the right
     return (
       <div className="ar-msg-student">
         <div className="ar-msg-student-bubble">
@@ -692,7 +764,6 @@ function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave, is
     );
   }
 
-  // AI message — plain, full-width, icon row below
   return (
     <div className={`ar-msg-ai ${locked ? "ar-msg-ai-locked" : ""}`}>
       <div className="ar-msg-ai-header">
@@ -709,7 +780,7 @@ function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave, is
         {isTypingNow && !done && <span className="ar-cursor-blink">▍</span>}
       </div>
 
-      {/* Icon row: copy · play · save */}
+      {/* Icon row: copy · play/pause · save */}
       {!locked && (
         <div className="ar-msg-icons">
           <button
@@ -724,16 +795,12 @@ function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave, is
             }
           </button>
           <button
-            className="ar-msg-icon-btn"
-            onClick={onReadAloud}
-            title="Read aloud"
+            className={`ar-msg-icon-btn ${ttsState !== "idle" ? "ar-icon-active" : ""}`}
+            onClick={handleReadAloud}
+            title={ttsState === "playing" ? "Pause" : ttsState === "paused" ? "Resume" : ttsState === "loading" ? "Loading…" : "Read aloud"}
             aria-label="Read aloud"
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-              <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
-              <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
-            </svg>
+            <ReadAloudIcon />
           </button>
           <button
             className={`ar-msg-icon-btn ${isSaved ? "ar-icon-saved" : ""}`}

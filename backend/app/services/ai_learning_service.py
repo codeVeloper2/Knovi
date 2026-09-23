@@ -1340,13 +1340,43 @@ async def create_idle_nudge(session_id: int, user_id: int, db: AsyncSession, nud
     if already:
         return already[-1].serialize()
     task_index = _current_task_index_from_messages(ordered)
-    content = (
-        "I haven’t seen your reply yet. Are you still with me? Take your time — "
-        "you can ask me to explain it differently if something isn’t clicking."
-        if nudge_number == 1 else
-        "No rush. I’m still here with you. If this part feels unclear, tell me what’s confusing "
-        "and I’ll approach it from another angle."
+
+    # Build context from recent messages so the AI can personalise the nudge
+    recent_msgs = ordered[-6:] if len(ordered) >= 6 else ordered
+    context_lines = []
+    for m in recent_msgs:
+        role_label = "Tutor" if m.role == "ai" else "Student"
+        snippet = (m.content or "")[:200]
+        context_lines.append(f"{role_label}: {snippet}")
+    context_snippet = "\n".join(context_lines)
+
+    concept_name = getattr(session, "concept_name", None) or ""
+    nudge_prompt = (
+        f"You are UPRAD, a warm and encouraging AI tutor.\n"
+        f"The student has gone quiet after your last message. Write a short friendly nudge (1-2 sentences max).\n\n"
+        f"Recent conversation:\n{context_snippet}\n\n"
+        f"Concept being taught: {concept_name}\n"
+        f"This is nudge {nudge_number} of 2.\n\n"
+        "Rules:\n"
+        "- Nudge 1: gently check they are still there, invite a reply or question. Warm, not pushy.\n"
+        "- Nudge 2: acknowledge they may need more time, offer to approach it differently. Brief.\n"
+        "- Do NOT repeat teaching content. No markdown. No bullet points.\n"
+        "- Return ONLY the nudge message text, nothing else."
     )
+    try:
+        content, _ = await call_with_fallback(nudge_prompt, temperature=0.8)
+        content = content.strip().strip('"').strip()
+        if not content:
+            raise ValueError("empty response")
+    except Exception:
+        content = (
+            "I haven’t seen your reply yet — are you still with me? Take your time, "
+            "and feel free to ask me to explain it a different way."
+            if nudge_number == 1 else
+            "No rush at all, I’m still here. If anything feels unclear, just let me know "
+            "and I’ll try coming at it from a different angle."
+        )
+
     msg = await _add_message(
         session_id, "ai", "idle_nudge", content, db,
         extra={"idleNudgeNumber": nudge_number, "currentTaskIndex": task_index, "taskIndex": task_index},

@@ -1844,3 +1844,8 @@
   /* hide old message card styles on mobile since we rebuilt */
   .ar-message { display: none; }
 }
+
+/* ─── Read-aloud spinner ─────────────────────────────────────────────── */
+@keyframes ar-spin {
+  to { transform: rotate(360deg); }
+}
