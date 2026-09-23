@@ -19,7 +19,16 @@
 }
 
 .pu-app, .pu-app * { box-sizing: border-box; }
-.pu-app { display:flex; flex-direction:column; background:var(--pu-bg); color:var(--pu-text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; overflow:hidden; }
+.pu-app {
+  display: flex;
+  flex-direction: column;
+  background: var(--pu-bg);
+  color: var(--pu-text);
+  font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+  overflow: hidden;
+  height: 100%;        /* always fill the parent — media queries can override */
+  min-height: 0;
+}
 /* pu-peer-header is removed from JSX — these rules kept as no-ops for safety */
 .pu-peer-header { display: none !important; }
 .pu-brand { display:flex; align-items:center; gap:10px; font-size:18px; letter-spacing:-.25px; }
@@ -56,7 +65,7 @@
 .pu-language-tags i { padding:2px 6px; border-radius:4px; background:rgba(96,165,250,.12); color:var(--pu-accent); font-size:10px; font-weight:700; font-style:normal; }
 .pu-empty { text-align:center; color:var(--pu-dim); padding:50px 20px; font-size:14px; }
 
-.pu-conversation { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; background:var(--pu-bg); }
+.pu-conversation { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; background:var(--pu-bg); max-height:100%; }
 .pu-user-header { height:56px; flex:0 0 56px; display:flex; align-items:center; gap:8px; padding:8px 8px 8px 4px; background:var(--pu-bg); border-bottom:1px solid var(--pu-border); z-index:15; }
 .pu-back { flex:0 0 40px; }
 .pu-user-info { flex:1; min-width:0; }
@@ -363,8 +372,8 @@
 }
 
 /* Desktop chat workspace */
-.pu-desktop-shell { flex:1; min-height:0; display:grid; grid-template-columns:340px minmax(0,1fr); overflow:hidden; }
-.pu-desktop-shell > .pu-list-screen { min-width:0; border-right:1px solid var(--pu-border); }
+.pu-desktop-shell { flex:1; min-height:0; display:grid; grid-template-columns:340px minmax(0,1fr); overflow:hidden; max-height:100%; }
+.pu-desktop-shell > .pu-list-screen { min-width:0; min-height:0; border-right:1px solid var(--pu-border); overflow:hidden; }
 .pu-desktop-shell > .pu-conversation { min-width:0; position:relative; }
 .pu-chat-item.selected { background:rgba(91,110,245,.14); box-shadow:inset 3px 0 0 var(--pu-blue); }
 .pu-chat-item:hover { background:rgba(255,255,255,.025); }
