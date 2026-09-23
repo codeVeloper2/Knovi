@@ -13,6 +13,8 @@ from app.services.ai_learning_service import (
     _VALID_TRANSITIONS,
     _derive_learning_state,
     _split_ai_response,
+    _remove_embedded_quiz_from_teaching,
+    _TRANSITION_CONFIRMATION_RE,
 )
 
 
@@ -144,3 +146,24 @@ def test_long_tutor_response_is_split_into_at_most_three_chunks():
 
 def test_short_tutor_response_stays_one_message():
     assert _split_ai_response("That makes sense.") == ["That makes sense."]
+
+
+def test_teaching_quiz_cleanup_removes_embedded_question_block():
+    text = (
+        "The law explains how price and quantity demanded are related.\n\n"
+        "How about a quick check to see what you remember?\n\n"
+        "Question 1: If price rises, what happens? A) It increases B) It decreases\n"
+        "Question 2: What causes a movement along the curve? A) Price B) Income"
+    )
+    cleaned = _remove_embedded_quiz_from_teaching(text)
+    assert "Question 1" not in cleaned
+    assert "Question 2" not in cleaned
+    assert "quick check" not in cleaned.lower()
+    assert "law explains" in cleaned
+
+
+def test_transition_confirmation_accepts_natural_move_to_task_phrase():
+    assert _TRANSITION_CONFIRMATION_RE.fullmatch("Let's move to task 2 please")
+    assert _TRANSITION_CONFIRMATION_RE.fullmatch("yes")
+    assert _TRANSITION_CONFIRMATION_RE.fullmatch("next task")
+    assert not _TRANSITION_CONFIRMATION_RE.fullmatch("I don't want to move to task 2")

@@ -595,6 +595,10 @@ export default function AILearningRoom() {
         if (msg.extra?.responseGroupId) speakGroupMessages(canonical, msg.extra.responseGroupId);
         else speakText(msg.content || "");
       }
+      if (msg.extra?.taskCompleted === true && Number.isInteger(Number(msg.extra?.taskIndex))) {
+        const completedIndex = Number(msg.extra.taskIndex);
+        setCompletedTaskIndexes(prev => [...new Set([...prev, completedIndex])]);
+      }
       if (msg.extra?.action === "start_quiz") {
         await beginPractice(msg.extra?.actionData?.task_index ?? currentTaskIndex);
       } else if (msg.extra?.action === "reteach_task") {
@@ -610,7 +614,12 @@ export default function AILearningRoom() {
             try { const s = await api.getSessionMessages(sessionId); if (Array.isArray(s)) fMsgs = s; } catch {}
             setSession(f); setMessages(fMsgs); setCurrentTaskIndex(nextIndex);
             const ps = f?.learningState;
-            if (Array.isArray(ps?.completedTaskIndexes)) setCompletedTaskIndexes(ps.completedTaskIndexes.map(Number).filter(Number.isInteger));
+            if (Array.isArray(ps?.completedTaskIndexes)) {
+              setCompletedTaskIndexes(prev => [...new Set([
+                ...prev,
+                ...ps.completedTaskIndexes.map(Number).filter(Number.isInteger),
+              ])]);
+            }
             setPhase("teaching");
             const nm = fMsgs.filter(m => m.role === "ai" && Number(m.extra?.taskIndex) === nextIndex);
             const g = nm.find(m => m.extra?.responseGroupId)?.extra?.responseGroupId;

@@ -90,8 +90,8 @@ _INTENT_PROMPT_MODIFIER: dict[str, str] = {
         "Go beyond the basics. Include technical depth, edge cases, underlying mechanisms, "
         "and implications. Assume the student can handle complexity.",
     "quiz_me":
-        "Begin immediately with a diagnostic question to assess current understanding. "
-        "Ask before explaining. Use the student's response to tailor the explanation.",
+        "Use a brief diagnostic discussion only if useful, but do NOT present a formal quiz, numbered questions, answer choices, or a quiz block inside teaching. "
+        "The formal compulsory quiz is opened separately by the Learning Room after an explicit readiness confirmation.",
     "custom":
         "Follow the student's specific request while staying within the curriculum concept.",
 }
@@ -146,6 +146,13 @@ _UNDERSTANDING_SIGNAL_RE = re.compile(
 )
 _TRANSITION_DECLINE_RE = re.compile(
     r"^(?:no|nope|not yet|not really|explain (?:it|that) again|please explain (?:it|that) again|i(?: still)? don['’]?t (?:get|understand) (?:it|that)|i need (?:more|another) explanation)[.!\s]*$",
+    re.IGNORECASE,
+)
+_TRANSITION_CONFIRMATION_RE = re.compile(
+    r"^(?:yes|yeah|yep|sure|ready|i(?:['’]|\s*)m ready|okay|ok|absolutely|sounds good|go ahead|"
+    r"let['’]?s\s+(?:move|go)\s+(?:to\s+)?(?:task\s*\d+|the\s+next\s+task|next\s+task)|"
+    r"(?:move|go)\s+(?:to\s+)?(?:task\s*\d+|the\s+next\s+task|next\s+task)|"
+    r"next\s+task)(?:\s+please)?[.!\s]*$",
     re.IGNORECASE,
 )
 
@@ -230,6 +237,32 @@ def _safe_int(v: Any, lo: int = 0, hi: int = 100) -> Optional[int]:
     if isinstance(v, (int, float)):
         return max(lo, min(hi, int(v)))
     return None
+
+
+def _remove_embedded_quiz_from_teaching(text: str) -> str:
+    """Keep formal assessment content out of the teaching message stream.
+
+    The actual quiz is generated and rendered separately in Practice Mode. This
+    defensive cleanup protects the UI if a provider ignores the prompt and
+    returns a numbered question block anyway.
+    """
+    value = (text or "").strip()
+    if not value:
+        return value
+
+    marker = re.search(r"(?im)^\s*(?:question\s*\d+|q\s*\d+)\s*[:.)-]", value)
+    if marker:
+        value = value[:marker.start()].rstrip()
+
+    # Remove a trailing readiness/quiz invitation left immediately before an
+    # accidentally embedded question block. Do not touch normal explanations.
+    lines = value.splitlines()
+    while lines and re.search(
+        r"(?i)(?:quick\s+check|ready\s+to\s+(?:test|answer)|test\s+(?:what|your)\s+understanding)",
+        lines[-1],
+    ):
+        lines.pop()
+    return "\n".join(lines).strip() or "Teaching content is ready. Let's continue with the current learning task."
 
 
 def _derive_learning_state(messages: list) -> dict:
@@ -953,6 +986,11 @@ Attempt number: {attempt_number}
 If a focused learning task was supplied, teach ONLY that task deeply enough to study and retrieve later.
 If no focused task was supplied, this is the orientation step: briefly introduce the concept and explain the learning plan,
 but DO NOT teach all tasks yet. Keep the orientation to about 120–220 words.
+
+FORMAL QUIZ SEPARATION (MANDATORY):
+- Teaching content must NEVER contain a formal quiz, practice questions, numbered questions, answer choices, A/B/C/D options, or a "quick check" question.
+- Do NOT end teaching by asking whether the student is ready for a quiz. The conversation agent handles readiness separately.
+- Even when the student's intent is "quiz me", do not paste quiz questions into the teaching response. The Learning Room will open Practice Mode as a separate UI after readiness is confirmed.
 Adapt depth and language to the student's familiarity ({session.student_familiarity}) and intent ({session.intent}).
 
 Return JSON (all fields required; arrays may be empty []):
@@ -982,6 +1020,7 @@ Return JSON (all fields required; arrays may be empty []):
     if current_plan:
         parsed["learning_tasks"] = current_plan
     explanation  = _safe_str(parsed.get("explanation"), "Teaching content temporarily unavailable.")
+    explanation  = _remove_embedded_quiz_from_teaching(explanation)
     raw_plan = current_plan if current_plan else _safe_list(parsed.get("learning_tasks"))
     learning_tasks = []
     valid_objective_ids = {int(lo.id) for lo in (topic.learning_objectives or [])}
@@ -1169,8 +1208,10 @@ action field rules:
 - "ask_readiness" → ask the learner whether they are ready for a quick check; do NOT start practice yet
 - "start_quiz" → trigger Practice Mode only after the learner has explicitly confirmed readiness
 - "mark_task_done" → only AFTER a quiz was passed (score ≥ 70); mark current task complete
-- "next_task"  → immediately after mark_task_done to proceed to the next task
+- "next_task"  → only after the persisted transition prompt was shown AND the learner explicitly confirms readiness to move on
 - "complete_session" → all tasks done and passed
+
+RESPONSE SEPARATION: If action is "ask_readiness" or "start_quiz", the response must be one short transition message only. NEVER include quiz questions, answer choices, or question lists in that response.
 
 When to signal "ask_readiness":
 - The learner has had enough teaching/explanation to reasonably check understanding
@@ -1255,6 +1296,7 @@ Rules:
         None,
     )
     confirmation = bool(_READINESS_CONFIRMATION_RE.fullmatch(content.strip()))
+    transition_confirmation = bool(_TRANSITION_CONFIRMATION_RE.fullmatch(content.strip()))
     previous_asked_readiness = bool(previous_ai and _READINESS_SIGNAL_RE.search(previous_ai.content or ""))
     previous_task_transition = bool(
         previous_ai
@@ -1262,12 +1304,19 @@ Rules:
         and (previous_ai.extra or {}).get("nextTaskIndex") is not None
     )
 
+    # Progression is server-authoritative. The model may suggest an action, but it
+    # cannot skip the persisted quiz/transition gate.
+    if action == "next_task" and not previous_task_transition:
+        action = None
+        action_data = None
+
     # A successful task completion is followed by an explicit transition question.
-    # A simple confirmation advances to the next persisted Learning Plan task.
-    if confirmation and previous_task_transition:
+    # Accept natural confirmations such as "Let's move to task 2 please", but only
+    # when that transition prompt actually exists in the persisted conversation.
+    if previous_task_transition and (confirmation or transition_confirmation):
         next_task_index = int((previous_ai.extra or {}).get("nextTaskIndex"))
         action = "next_task"
-        action_data = {"task_index": next_task_index, "reason": "The learner confirmed they are ready for the next Learning Plan task."}
+        action_data = {"task_index": next_task_index, "reason": "The learner explicitly confirmed they are ready for the next Learning Plan task."}
         response_text = "Great — let’s move to the next part."
     elif _TRANSITION_DECLINE_RE.fullmatch(content.strip()) and previous_task_transition:
         action = "reteach_task"
@@ -1276,9 +1325,14 @@ Rules:
     elif confirmation and previous_asked_readiness:
         action = "start_quiz"
         action_data = {"task_index": current_task_index, "reason": "The learner explicitly confirmed readiness."}
+        # Do not let the model paste the quiz into the conversation. The frontend
+        # opens the actual Practice Mode UI immediately after this message.
+        response_text = "Great — I’ll open the quick check now."
     elif action == "start_quiz":
         action = "ask_readiness"
         action_data = {"reason": "The learner needs to explicitly confirm readiness before practice."}
+        response_text = "You’ve covered enough for a quick check. Are you ready to test what you understand?"
+    elif action == "ask_readiness":
         response_text = "You’ve covered enough for a quick check. Are you ready to test what you understand?"
     elif action is None and _UNDERSTANDING_SIGNAL_RE.search(content or ""):
         action = "ask_readiness"
