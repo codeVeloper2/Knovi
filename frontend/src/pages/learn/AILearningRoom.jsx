@@ -1273,10 +1273,10 @@ function inlineMarkdown(text) {
     if (p.startsWith("$$") && p.endsWith("$$")) return <span key={i}>{renderMath(p.slice(2, -2), true)}</span>;
     if (p.startsWith("\\(") && p.endsWith("\\)")) return <span key={i}>{renderMath(p.slice(2, -2))}</span>;
     if (p.startsWith("$") && p.endsWith("$") && p.length > 2) return <span key={i}>{renderMath(p.slice(1, -1))}</span>;
-    if (p.startsWith("==") && p.endsWith("==")) return <mark key={i} className="ar-rich-highlight">{p.slice(2, -2)}</mark>;
-    if ((p.startsWith("**") && p.endsWith("**")) || (p.startsWith("__") && p.endsWith("__"))) return <strong key={i}>{p.slice(2, -2)}</strong>;
-    if (p.startsWith("~~") && p.endsWith("~~")) return <del key={i}>{p.slice(2, -2)}</del>;
-    if ((p.startsWith("*") && p.endsWith("*")) || (p.startsWith("_") && p.endsWith("_"))) return <em key={i}>{p.slice(1, -1)}</em>;
+    if (p.startsWith("==") && p.endsWith("==")) return <mark key={i} className="ar-rich-highlight">{inlineMarkdown(p.slice(2, -2))}</mark>;
+    if ((p.startsWith("**") && p.endsWith("**")) || (p.startsWith("__") && p.endsWith("__"))) return <strong key={i}>{inlineMarkdown(p.slice(2, -2))}</strong>;
+    if (p.startsWith("~~") && p.endsWith("~~")) return <del key={i}>{inlineMarkdown(p.slice(2, -2))}</del>;
+    if ((p.startsWith("*") && p.endsWith("*")) || (p.startsWith("_") && p.endsWith("_"))) return <em key={i}>{inlineMarkdown(p.slice(1, -1))}</em>;
     if (p.startsWith("`") && p.endsWith("`")) return <code key={i}>{p.slice(1, -1)}</code>;
     return p;
   });
