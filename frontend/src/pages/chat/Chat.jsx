@@ -5,7 +5,8 @@ import * as api from "../../api";
 import { useAuth } from "../../context/AuthContext";
 import "./Chat.css";
 
-const EMOJIS = ["🔥", "👏", "😢", "😮", "🙏", "😂", "✨"];
+// Must match backend ALLOWED set in chat_service.toggle_reaction
+const EMOJIS = ["👍", "❤️", "😂", "😮", "🙏", "🔥"];
 
 const GRADIENTS = [
   ["#5b6ef5", "#6366f1"],
@@ -68,6 +69,12 @@ function mapChat(raw) {
     subject: raw.subject || "",
   };
 }
+/** Backend user serialize uses `uid` (string of numeric id). Accept both. */
+function resolveMyId(user) {
+  if (!user) return null;
+  return user.uid ?? user.id ?? null;
+}
+
 function mapMessage(raw, myId, partnerName) {
   const isImage = !!raw.attachmentUrl && /\.(jpe?g|png|webp|gif)(\?|$)/i.test(raw.attachmentUrl);
   // Compare as strings so "12" === 12 never fails
@@ -100,7 +107,9 @@ function mapMessage(raw, myId, partnerName) {
         }
       : raw.replyTo || null,
     senderName: isMine ? "You" : partnerName,
+    // Prefer a single display reaction (first key); keep full map for future
     reaction: Object.keys(raw.reactions || {})[0] || null,
+    reactions: raw.reactions || {},
   };
 }
 
@@ -240,12 +249,14 @@ export default function Chat() {
       setLoading(false);
     }
   };
+  const myId = resolveMyId(user);
+
   const loadMessages = async (id) => {
     if (!id) return;
     try {
       const rows = await api.getMessages(id);
       const partner = chats.find(c => c.id === String(id))?.name || "Peer";
-      setMessages((rows || []).map(m => mapMessage(m, user?.id, partner)));
+      setMessages((rows || []).map(m => mapMessage(m, myId, partner)));
       await api.markRead(id).catch(() => {});
       setChats(prev => prev.map(c => c.id === String(id) ? { ...c, unread: 0 } : c));
     } catch (err) {
@@ -261,7 +272,7 @@ export default function Chat() {
     const ws = api.openChatSocket(screen, event => {
       if (event.type === "message" && event.data) {
         const partner = chats.find(c => c.id === String(screen))?.name || "Peer";
-        const mapped = mapMessage(event.data, user?.id, partner);
+        const mapped = mapMessage(event.data, myId, partner);
         setMessages(prev => {
           // Already have this exact id
           if (prev.some(m => String(m.id) === String(mapped.id))) return prev;
@@ -285,13 +296,13 @@ export default function Chat() {
         setMessages(prev => prev.map(m => String(m.id) === String(event.msgId) ? { ...m, deleted: true, text: "This message was deleted", type: undefined, imageUrl: undefined, reaction: null } : m));
       } else if (event.type === "reaction") {
         const reaction = Object.keys(event.reactions || {})[0] || null;
-        setMessages(prev => prev.map(m => String(m.id) === String(event.msgId) ? { ...m, reaction } : m));
+        setMessages(prev => prev.map(m => String(m.id) === String(event.msgId) ? { ...m, reaction, reactions: event.reactions || {} } : m));
       } else if (event.type === "read") {
         setMessages(prev => prev.map(m => m.outgoing ? { ...m, status: "read" } : m));
       }
     });
     return () => ws.close();
-  }, [screen, user?.id]);
+  }, [screen, myId]);
   useEffect(() => {
     requestAnimationFrame(() => { if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight; });
   }, [screen, messages.length]);
@@ -336,7 +347,7 @@ export default function Chat() {
           }
         : null,
       senderName: "You",
-      senderId: user?.id,
+      senderId: myId,
       _optimistic: true,
     };
 
@@ -386,8 +397,13 @@ export default function Chat() {
       );
       // Replace temp bubble with real server message (still outgoing / right side)
       const partner = currentChat?.name || "Peer";
-      const mapped = mapMessage(created || {}, user?.id, partner);
-      mapped.outgoing = true; // force right side even if senderId shape differs
+      const mapped = mapMessage(created || {}, myId, partner);
+      // Defensive: ensure right side if senderId ever mismatches shape
+      if (myId != null && created?.senderId != null && String(created.senderId) === String(myId)) {
+        mapped.outgoing = true;
+      } else if (myId != null) {
+        mapped.outgoing = true;
+      }
       mapped.status = mapped.status || "delivered";
       if (!mapped.text && savedInput) mapped.text = savedInput;
       if (savedPending?.type === "image" && !mapped.imageUrl && attachmentUrl) {
@@ -448,8 +464,38 @@ export default function Chat() {
     setModal(null);
   };
   const react = async (msg, emoji) => {
-    try { await api.sendReaction(msg.id, emoji); } catch (err) { setLoadError(err.message || "Couldn't react."); }
+    // Optimistic UI update — WS will confirm / sync full reactions map
+    setMessages(prev =>
+      prev.map(m =>
+        String(m.id) === String(msg.id)
+          ? { ...m, reaction: emoji, reactions: { ...(m.reactions || {}), [emoji]: [myId] } }
+          : m
+      )
+    );
     setModal(null);
+    try {
+      const res = await api.sendReaction(msg.id, emoji);
+      if (res?.reactions) {
+        const reaction = Object.keys(res.reactions)[0] || null;
+        setMessages(prev =>
+          prev.map(m =>
+            String(m.id) === String(msg.id)
+              ? { ...m, reaction, reactions: res.reactions }
+              : m
+          )
+        );
+      }
+    } catch (err) {
+      // Roll back optimistic reaction on failure
+      setMessages(prev =>
+        prev.map(m =>
+          String(m.id) === String(msg.id)
+            ? { ...m, reaction: msg.reaction || null, reactions: msg.reactions || {} }
+            : m
+        )
+      );
+      setLoadError(err.message || "Couldn't react.");
+    }
   };
 
   const messageRows = messages.map((m, i) => ({ msg: m, first: !messages[i - 1] || messages[i - 1].outgoing !== m.outgoing, last: !messages[i + 1] || messages[i + 1].outgoing !== m.outgoing }));
