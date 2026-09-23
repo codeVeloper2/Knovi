@@ -219,6 +219,45 @@ function MessageBubble({ msg, first, last, onLongPress, onReplyDrag, onImage }) 
   );
 }
 
+function ChatListSkeleton() {
+  return (
+    <div className="pu-chat-skeleton" aria-hidden="true">
+      {Array.from({ length: 7 }).map((_, i) => (
+        <div className="pu-chat-skeleton-item" key={i}>
+          <span className="pu-skeleton pu-skeleton-avatar" />
+          <span className="pu-chat-skeleton-meta">
+            <span className="pu-chat-skeleton-top"><span className="pu-skeleton pu-skeleton-name" /><span className="pu-skeleton pu-skeleton-time" /></span>
+            <span className="pu-skeleton pu-skeleton-preview" />
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MessageSkeleton({ outgoing = false, wide = false }) {
+  return (
+    <div className={`pu-message-skeleton-row ${outgoing ? "outgoing" : "incoming"}`} aria-hidden="true">
+      {!outgoing && <span className="pu-skeleton pu-message-skeleton-avatar" />}
+      <span className={`pu-skeleton pu-message-skeleton-bubble ${wide ? "wide" : ""}`} />
+    </div>
+  );
+}
+
+function MessageListSkeleton() {
+  return (
+    <div className="pu-message-skeleton-list" aria-hidden="true">
+      <div className="pu-skeleton pu-message-skeleton-day" />
+      <MessageSkeleton />
+      <MessageSkeleton outgoing wide />
+      <MessageSkeleton />
+      <MessageSkeleton outgoing />
+      <MessageSkeleton />
+      <MessageSkeleton outgoing wide />
+    </div>
+  );
+}
+
 export default function Chat() {
   const { convId } = useParams();
   const navigate = useNavigate();
@@ -236,6 +275,7 @@ export default function Chat() {
   const [deleteMsg, setDeleteMsg] = useState(null);
   const [lightbox, setLightbox] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [messagesLoading, setMessagesLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const imageInput = useRef(null);
   const fileInput = useRef(null);
@@ -263,6 +303,7 @@ export default function Chat() {
 
   const loadMessages = async (id) => {
     if (!id) return;
+    setMessagesLoading(true);
     try {
       const rows = await api.getMessages(id);
       const partner = chats.find(c => c.id === String(id))?.name || "Peer";
@@ -271,6 +312,8 @@ export default function Chat() {
       setChats(prev => prev.map(c => c.id === String(id) ? { ...c, unread: 0 } : c));
     } catch (err) {
       setLoadError(err.message || "Couldn't load messages.");
+    } finally {
+      setMessagesLoading(false);
     }
   };
   useEffect(() => { refreshChats(); }, []);
@@ -321,7 +364,6 @@ export default function Chat() {
     setScreen(String(id));
     navigate(`/app/chat/${id}`, { replace: true });
     setReplyTo(null); setPending(null); setModal(null);
-    await loadMessages(String(id));
   };
   const closeChat = () => {
     setScreen(null); navigate("/app/chat", { replace: true });
@@ -538,7 +580,7 @@ export default function Chat() {
             <button className={tab === "unread" ? "active" : ""} onClick={() => setTab("unread")}>Unread{unreadCount > 0 && <span className="pu-tab-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>}</button>
           </div>
           <div className="pu-chat-list">
-            {list.map(chat => (
+            {loading ? <ChatListSkeleton /> : list.map(chat => (
               <button className="pu-chat-item" key={chat.id} onClick={() => openChat(chat.id)}>
                 <Avatar name={chat.name} photoURL={chat.photoURL} online={chat.online} size={52} />
                 <span className="pu-chat-meta">
@@ -548,7 +590,7 @@ export default function Chat() {
                 </span>
               </button>
             ))}
-            {!list.length && <div className="pu-empty">No chats match your filter.</div>}
+            {!loading && !list.length && <div className="pu-empty">No chats match your filter.</div>}
           </div>
         </main>
       ) : (
@@ -560,8 +602,10 @@ export default function Chat() {
             <div className="pu-user-actions"><button className="pu-icon-btn"><Phone size={18} /></button><button className="pu-icon-btn"><Video size={18} /></button><button className="pu-icon-btn"><Info size={18} /></button></div>
           </header>
           <div className="pu-messages" ref={messagesRef}>
-            <div className="pu-day-divider">Today</div>
-            {messageRows.map(({ msg, first, last }) => <MessageBubble key={msg.id} msg={{ ...msg, senderName: currentChat?.name, senderPhotoURL: currentChat?.photoURL }} first={first} last={last} onLongPress={m => setModal({ msg: m })} onReplyDrag={m => setReplyTo(m)} onImage={url => setLightbox(url)} />)}
+            {messagesLoading ? <MessageListSkeleton /> : <>
+              <div className="pu-day-divider">Today</div>
+              {messageRows.map(({ msg, first, last }) => <MessageBubble key={msg.id} msg={{ ...msg, senderName: currentChat?.name, senderPhotoURL: currentChat?.photoURL }} first={first} last={last} onLongPress={m => setModal({ msg: m })} onReplyDrag={m => setReplyTo(m)} onImage={url => setLightbox(url)} />)}
+            </>}
           </div>
           {replyTo && <div className="pu-reply-bar"><span></span><div><b>{replyTo.outgoing ? "You" : currentChat?.name}</b><small>{messagePreview(replyTo)}</small></div><button onClick={() => setReplyTo(null)}><X size={15} /></button></div>}
           {pending && <div className="pu-pending"><div className="pu-pending-thumb">{pending.type === "image" ? <img src={pending.imageUrl} alt="Selected" /> : <FileText size={22} />}</div><div><b>{pending.type === "image" ? "Photo" : pending.fileName}</b><small>{pending.type === "image" ? "Add a caption below, then send" : pending.fileMeta}</small></div><button onClick={removePending}><X size={15} /></button></div>}

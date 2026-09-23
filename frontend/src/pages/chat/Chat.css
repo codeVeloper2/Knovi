@@ -177,3 +177,46 @@
 }
 
 .pu-lightbox-close-bottom { border:0; background:transparent; color:#fff; font-size:14px; font-weight:600; padding:12px 16px; cursor:pointer; }
+
+/* Loading skeletons */
+.pu-skeleton {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  background: var(--pu-card);
+  border-radius: 8px;
+}
+.pu-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.08), transparent);
+  animation: pu-skeleton-shimmer 1.35s ease-in-out infinite;
+}
+@keyframes pu-skeleton-shimmer {
+  100% { transform: translateX(100%); }
+}
+.pu-chat-skeleton { padding-bottom: 16px; }
+.pu-chat-skeleton-item { display:flex; align-items:center; gap:12px; padding:12px 16px; }
+.pu-skeleton-avatar { width:52px; height:52px; flex:0 0 52px; border-radius:50%; }
+.pu-chat-skeleton-meta { min-width:0; flex:1; display:flex; flex-direction:column; gap:9px; }
+.pu-chat-skeleton-top { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.pu-skeleton-name { width:42%; height:15px; border-radius:6px; }
+.pu-skeleton-time { width:46px; height:11px; border-radius:5px; }
+.pu-skeleton-preview { width:72%; max-width:240px; height:12px; border-radius:5px; }
+
+.pu-message-skeleton-list { display:flex; flex-direction:column; gap:12px; padding:12px 4px 20px; margin-top:auto; }
+.pu-message-skeleton-day { width:42px; height:10px; margin:0 auto 8px; border-radius:5px; }
+.pu-message-skeleton-row { display:flex; align-items:flex-end; gap:8px; max-width:85%; min-height:34px; }
+.pu-message-skeleton-row.incoming { align-self:flex-start; }
+.pu-message-skeleton-row.outgoing { align-self:flex-end; }
+.pu-message-skeleton-avatar { width:28px; height:28px; flex:0 0 28px; border-radius:50%; }
+.pu-message-skeleton-bubble { width:150px; height:40px; border-radius:18px 18px 18px 5px; }
+.pu-message-skeleton-row.outgoing .pu-message-skeleton-bubble { width:132px; border-radius:18px 18px 5px 18px; }
+.pu-message-skeleton-bubble.wide { width:210px; }
+.pu-message-skeleton-row.outgoing .pu-message-skeleton-bubble.wide { width:190px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pu-skeleton::after { animation:none; }
+}
