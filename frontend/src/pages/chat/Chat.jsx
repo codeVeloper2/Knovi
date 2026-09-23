@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Search, Video, PenLine, ArrowLeft, Phone, Info, Plus, Image as ImageIcon, Mic, Smile, Send, FileText, X, Copy, Reply, Forward, Trash2, UserRoundX, Download, CheckCheck, BellOff } from "lucide-react";
+import * as api from "../../api";
+import { useAuth } from "../../context/AuthContext";
 import "./Chat.css";
 
 const EMOJIS = ["🔥", "👏", "😢", "😮", "🙏", "😂", "✨"];
@@ -36,56 +38,64 @@ function Avatar({ name, size = 52, online = false, className = "" }) {
   );
 }
 
-const chatsSeed = [
-  { id: "1", name: "Emma Johnson", verified: true, online: true, lastMessage: "Typing...", typing: true, time: "9:41 PM", unread: 2, languages: ["EN", "ES"], muted: false },
-  { id: "2", name: "Liam Garcia", verified: true, online: true, lastMessage: "That sounds amazing! 😍", time: "9:30 PM", unread: 1, languages: ["EN", "FR"], muted: false },
-  { id: "3", name: "Language Buddies", verified: false, online: false, lastMessage: "Sofia: Can someone help me with this?", time: "8:15 PM", unread: 5, languages: [], muted: true, isGroup: true },
-  { id: "4", name: "Sofia Martinez", verified: true, online: true, lastMessage: "Voice message", time: "7:50 PM", unread: 0, languages: ["ES", "EN"], muted: false, isVoice: true },
-  { id: "5", name: "Ahmed Hassan", verified: true, online: false, lastMessage: "I want to practice Arabic with you", time: "6:20 PM", unread: 0, languages: ["AR"], muted: false },
-  { id: "6", name: "Mika Tanaka", verified: true, online: true, lastMessage: "Let's do a video call tomorrow! 📞", time: "5:42 PM", unread: 0, languages: ["JP", "EN"], muted: false },
-  { id: "7", name: "Lucas Moreau", verified: true, online: true, lastMessage: "Merci beaucoup! 🙌", time: "Yesterday", unread: 0, languages: ["FR", "EN"], muted: false },
-];
 
-const conversationsSeed = {
-  "1": [
-    { id: "m1", text: "Hey! How's the new design coming along?", outgoing: false, time: "9:20 PM", status: "read" },
-    { id: "m2", text: "Pretty good actually. Just finished the main screens.", outgoing: true, time: "9:22 PM", status: "read" },
-    { id: "m3", text: "Can't wait to see it. The last version looked so clean.", outgoing: false, time: "9:23 PM", status: "read" },
-    { id: "m4", text: "Thanks! I improved the button placement and spacing like you suggested.", outgoing: true, time: "9:25 PM", status: "read" },
-    { id: "m5", text: "The primary call-to-action is much better now.", outgoing: true, time: "9:25 PM", status: "read" },
-    { id: "m6", text: "Awesome. Want to hop on a quick call later?", outgoing: false, time: "9:30 PM", status: "read" },
-    { id: "m7", text: "Sure, after 10 works for me.", outgoing: true, time: "9:31 PM", status: "delivered" },
-  ],
-  "2": [
-    { id: "m1", text: "Are you free to practice English tonight?", outgoing: false, time: "9:10 PM", status: "read" },
-    { id: "m2", text: "Yes! That sounds amazing! 😍", outgoing: true, time: "9:15 PM", status: "read" },
-    { id: "m3", text: "We should try it this weekend.", outgoing: false, time: "9:18 PM", status: "read" },
-  ],
-  "3": [
-    { id: "m1", text: "Sofia: Can someone help me with this?", outgoing: false, time: "8:10 PM", status: "read" },
-    { id: "m2", text: "Sure, what do you need?", outgoing: true, time: "8:12 PM", status: "read" },
-  ],
-  "4": [
-    { id: "m1", text: "Voice message", outgoing: false, time: "7:48 PM", status: "read", isVoice: true },
-    { id: "m2", text: "Got it, I'll listen later!", outgoing: true, time: "7:50 PM", status: "delivered" },
-  ],
-  "5": [
-    { id: "m1", text: "I want to practice Arabic with you", outgoing: false, time: "6:15 PM", status: "read" },
-    { id: "m2", text: "Of course! When are you free?", outgoing: true, time: "6:18 PM", status: "read" },
-  ],
-  "6": [
-    { id: "m1", text: "Let's do a video call tomorrow! 📞", outgoing: false, time: "5:40 PM", status: "read" },
-    { id: "m2", text: "Sounds good, morning or afternoon?", outgoing: true, time: "5:42 PM", status: "delivered" },
-  ],
-  "7": [
-    { id: "m1", text: "Merci beaucoup! 🙌", outgoing: false, time: "Yesterday", status: "read" },
-    { id: "m2", text: "De rien! Anytime.", outgoing: true, time: "Yesterday", status: "read" },
-  ],
-};
-
-function cloneData() {
-  return { chats: structuredClone(chatsSeed), conversations: structuredClone(conversationsSeed) };
+function fileSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
+function fileExt(name = "") {
+  const e = name.split(".").pop();
+  return e ? e.toUpperCase() : "FILE";
+}
+function formatTime(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? "" : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+function formatListTime(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  return d.toDateString() === now.toDateString()
+    ? d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    : d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+function mapChat(raw) {
+  return {
+    id: String(raw.id),
+    name: raw.partner?.displayName || "Peer",
+    online: !!raw.partner?.isOnline,
+    verified: false,
+    lastMessage: raw.lastMessage?.attachmentUrl
+      ? `📎 ${raw.lastMessage.attachmentName || "Attachment"}`
+      : (raw.lastMessage?.body || ""),
+    time: formatListTime(raw.lastMessageAt || raw.lastMessage?.createdAt),
+    unread: Number(raw.unread || 0),
+    muted: false,
+    partnerId: raw.partnerId,
+    subject: raw.subject || "",
+  };
+}
+function mapMessage(raw, myId, partnerName) {
+  const isImage = !!raw.attachmentUrl && /\.(jpe?g|png|webp|gif)(\?|$)/i.test(raw.attachmentUrl);
+  return {
+    ...raw,
+    text: raw.body || "",
+    outgoing: Number(raw.senderId) === Number(myId),
+    time: formatTime(raw.createdAt),
+    status: raw.isRead ? "read" : raw.isDelivered ? "delivered" : "sent",
+    type: raw.attachmentUrl ? (isImage ? "image" : "document") : undefined,
+    imageUrl: isImage ? raw.attachmentUrl : undefined,
+    fileName: raw.attachmentName || undefined,
+    fileMeta: raw.attachmentName ? fileExt(raw.attachmentName) : undefined,
+    replyTo: raw.replyToId ? { text: raw.replyToSnapshot || "Message", outgoing: false, name: "Reply" } : null,
+    senderName: Number(raw.senderId) === Number(myId) ? "You" : partnerName,
+    reaction: Object.keys(raw.reactions || {})[0] || null,
+  };
+}
+
 function messagePreview(msg) {
   if (!msg) return "";
   if (msg.deleted) return "This message was deleted";
@@ -185,7 +195,9 @@ function MessageBubble({ msg, first, last, onLongPress, onReplyDrag, onImage }) 
 export default function Chat() {
   const { convId } = useParams();
   const navigate = useNavigate();
-  const [data, setData] = useState(cloneData);
+  const { user } = useAuth();
+  const [chats, setChats] = useState([]);
+  const [messages, setMessages] = useState([]);
   const [screen, setScreen] = useState(convId || null);
   const [tab, setTab] = useState("all");
   const [query, setQuery] = useState("");
@@ -196,78 +208,132 @@ export default function Chat() {
   const [deleteType, setDeleteType] = useState(null);
   const [deleteMsg, setDeleteMsg] = useState(null);
   const [lightbox, setLightbox] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const imageInput = useRef(null);
   const fileInput = useRef(null);
   const messagesRef = useRef(null);
 
-  const currentChat = data.chats.find(c => c.id === screen) || null;
-  const unreadCount = data.chats.reduce((sum, c) => sum + (c.unread || 0), 0);
-  const list = useMemo(() => data.chats.filter(c => {
+  const currentChat = chats.find(c => c.id === String(screen)) || null;
+  const unreadCount = chats.reduce((sum, c) => sum + (c.unread || 0), 0);
+  const list = useMemo(() => chats.filter(c => {
     const q = query.trim().toLowerCase();
     const matches = !q || c.name.toLowerCase().includes(q) || c.lastMessage.toLowerCase().includes(q);
     return matches && (tab === "all" || c.unread > 0);
-  }), [data.chats, query, tab]);
-  const messages = screen ? (data.conversations[screen] || []) : [];
+  }), [chats, query, tab]);
 
-  useEffect(() => { if (screen) navigate(`/chat/${screen}`, { replace: true }); }, [screen]);
-  useEffect(() => { requestAnimationFrame(() => { if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight; }); }, [screen, messages.length]);
+  const refreshChats = async () => {
+    try {
+      const rows = await api.listConversations();
+      setChats((rows || []).map(mapChat));
+    } catch (err) {
+      setLoadError(err.message || "Couldn't load chats.");
+    } finally {
+      setLoading(false);
+    }
+  };
+  const loadMessages = async (id) => {
+    if (!id) return;
+    try {
+      const rows = await api.getMessages(id);
+      const partner = chats.find(c => c.id === String(id))?.name || "Peer";
+      setMessages((rows || []).map(m => mapMessage(m, user?.id, partner)));
+      await api.markRead(id).catch(() => {});
+      setChats(prev => prev.map(c => c.id === String(id) ? { ...c, unread: 0 } : c));
+    } catch (err) {
+      setLoadError(err.message || "Couldn't load messages.");
+    }
+  };
+  useEffect(() => { refreshChats(); }, []);
+  useEffect(() => { const timer = setInterval(refreshChats, 10000); return () => clearInterval(timer); }, []);
+  useEffect(() => { if (convId) setScreen(convId); }, [convId]);
+  useEffect(() => {
+    if (!screen) return;
+    loadMessages(screen);
+    const ws = api.openChatSocket(screen, event => {
+      if (event.type === "message" && event.data) {
+        const partner = chats.find(c => c.id === String(screen))?.name || "Peer";
+        const mapped = mapMessage(event.data, user?.id, partner);
+        setMessages(prev => prev.some(m => String(m.id) === String(mapped.id)) ? prev : [...prev, mapped]);
+        refreshChats();
+      } else if (event.type === "deleted") {
+        setMessages(prev => prev.map(m => String(m.id) === String(event.msgId) ? { ...m, deleted: true, text: "This message was deleted", type: undefined, imageUrl: undefined, reaction: null } : m));
+      } else if (event.type === "reaction") {
+        const reaction = Object.keys(event.reactions || {})[0] || null;
+        setMessages(prev => prev.map(m => String(m.id) === String(event.msgId) ? { ...m, reaction } : m));
+      } else if (event.type === "read") {
+        setMessages(prev => prev.map(m => m.outgoing ? { ...m, status: "read" } : m));
+      }
+    });
+    return () => ws.close();
+  }, [screen, user?.id]);
+  useEffect(() => {
+    requestAnimationFrame(() => { if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight; });
+  }, [screen, messages.length]);
 
-  const openChat = (id) => {
-    setScreen(id);
-    setData(d => ({ ...d, chats: d.chats.map(c => c.id === id ? { ...c, unread: 0 } : c) }));
+  const openChat = async (id) => {
+    setScreen(String(id));
+    navigate(`/chat/${id}`, { replace: true });
+    setReplyTo(null); setPending(null); setModal(null);
+    await loadMessages(String(id));
+  };
+  const closeChat = () => {
+    setScreen(null); navigate("/chat", { replace: true });
     setReplyTo(null); setPending(null); setModal(null);
   };
-  const closeChat = () => { setScreen(null); navigate("/chat", { replace: true }); setReplyTo(null); setPending(null); setModal(null); };
 
-  const updateMessage = (id, updater) => setData(d => ({ ...d, conversations: { ...d.conversations, [screen]: d.conversations[screen].map(m => m.id === id ? updater(m) : m) } }));
-
-  const send = () => {
+  const send = async () => {
     if (!screen) return;
-    if (pending) {
-      const media = pending;
-      const msg = { type: media.type, imageUrl: media.imageUrl, fileName: media.fileName, fileMeta: media.fileMeta, text: input.trim(), outgoing: true, status: "delivered" };
-      addMessage(msg); setPending(null); setInput(""); return;
+    try {
+      let attachmentUrl = null, attachmentName = null;
+      if (pending?.file) {
+        const uploaded = await api.uploadAttachment(screen, pending.file);
+        attachmentUrl = uploaded.url;
+        attachmentName = uploaded.name || pending.file.name;
+      }
+      const text = input.trim();
+      if (!text && !attachmentUrl) return;
+      await api.sendMessageRest(screen, text, attachmentUrl, attachmentName, replyTo?.id || null);
+      if (pending?.imageUrl) URL.revokeObjectURL(pending.imageUrl);
+      setPending(null); setInput(""); setReplyTo(null);
+      await refreshChats();
+    } catch (err) {
+      setLoadError(err.message || "Couldn't send message.");
     }
-    const text = input.trim();
-    if (!text) return;
-    addMessage({ text, outgoing: true, status: "delivered" }); setInput("");
   };
-  const addMessage = (payload) => {
-    const now = new Date();
-    const time = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-    const reply = replyTo ? { text: messagePreview(replyTo), outgoing: replyTo.outgoing, name: replyTo.outgoing ? "You" : currentChat?.name || "User" } : null;
-    const msg = { id: `m${Date.now()}`, time, ...payload, ...(reply ? { replyTo: reply } : {}) };
-    setData(d => ({
-      chats: d.chats.map(c => c.id === screen ? { ...c, lastMessage: msg.type === "image" ? (msg.text ? `📷 ${msg.text}` : "📷 Photo") : msg.type === "document" ? `📄 ${msg.fileName}` : msg.text, time, typing: false } : c),
-      conversations: { ...d.conversations, [screen]: [...(d.conversations[screen] || []), msg] },
-    }));
-    setReplyTo(null);
-  };
-
   const pickImage = (e) => {
     const file = e.target.files?.[0]; e.target.value = ""; if (!file) return;
-    const url = URL.createObjectURL(file);
-    setPending({ type: "image", imageUrl: url, fileName: file.name });
+    setPending({ type: "image", imageUrl: URL.createObjectURL(file), fileName: file.name, file });
   };
   const pickFile = (e) => {
     const file = e.target.files?.[0]; e.target.value = ""; if (!file) return;
-    if (file.type.startsWith("image/")) {
-      const url = URL.createObjectURL(file); setPending({ type: "image", imageUrl: url, fileName: file.name });
-    } else setPending({ type: "document", fileName: file.name, fileMeta: `${fileExt(file.name)} · ${fileSize(file.size)}` });
+    if (file.type.startsWith("image/")) setPending({ type: "image", imageUrl: URL.createObjectURL(file), fileName: file.name, file });
+    else setPending({ type: "document", fileName: file.name, fileMeta: `${fileExt(file.name)} · ${fileSize(file.size)}`, file });
   };
-  const removePending = () => { if (pending?.imageUrl) URL.revokeObjectURL(pending.imageUrl); setPending(null); };
-
-  const performDelete = () => {
-    if (!deleteMsg || !screen) return;
-    setData(d => {
-      const current = d.conversations[screen] || [];
-      const next = deleteType === "me" ? current.filter(m => m.id !== deleteMsg.id) : current.map(m => m.id === deleteMsg.id ? { ...m, text: "This message was deleted", deleted: true, reaction: null, type: undefined, imageUrl: undefined } : m);
-      return { ...d, conversations: { ...d.conversations, [screen]: next } };
-    });
-    setDeleteMsg(null); setDeleteType(null);
+  const removePending = () => {
+    if (pending?.imageUrl) URL.revokeObjectURL(pending.imageUrl);
+    setPending(null);
   };
-  const copy = async () => { if (modal?.msg?.text) await navigator.clipboard?.writeText(modal.msg.text).catch(() => {}); setModal(null); };
-  const openDelete = () => { if (modal?.msg?.outgoing) { setDeleteMsg(modal.msg); setModal(null); } };
+  const performDelete = async () => {
+    if (!deleteMsg || !deleteType) return;
+    try {
+      await api.deleteMessage(deleteMsg.id, deleteType);
+      if (deleteType === "me") setMessages(prev => prev.filter(m => String(m.id) !== String(deleteMsg.id)));
+      else setMessages(prev => prev.map(m => String(m.id) === String(deleteMsg.id) ? { ...m, deleted: true, text: "This message was deleted", type: undefined, imageUrl: undefined, reaction: null } : m));
+    } catch (err) {
+      setLoadError(err.message || "Couldn't delete message.");
+    } finally {
+      setDeleteMsg(null); setDeleteType(null);
+    }
+  };
+  const copy = async () => {
+    if (modal?.msg?.text) await navigator.clipboard?.writeText(modal.msg.text).catch(() => {});
+    setModal(null);
+  };
+  const react = async (msg, emoji) => {
+    try { await api.sendReaction(msg.id, emoji); } catch (err) { setLoadError(err.message || "Couldn't react."); }
+    setModal(null);
+  };
 
   const messageRows = messages.map((m, i) => ({ msg: m, first: !messages[i - 1] || messages[i - 1].outgoing !== m.outgoing, last: !messages[i + 1] || messages[i + 1].outgoing !== m.outgoing }));
 
@@ -332,7 +398,7 @@ export default function Chat() {
 
       {modal?.attach && <div className="pu-overlay pu-bottom" onClick={() => setModal(null)}><div className="pu-sheet" onClick={e => e.stopPropagation()}><div className="pu-sheet-head"><b>Share from device</b><button onClick={() => setModal(null)}><X size={16} /></button></div><button className="pu-action" onClick={() => { setModal(null); imageInput.current?.click(); }}><ImageIcon size={18} /><span>Photo from gallery</span></button><button className="pu-action" onClick={() => { setModal(null); fileInput.current?.click(); }}><FileText size={18} /><span>Document / file</span></button></div></div>}
 
-      {modal?.msg && <div className="pu-overlay pu-blur pu-bottom" onClick={() => setModal(null)}><div className="pu-sheet" onClick={e => e.stopPropagation()}><div className={`pu-preview ${modal.msg.outgoing ? "outgoing" : ""}`}>{messagePreview(modal.msg)}</div><div className="pu-reactions">{EMOJIS.map(e => <button key={e} onClick={() => { updateMessage(modal.msg.id, m => ({ ...m, reaction: e })); setModal(null); }}>{e}</button>)}<button>+</button></div><div className="pu-actions"><button className="pu-action" onClick={copy}><span>Copy</span><Copy size={18} /></button><button className="pu-action" onClick={() => { setReplyTo(modal.msg); setModal(null); }}><span>Reply</span><Reply size={18} /></button><button className="pu-action" onClick={() => setModal(null)}><span>Forward</span><Forward size={18} /></button>{modal.msg.outgoing && <button className="pu-action danger" onClick={openDelete}><span>Delete</span><Trash2 size={18} /></button>}</div></div></div>}
+      {modal?.msg && <div className="pu-overlay pu-blur pu-bottom" onClick={() => setModal(null)}><div className="pu-sheet" onClick={e => e.stopPropagation()}><div className={`pu-preview ${modal.msg.outgoing ? "outgoing" : ""}`}>{messagePreview(modal.msg)}</div><div className="pu-reactions">{EMOJIS.map(e => <button key={e} onClick={() => { react(modal.msg, e); }}>{e}</button>)}<button>+</button></div><div className="pu-actions"><button className="pu-action" onClick={copy}><span>Copy</span><Copy size={18} /></button><button className="pu-action" onClick={() => { setReplyTo(modal.msg); setModal(null); }}><span>Reply</span><Reply size={18} /></button><button className="pu-action" onClick={() => setModal(null)}><span>Forward</span><Forward size={18} /></button>{modal.msg.outgoing && <button className="pu-action danger" onClick={openDelete}><span>Delete</span><Trash2 size={18} /></button>}</div></div></div>}
 
       {deleteMsg && <div className="pu-overlay pu-bottom" onClick={() => setDeleteMsg(null)}><div className="pu-sheet" onClick={e => e.stopPropagation()}><p className="pu-delete-title">Delete message?</p><button className="pu-action danger" onClick={() => setDeleteType("me")}><span>Delete for me</span><Trash2 size={18} /></button><button className="pu-action danger" onClick={() => setDeleteType("everyone")}><span>Delete for everyone</span><UserRoundX size={18} /></button><button className="pu-action" onClick={() => setDeleteMsg(null)}><span>Cancel</span><X size={18} /></button></div></div>}
 
