@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import * as api from "../../api";
 
@@ -271,7 +271,10 @@ export default function AISessionSetup() {
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
 
+let _tutorAvatarCounter = 0;
 export function TutorAvatar({ size = 40 }) {
+  const idRef = useRef(`tutorGrad-${++_tutorAvatarCounter}`);
+  const gid = idRef.current;
   return (
     <svg
       width={size}
@@ -283,7 +286,7 @@ export function TutorAvatar({ size = 40 }) {
       role="img"
     >
       <defs>
-        <linearGradient id="tutorGrad" x1="150" y1="70" x2="360" y2="440" gradientUnits="userSpaceOnUse">
+        <linearGradient id={gid} x1="150" y1="70" x2="360" y2="440" gradientUnits="userSpaceOnUse">
           <stop offset="0" stopColor="#2f9bff" />
           <stop offset="0.5" stopColor="#1fbaf0" />
           <stop offset="1" stopColor="#25e7c6" />
@@ -292,15 +295,15 @@ export function TutorAvatar({ size = 40 }) {
       {/* U shape */}
       <path
         d="M356 96 V300 A100 100 0 0 1 156 300 V300"
-        stroke="url(#tutorGrad)" strokeWidth="64" strokeLinecap="round" fill="none"
+        stroke={`url(#${gid})`} strokeWidth="64" strokeLinecap="round" fill="none"
       />
       {/* Left bar */}
       <path
         d="M156 300 V150"
-        stroke="url(#tutorGrad)" strokeWidth="64" strokeLinecap="round" fill="none"
+        stroke={`url(#${gid})`} strokeWidth="64" strokeLinecap="round" fill="none"
       />
       {/* Upward arrowhead */}
-      <path d="M156 70 L226 168 H86 Z" fill="url(#tutorGrad)" />
+      <path d="M156 70 L226 168 H86 Z" fill={`url(#${gid})`} />
     </svg>
   );
 }

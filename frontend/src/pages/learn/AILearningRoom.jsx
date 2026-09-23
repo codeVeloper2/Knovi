@@ -59,70 +59,125 @@ function useTypewriter(targetText, active) {
   return { displayed, done };
 }
 
-/* ─── Robust TTS (handles mobile async voice loading) ────────────────── */
-function speakText(text, { onStart, onEnd } = {}) {
-  if (!text || !window.speechSynthesis) { onEnd?.(); return; }
+/* ─── Robust TTS with Android-safe pause/resume (word-position tracking) ── */
+// Android Chrome silently ignores speechSynthesis.pause()/resume(), so we
+// track the last spoken word boundary and replay from that word on resume.
 
-  // Keep punctuation so the voice pauses naturally; strip only markdown noise
-  const clean = String(text)
+function _cleanForTTS(text) {
+  return String(text)
     .replace(/```[\s\S]*?```/g, ", code block, ")
     .replace(/#{1,6}\s+/g, "")
     .replace(/[*_`~>]+/g, "")
-    .replace(/([.!?])\s+/g, "$1  ")   // longer pause after sentences
-    .replace(/:\s+/g, ":  ")           // pause after colons
-    .replace(/;\s+/g, ";  ")           // pause after semicolons
-    .replace(/—/g, ", ")               // em-dash → short pause
+    .replace(/([.!?])\s+/g, "$1  ")
+    .replace(/:\s+/g, ":  ")
+    .replace(/;\s+/g, ";  ")
+    .replace(/—/g, ", ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function _pickVoice() {
+  const voices = window.speechSynthesis.getVoices();
+  const english = voices.filter(v => /^en/i.test(v.lang));
+  const pool = english.length ? english : voices;
+  const preferred = ["Google UK English Female", "Google US English", "Samantha", "Karen", "Aria", "Jenny", "Daniel"];
+  return (
+    pool.find(v => preferred.some(n => v.name === n)) ||
+    pool.find(v => preferred.some(n => v.name.includes(n))) ||
+    pool.find(v => /natural|neural|enhanced|premium/i.test(v.name)) ||
+    pool.find(v => /female/i.test(v.name) && /^en/i.test(v.lang)) ||
+    pool[0]
+  );
+}
+
+// Module-level TTS session so pause/resume can reach it from anywhere
+const _tts = {
+  words: [],        // full word array of current text
+  wordIndex: 0,     // last confirmed spoken word index
+  charIndex: 0,     // last onboundary charIndex (for mid-word accuracy)
+  utterance: null,
+  onEnd: null,
+};
+
+function _speakFrom(wordIndex, { onStart, onEnd } = {}) {
+  window.speechSynthesis.cancel();
+  const slice = _tts.words.slice(wordIndex).join(" ");
+  if (!slice.trim()) { onEnd?.(); return; }
+
+  const u = new SpeechSynthesisUtterance(slice);
+  _tts.utterance = u;
+  _tts.onEnd = onEnd;
+
+  const voice = _pickVoice();
+  if (voice) { u.voice = voice; u.lang = voice.lang; }
+  u.rate = 0.88;
+  u.pitch = 1.05;
+  u.volume = 1;
+
+  u.onstart = () => onStart?.();
+
+  u.onboundary = (e) => {
+    if (e.name !== "word") return;
+    // e.charIndex is relative to the slice; map back to the full word array
+    const spokenSoFar = slice.slice(0, e.charIndex);
+    const wordsSpoken = spokenSoFar.trim() === "" ? 0 : spokenSoFar.trim().split(/\s+/).length;
+    _tts.wordIndex = wordIndex + wordsSpoken;
+    _tts.charIndex = e.charIndex;
+  };
+
+  u.onend = () => {
+    _tts.utterance = null;
+    _tts.wordIndex = 0;
+    onEnd?.();
+  };
+  u.onerror = (e) => {
+    if (e.error === "interrupted") return; // we cancelled it ourselves — not a real error
+    _tts.utterance = null;
+    _tts.wordIndex = 0;
+    onEnd?.();
+  };
+
+  window.speechSynthesis.speak(u);
+}
+
+function speakText(text, { onStart, onEnd } = {}) {
+  if (!text || !window.speechSynthesis) { onEnd?.(); return; }
+  const clean = _cleanForTTS(text);
   if (!clean) { onEnd?.(); return; }
 
-  function doSpeak() {
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(clean);
+  _tts.words = clean.split(/\s+/);
+  _tts.wordIndex = 0;
+  _tts.charIndex = 0;
 
-    const voices = window.speechSynthesis.getVoices();
-    const english = voices.filter(v => /^en/i.test(v.lang));
-    const pool = english.length ? english : voices;
-
-    // Exact-name matches first, then partial, then neural/natural, then female EN
-    const preferred = [
-      "Google UK English Female", "Google US English",
-      "Samantha", "Karen", "Aria", "Jenny", "Daniel",
-    ];
-    const voice =
-      pool.find(v => preferred.some(n => v.name === n)) ||
-      pool.find(v => preferred.some(n => v.name.includes(n))) ||
-      pool.find(v => /natural|neural|enhanced|premium/i.test(v.name)) ||
-      pool.find(v => /female/i.test(v.name) && /^en/i.test(v.lang)) ||
-      pool[0];
-
-    if (voice) { u.voice = voice; u.lang = voice.lang; }
-    u.rate = 0.88;   // slightly slower → clearer on mobile
-    u.pitch = 1.05;
-    u.volume = 1;
-
-    u.onstart = () => onStart?.();
-    u.onend   = () => onEnd?.();
-    u.onerror = () => onEnd?.();
-
-    window.speechSynthesis.speak(u);
-  }
+  function go() { _speakFrom(0, { onStart, onEnd }); }
 
   const voices = window.speechSynthesis.getVoices();
   if (voices.length) {
-    doSpeak();
+    go();
   } else {
     window.speechSynthesis.onvoiceschanged = () => {
       window.speechSynthesis.onvoiceschanged = null;
-      doSpeak();
+      go();
     };
-    setTimeout(doSpeak, 300);
+    setTimeout(go, 300);
   }
 }
 
-function _pauseSpeech()  { window.speechSynthesis?.pause(); }
-function _resumeSpeech() { window.speechSynthesis?.resume(); }
-function _stopSpeech()   { window.speechSynthesis?.cancel(); }
+function _pauseSpeech() {
+  // Cancel the utterance (pause is broken on Android) but remember word position
+  window.speechSynthesis.cancel();
+}
+
+function _resumeSpeech({ onEnd } = {}) {
+  // Replay from the last confirmed word boundary
+  _speakFrom(_tts.wordIndex, { onEnd });
+}
+
+function _stopSpeech() {
+  window.speechSynthesis.cancel();
+  _tts.wordIndex = 0;
+  _tts.utterance = null;
+}
 
 /* ═══════════════════════════════════════════════════════════════════════ */
 export default function AILearningRoom() {
@@ -715,7 +770,7 @@ function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave, is
       return;
     }
     if (ttsState === "paused") {
-      _resumeSpeech();
+      _resumeSpeech({ onEnd: () => setTtsState("idle") });
       setTtsState("playing");
       return;
     }
