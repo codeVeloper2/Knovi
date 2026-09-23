@@ -20,7 +20,8 @@
 
 .pu-app, .pu-app * { box-sizing: border-box; }
 .pu-app { display:flex; flex-direction:column; background:var(--pu-bg); color:var(--pu-text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; overflow:hidden; }
-.pu-peer-header { height:56px; flex:0 0 56px; display:flex; align-items:center; justify-content:space-between; padding:8px 12px 8px 16px; background:var(--pu-bg); border-bottom:1px solid var(--pu-border); z-index:20; }
+/* pu-peer-header is removed from JSX — these rules kept as no-ops for safety */
+.pu-peer-header { display: none !important; }
 .pu-brand { display:flex; align-items:center; gap:10px; font-size:18px; letter-spacing:-.25px; }
 .pu-logo { width:36px; height:36px; border-radius:10px; display:grid; place-items:center; background:linear-gradient(135deg,var(--pu-blue),var(--pu-blue-bright)); color:#fff; font-weight:800; box-shadow:0 4px 12px rgba(91,110,245,.28); }
 .pu-header-actions,.pu-user-actions { display:flex; gap:2px; }
@@ -255,27 +256,68 @@
 .pu-avatar-photo { object-fit:cover; display:block; background:var(--pu-card); }
 .pu-online-dot { position:absolute; right:1px; bottom:1px; width:12px; height:12px; border-radius:50%; background:var(--pu-teal); border:2px solid var(--pu-bg); }
 
-/* Desktop: fill the available area below the outer PeerUP navbar (58px) */
+/* ── Chat page: escape the dashboard padding/max-width on both viewports ── */
+
+/* Desktop: dash-main--desktop has padding:28px 32px 40px and max-width:1200px.
+   Override so the chat workspace runs edge-to-edge inside the topbar. */
 @media (min-width:769px) {
-  .pu-app {
+  /* Make the dash-main wrapper zero-padding, full-width, full-height */
+  .dash-main--chat.dash-main--desktop {
+    padding: 0 !important;
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    width: 100% !important;
     height: calc(100vh - 58px);
-    max-width: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
-  /* Hide the internal pu-peer-header on desktop — the outer PeerUP navbar is enough */
-  .pu-peer-header { display: none; }
+  /* pu-app fills its parent fully */
+  .pu-app {
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+    max-width: 100%;
+    overflow: hidden;
+  }
   .pu-desktop-shell { height: 100%; }
 }
-/* Mobile: pu-app fills remaining space below the outer mobile top bar (~56px) + bottom nav (~56px) */
+
+/* Mobile: dash-main--mobile has padding-top:56px (topbar) + padding-bottom:90px (bottom nav).
+   Override so the chat fills between topbar and bottom nav without any extra gap. */
 @media (max-width:768px) {
-  .pu-app {
+  .dash-main--chat.dash-main--mobile {
+    padding: 0 !important;
+    margin: 0 !important;
+    /* topbar ~56px + bottom nav ~56px */
     height: calc(100vh - 56px - 56px);
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
-  /* On mobile keep the internal per-conversation header, but NOT fixed — it lives inside the flex column */
-  .pu-peer-header { position: relative; top: auto; left: auto; right: auto; }
+  .pu-app {
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+  }
   .pu-in-chat .pu-conversation { margin-top: 0; }
 }
 
 .pu-lightbox-close-bottom { border:0; background:transparent; color:#fff; font-size:14px; font-weight:600; padding:12px 16px; cursor:pointer; }
+
+/* Highlight flash when scrolling to a replied-to message */
+@keyframes pu-msg-flash {
+  0%   { background: rgba(91,110,245,0.35); }
+  60%  { background: rgba(91,110,245,0.18); }
+  100% { background: transparent; }
+}
+.pu-msg-highlight .pu-bubble {
+  animation: pu-msg-flash 1.4s ease-out forwards;
+}
 
 /* Loading skeletons */
 .pu-skeleton {
@@ -362,8 +404,4 @@
 @media (min-width:769px) {
   .pu-desktop-shell > .pu-list-screen { display:flex; }
   .pu-desktop-shell > .pu-conversation { position:relative; left:auto; right:auto; top:auto; bottom:auto; width:auto; }
-}
-@media (max-width:768px) {
-  .pu-peer-header { position:relative !important; top:auto !important; left:auto !important; right:auto !important; }
-  .pu-in-chat .pu-conversation { margin-top:0; }
 }

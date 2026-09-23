@@ -109,6 +109,7 @@ function mapMessage(raw, myId, partnerName) {
     fileMeta: raw.attachmentName
       ? fileExt(raw.attachmentName)
       : raw.fileMeta,
+    replyToId: raw.replyToId || null,
     replyTo: raw.replyToId
       ? {
           text: raw.replyToSnapshot || "Message",
@@ -140,7 +141,7 @@ function fileExt(name = "") {
   return e ? e.toUpperCase() : "FILE";
 }
 
-function MessageBubble({ msg, first, last, onLongPress, onReplyDrag, onImage, onReply, onCopy, onReact, onDelete }) {
+function MessageBubble({ msg, first, last, onLongPress, onReplyDrag, onImage, onReply, onCopy, onReact, onDelete, onScrollToMsg }) {
   // Touch / drag state (mobile)
   const timer = useRef(null);
   const start = useRef(null);
@@ -205,7 +206,7 @@ function MessageBubble({ msg, first, last, onLongPress, onReplyDrag, onImage, on
   const rowClass = ["pu-message-row", msg.outgoing ? "outgoing" : "incoming", last ? "last-in-group" : "", draggingUi ? "dragging" : "", emojiOpen ? "active-picker" : ""].filter(Boolean).join(" ");
 
   return (
-    <div className={rowClass}>
+    <div className={rowClass} data-msg-id={msg.id}>
       {!msg.outgoing && <Avatar name={msg.senderName || "Peer"} photoURL={msg.senderPhotoURL} size={28} className="pu-msg-avatar" />}
       {/* pu-msg-wrapper: hover target on desktop — the padding-bottom creates the flicker-free bridge */}
       <div className={`pu-msg-wrapper ${msg.outgoing ? "sent" : "received"}`}>
@@ -218,7 +219,7 @@ function MessageBubble({ msg, first, last, onLongPress, onReplyDrag, onImage, on
             onContextMenu={(e) => e.preventDefault()}
             onClick={(e) => { if (msg.type === "image" && msg.imageUrl && e.detail === 1) onImage(msg); }}
           >
-            {msg.replyTo && <div className="pu-bubble-reply"><span>{msg.replyTo.name}</span><small>{msg.replyTo.text}</small></div>}
+            {msg.replyTo && <div className="pu-bubble-reply" onClick={(e) => { e.stopPropagation(); onScrollToMsg && onScrollToMsg(msg.replyToId); }} style={{ cursor: "pointer" }}><span>{msg.replyTo.name}</span><small>{msg.replyTo.text}</small></div>}
             {msg.deleted ? <span>This message was deleted</span> : msg.type === "image" ? (
               <div className="pu-image-wrap">
                 <img src={msg.imageUrl} alt={msg.text || "Photo"} className="pu-message-image" />
@@ -332,6 +333,15 @@ export default function Chat() {
   const imageInput = useRef(null);
   const fileInput = useRef(null);
   const messagesRef = useRef(null);
+
+  const scrollToMsg = (msgId) => {
+    if (!msgId || !messagesRef.current) return;
+    const el = messagesRef.current.querySelector(`[data-msg-id="${msgId}"]`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("pu-msg-highlight");
+    setTimeout(() => el.classList.remove("pu-msg-highlight"), 1400);
+  };
 
   const currentChat = chats.find(c => c.id === String(screen)) || null;
   const unreadCount = chats.reduce((sum, c) => sum + (c.unread || 0), 0);
@@ -620,14 +630,6 @@ export default function Chat() {
 
   return (
     <div className={`pu-app ${screen ? "pu-in-chat" : ""}`}>
-      <header className="pu-peer-header">
-        <div className="pu-brand"><span className="pu-logo">P</span><strong>PeerUP</strong></div>
-        <div className="pu-header-actions">
-          {!screen && <button className="pu-icon-btn" aria-label="Camera"><Video size={19} /></button>}
-          {!screen && <button className="pu-icon-btn" aria-label="New chat"><PenLine size={19} /></button>}
-          {screen && <button className="pu-icon-btn" aria-label="Search"><Search size={19} /></button>}
-        </div>
-      </header>
 
       <div className="pu-desktop-shell">
         <main className={`pu-list-screen ${screen ? "has-selection" : ""}`}>
@@ -671,7 +673,7 @@ export default function Chat() {
               <div className="pu-messages" ref={messagesRef}>
                 {messagesLoading ? <MessageListSkeleton /> : <>
                   <div className="pu-day-divider">Today</div>
-                  {messageRows.map(({ msg, first, last }) => <MessageBubble key={msg.id} msg={{ ...msg, senderName: currentChat?.name, senderPhotoURL: currentChat?.photoURL }} first={first} last={last} onLongPress={m => setModal({ msg: m })} onReplyDrag={m => setReplyTo(m)} onImage={m => setLightbox(m)} onReply={m => setReplyTo(m)} onCopy={copyMsg} onReact={react} onDelete={openDeleteDirect} />)}
+                  {messageRows.map(({ msg, first, last }) => <MessageBubble key={msg.id} msg={{ ...msg, senderName: currentChat?.name, senderPhotoURL: currentChat?.photoURL }} first={first} last={last} onLongPress={m => setModal({ msg: m })} onReplyDrag={m => setReplyTo(m)} onImage={m => setLightbox(m)} onReply={m => setReplyTo(m)} onCopy={copyMsg} onReact={react} onDelete={openDeleteDirect} onScrollToMsg={scrollToMsg} />)}
                 </>}
               </div>
               {replyTo && <div className="pu-reply-bar"><span></span><div><b>{replyTo.outgoing ? "You" : currentChat?.name}</b><small>{messagePreview(replyTo)}</small></div><button onClick={() => setReplyTo(null)}><X size={15} /></button></div>}
