@@ -210,6 +210,21 @@ def build_learner_context(
         lines.append("STUDENT LEARNING PROFILE (self-reported)")
         lines.extend(reported)
 
+    # ── Concept mastery map (teacher memory) ─────────────────────────────
+    mastery = get_concept_mastery(profile, concept_id) if concept_id is not None else None
+    if mastery:
+        lines.append("CONCEPT MASTERY MAP (from previous sessions on this concept)")
+        lines.append(f"  Mastery level: {mastery.get('mastery_level', 'unknown')}")
+        lines.append(f"  Last studied: {mastery.get('last_studied', 'unknown')}")
+        lines.append(f"  Suggested review date: {mastery.get('review_date', 'soon')}")
+        if mastery.get("strong_on"):
+            lines.append(f"  Strong on: {', '.join(mastery['strong_on'])}")
+        if mastery.get("weak_on"):
+            lines.append(f"  Weak on: {', '.join(mastery['weak_on'])}")
+        if mastery.get("known_misconceptions"):
+            lines.append(f"  Known misconceptions: {', '.join(mastery['known_misconceptions'])}")
+        lines.append("  Open by briefly recalling a weak area before teaching anything new.")
+
     # ── AI-observed section ───────────────────────────────────────────────
     observations: list[dict] = list(profile.ai_observations or [])
     if observations:
@@ -273,3 +288,62 @@ def build_learner_context(
         return ""
 
     return "\n".join(lines)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CONCEPT MASTERY MAP (persistent teacher memory per concept)
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def upsert_concept_mastery(
+    user_id: int,
+    *,
+    concept_id: int,
+    concept_name: str,
+    mastery_level: str,
+    known_misconceptions: list[str] | None = None,
+    strong_on: list[str] | None = None,
+    weak_on: list[str] | None = None,
+    review_after_days: int = 1,
+    db: AsyncSession,
+) -> None:
+    """Store/replace a structured concept-level mastery snapshot for this user.
+
+    Stored inside ai_observations as type=concept_mastery so no schema migration
+    is required. Older entries for the same concept_id are replaced.
+    """
+    from datetime import datetime, timezone, timedelta
+
+    profile = await _get_or_create(user_id, db)
+    current: list[dict] = list(profile.ai_observations or [])
+    current = [
+        o for o in current
+        if not (o.get("type") == "concept_mastery" and int(o.get("concept_id") or 0) == int(concept_id))
+    ]
+    review_at = (datetime.now(timezone.utc) + timedelta(days=max(0, int(review_after_days)))).date().isoformat()
+    current.append({
+        "type": "concept_mastery",
+        "concept_id": int(concept_id),
+        "concept_name": concept_name,
+        "mastery_level": mastery_level,
+        "known_misconceptions": list(known_misconceptions or [])[:6],
+        "strong_on": list(strong_on or [])[:6],
+        "weak_on": list(weak_on or [])[:6],
+        "last_studied": datetime.now(timezone.utc).date().isoformat(),
+        "review_after_days": int(review_after_days),
+        "review_date": review_at,
+        "confidence": 0.95,
+        "created_at": _now_iso(),
+    })
+    if len(current) > _MAX_OBSERVATIONS:
+        current = current[-_MAX_OBSERVATIONS:]
+    profile.ai_observations = current
+    await db.commit()
+
+
+def get_concept_mastery(profile: Optional[AILearningProfile], concept_id: int) -> Optional[dict]:
+    if profile is None:
+        return None
+    for o in reversed(list(profile.ai_observations or [])):
+        if o.get("type") == "concept_mastery" and int(o.get("concept_id") or 0) == int(concept_id):
+            return o
+    return None

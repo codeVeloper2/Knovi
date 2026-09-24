@@ -773,6 +773,11 @@ export default function AILearningRoom() {
       setAnswerInput("");
       setHintOpen(false);
       setHintUsed(false);
+      // If UPRAD returned an inline correction, give the student a moment to read it
+      // (messages stream already contains Quick correction) before the next item.
+      if (evaluation?.correctionNote) {
+        await new Promise(r => setTimeout(r, 1200));
+      }
       if (next < questions.length) { setQIndex(next); return; }
       await finishPracticeRun();
     } catch (err) { setError(err.message || "Could not evaluate that answer."); }
@@ -1509,7 +1514,7 @@ function inlineMarkdown(text) {
 }
 async function copyText(text, id, onCopy) { try { await navigator.clipboard?.writeText(text); onCopy(id); setTimeout(() => onCopy(null), 1300); } catch {} }
 function formatFamiliarity(v) { return ({ new: "new to this", seen_before: "seen it before", know_basics: "basics understood", know_well: "confident", need_help: "needs help" })[v] || v; }
-function formatIntent(v) { return ({ teach_me: "learn the concept", explain_simply: "simple explanation", give_examples: "learn through examples", go_deeper: "go deeper", already_know: "probe understanding", quiz_me: "diagnostic first", broaden: "broaden context", custom: "custom goal" })[v] || v; }
+function formatIntent(v) { return ({ teach_me: "learn the concept", explain_simply: "simple explanation", give_examples: "learn through examples", go_deeper: "go deeper", already_know: "probe understanding", quiz_me: "diagnostic first", broaden: "broaden context", teach_it_back: "explain it back (Feynman)", custom: "custom goal" })[v] || v; }
 function taskTitle(task) { return task?.title || task?.name || task?.concept || task?.task || "Learning step"; }
 function taskDescription(task) { return task?.description || task?.objective || task?.goal || task?.summary || "Build understanding and apply the idea."; }
 function taskMeta(task) { return task?.estimatedMinutes ? `${task.estimatedMinutes} min` : task?.recommended_minutes ? `${task.recommended_minutes} min` : task?.type || "Guided learning"; }

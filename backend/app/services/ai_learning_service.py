@@ -94,6 +94,11 @@ _INTENT_PROMPT_MODIFIER: dict[str, str] = {
         "The formal compulsory quiz is opened separately by the Learning Room after an explicit readiness confirmation.",
     "custom":
         "Follow the student's specific request while staying within the curriculum concept.",
+    "teach_it_back":
+        "Feynman mode: after a brief orientation, ask the student to explain the idea back "
+        "in their own words as if teaching a classmate. Evaluate their explanation for gaps, "
+        "correct misconceptions, then invite them to try again until the core idea is solid. "
+        "Do not open the formal quiz until they can explain the core idea reasonably.",
 }
 
 # ── Valid state transitions ───────────────────────────────────────────────────
@@ -583,12 +588,7 @@ def _build_curriculum_context(
     intent_note = _INTENT_PROMPT_MODIFIER.get(session.intent, "")
 
     # Build the learner profile section (empty string if no profile / empty profile)
-    learner_ctx = lp_svc.build_learner_context(
-        learner_profile,
-        subject_name=subject.name,
-        concept_id=getattr(concept, "id", None),
-        topic_id=getattr(topic, "id", None),
-    )
+    learner_ctx = lp_svc.build_learner_context(learner_profile, subject_name=subject.name)
     learner_section = f"\n\n{learner_ctx}" if learner_ctx else ""
 
     return (
@@ -1040,14 +1040,9 @@ Do not teach the whole concept again. Connect briefly to prerequisite ideas when
 """
 
     system_prompt = (
-        "You are UPRAD, a warm and exam-aware AI tutor on PeerUP, a peer learning platform "
-        "built for Nigerian secondary school students. You teach to the NERDC curriculum. "
-        "Your tone is encouraging, clear, and direct — like a knowledgeable older student "
-        "who genuinely wants you to pass your exams. "
-        "When it helps understanding, use concrete examples from everyday Nigerian life "
-        "(markets, transport, cooking, electricity, local geography). "
-        "For mathematics, always show fully worked steps — never give just the final answer. "
-        "Keep your language simple and direct; avoid overly academic phrasing. "
+        "You are an expert AI tutor for PeerUP. Teach concepts clearly and adaptively. "
+        "Teach like a real secondary-school teacher: check understanding, use questions, "
+        "correct misconceptions quickly, and never rush to a test on empty confidence. "
         "Return structured JSON only — no markdown outside JSON strings."
     )
     plan_instruction = """
@@ -1100,10 +1095,10 @@ READABLE RESPONSE LAYOUT (MANDATORY):
 - Markdown is allowed INSIDE the JSON string; encode newlines normally so the Learning Room can render them.
 
 MATHEMATICS TEACHING MODE:
-- For Mathematics/General Mathematics/Mathematics-related topics, do not turn the teaching conversation into an oral quiz.
-- Explain the mathematical idea in plain language first, then demonstrate it with a concrete worked calculation using the exact skill being taught.
-- After the explanation, prefer a worked example such as a substitution, simplification, conversion, equation, graph calculation, or other relevant numerical procedure. Show the steps and final answer clearly.
-- Do not ask the student to verbally define a mathematical concept as a substitute for practicing the calculation. Formal assessment happens separately in Practice Mode.
+- For Mathematics/General Mathematics/Mathematics-related topics, follow: explain idea → full worked example with steps → invite the student to try a SIMILAR problem in chat (guided practice) before any formal quiz.
+- Show each calculation step on its own line and box the final answer clearly.
+- When the student attempts a similar problem, check their working step-by-step and correct the first wrong step immediately.
+- Do not ask only for verbal definitions when the skill is procedural. Formal Practice Mode still runs after micro-verification + readiness.
 
 Adapt depth and language to the student's familiarity ({session.student_familiarity}) and intent ({session.intent}).
 
@@ -1304,12 +1299,8 @@ POST-SESSION FOLLOW-UP RULES:
     )
 
     system_prompt = (
-        "You are UPRAD, a warm and exam-aware AI tutor on PeerUP, a peer learning platform "
-        "built for Nigerian secondary school students. You teach to the NERDC curriculum. "
-        "Your tone is encouraging, clear, and direct — like a knowledgeable older student "
-        "who genuinely wants you to pass your exams. "
-        "When it helps understanding, use concrete examples from everyday Nigerian life. "
-        "For mathematics, always show fully worked steps — never give just the final answer. "
+        "You are an AI tutor on PeerUP, a peer learning platform for students. "
+        "You always answer educational questions helpfully and warmly. "
         "Return JSON only — no markdown outside the response field."
     )
 
@@ -1335,28 +1326,33 @@ READABLE RESPONSE LAYOUT:
 
 action field rules:
 - null         → continue teaching/conversing normally
-- "ask_readiness" → ask the learner whether they are ready for a quick check; do NOT start practice yet
+- "verify_understanding" → ask ONE short oral comprehension check (student explains in their own words). NOT a graded quiz. NOT multiple choice.
+- "ask_readiness" → only AFTER a successful verify_understanding exchange; ask if ready for the formal quick check
 - "start_quiz" → trigger Practice Mode only after the learner has explicitly confirmed readiness
 - "mark_task_done" → only AFTER a quiz was passed (score ≥ 70); mark current task complete
 - "next_task"  → only after the persisted transition prompt was shown AND the learner explicitly confirms readiness to move on
 - "complete_session" → all tasks done and passed
+- "guided_practice" → (Mathematics only) show a fully worked example, then give ONE similar problem for the student to attempt before formal quiz
+
+SOCRATIC TEACHING (use deliberately):
+- Do not always give the full answer immediately when the student asks something within the current task.
+- Roughly 30–40% of the time when the student asks a conceptual question (and familiarity is not "new"), respond with a short guiding question first, then help them finish the idea.
+- If the student is stuck or says they don't know, give a clear explanation — never trap them.
+
+MICRO-VERIFICATION (critical for real learning):
+- When the learner signals understanding ("I get it", "that makes sense", etc.), prefer action "verify_understanding" over jumping to readiness.
+- The verify question must require the student to restate or apply the idea in their own words in 1–3 sentences.
+- Only move to ask_readiness after a reasonable verify answer (or two soft attempts).
+
+MATH GUIDED PRACTICE:
+- For General Mathematics / Mathematics subjects, before formal quiz, use guided_practice: one worked example with clear steps, then one similar problem for the student to attempt in chat.
 
 RESPONSE SEPARATION: If action is "ask_readiness" or "start_quiz", the response must be one short transition message only. NEVER include quiz questions, answer choices, or question lists in that response.
 
-MICRO-VERIFY BEFORE READINESS (mandatory):
-- When the learner says they understand ("I get it", "that makes sense", "I understand", etc.),
-  do NOT immediately ask if they are ready for the quiz.
-- Instead, set action to null and ask ONE short diagnostic question to verify real understanding.
-  Example: "Good — before we move on, tell me in your own words: what is [key concept]?"
-  or "Quick check: if [scenario], what would happen?"
-- This question must NOT be a formal quiz question. It is a conversational check.
-- Only AFTER the learner gives a reasonable answer to the micro-verify question should you
-  signal "ask_readiness".
-
 When to signal "ask_readiness":
-- The learner passed a micro-verify question with a reasonable answer
-- The learner has had substantial teaching/explanation AND the micro-verify check is done
-- Do NOT signal ask_readiness the moment a learner says "I understand" — verify first
+- The learner has had enough teaching/explanation to reasonably check understanding
+- The learner says they understand, e.g. "I understand", "that makes sense", "I get it", or equivalent
+- The learner is not asking for another explanation at that moment
 
 When to signal "start_quiz":
 - The immediately preceding tutor response asked whether the learner is ready for a quick check
@@ -1422,7 +1418,7 @@ Rules:
     # Agentic action signal — only valid during active sessions
     action      = parsed.get("action") or None
     action_data = parsed.get("action_data") or None
-    valid_actions = {"ask_readiness", "start_quiz", "mark_task_done", "next_task", "complete_session"}
+    valid_actions = {"ask_readiness", "start_quiz", "mark_task_done", "next_task", "complete_session", "verify_understanding", "guided_practice", "reteach_task"}
     if is_post_session or action not in valid_actions:
         action      = None
         action_data = None
@@ -1485,19 +1481,75 @@ Rules:
     elif action == "start_quiz":
         action = "ask_readiness"
         action_data = {"reason": "The learner needs to explicitly confirm readiness before practice."}
-        response_text = "You’ve covered enough for a quick check. Are you ready to test what you understand?"
+        response_text = "You've covered enough for a quick check. Are you ready to test what you understand?"
     elif action == "ask_readiness":
-        response_text = "You’ve covered enough for a quick check. Are you ready to test what you understand?"
+        prior_verify_pass = any(
+            (m.extra or {}).get("verifyPassed") is True
+            and (m.extra or {}).get("taskIndex") == current_task_index
+            for m in session.messages if m.role == "ai"
+        )
+        if not prior_verify_pass:
+            action = "verify_understanding"
+            action_data = {"task_index": current_task_index, "reason": "Micro-verification required before readiness."}
+            response_text = (
+                "Before we test formally, tell me in your own words what the key idea of this task is. "
+                "A short explanation is enough."
+            )
+        else:
+            response_text = "You've covered enough for a quick check. Are you ready to test what you understand?"
     elif action is None and _UNDERSTANDING_SIGNAL_RE.search(content or ""):
-        # Bug fix: don't jump straight to quiz. Ask one short diagnostic question
-        # to verify the student actually understood before inviting the formal check.
-        # The AI will generate a targeted oral question in its response field.
-        # Only after the student answers that correctly does ask_readiness fire.
-        action = None
-        action_data = None
-        # Inject a directive into the response so the AI asks a verification question
-        # instead of immediately offering the quiz.
-        response_text = None  # let the AI generate the micro-verify question naturally
+        # Real teachers verify understanding before testing.
+        action = "verify_understanding"
+        action_data = {"task_index": current_task_index, "reason": "Learner indicated understanding; verify before readiness."}
+        response_text = (
+            "Good — before the formal check, explain the main idea of this task in your own words "
+            "in one or two sentences. What does it mean, and how would you use it?"
+        )
+    # Evaluate micro-verification answers (oral comprehension, not graded quiz).
+    previous_verify = bool(
+        previous_ai
+        and (
+            (previous_ai.extra or {}).get("verifyUnderstanding") is True
+            or (previous_ai.extra or {}).get("action") == "verify_understanding"
+            or action == "verify_understanding" and False
+        )
+    )
+    if previous_ai and (previous_ai.extra or {}).get("verifyUnderstanding") is True and not confirmation:
+        # Student is answering the oral check — evaluate lightly with the model response already generated,
+        # but enforce progression: weak → keep teaching; reasonable → ask readiness.
+        verify_prompt = f"""You are checking whether a student roughly understands the current learning task.
+TASK INDEX: {current_task_index}
+STUDENT EXPLANATION: {content}
+
+Return JSON only:
+{{"passed": true/false, "feedback": "1-2 sentences", "correction": "brief correction if failed, else null"}}
+Passed means the explanation is roughly on-topic and shows partial or better understanding — not perfection.
+"""
+        try:
+            vraw, _ = await call_with_fallback(
+                verify_prompt,
+                system="You are a fair teacher doing a quick oral check. Return JSON only.",
+                temperature=0.2,
+                json_mode=True,
+            )
+            vparsed = parse_json(vraw)
+        except Exception:
+            vparsed = {"passed": len(content.strip()) >= 20, "feedback": "Thanks for explaining.", "correction": None}
+        passed = bool(vparsed.get("passed"))
+        if passed:
+            action = "ask_readiness"
+            action_data = {"task_index": current_task_index, "reason": "Micro-verification passed.", "verifyPassed": True}
+            response_text = (
+                f"{_safe_str(vparsed.get('feedback'), 'Solid explanation.')} "
+                "Are you ready for a short formal check on this task?"
+            )
+        else:
+            action = None
+            action_data = {"verifyPassed": False, "task_index": current_task_index}
+            correction = _safe_str(vparsed.get("correction") or vparsed.get("feedback"), "Let's tighten the idea.")
+            response_text = (
+                f"{correction}\n\nI'll keep teaching this point, then we'll try the oral check again."
+            )
 
     next_task_index = (
         int(action_data.get("task_index"))
@@ -1525,7 +1577,15 @@ Rules:
         "action": action,
         "actionData": action_data,
         "currentTaskIndex": next_task_index if next_task_index is not None else current_task_index,
+        "taskIndex": current_task_index,
     }
+    if action == "verify_understanding":
+        response_extra["verifyUnderstanding"] = True
+    if isinstance(action_data, dict) and action_data.get("verifyPassed") is True:
+        response_extra["verifyPassed"] = True
+        response_extra["verifyUnderstanding"] = True
+    if action == "ask_readiness" and isinstance(action_data, dict) and action_data.get("verifyPassed"):
+        response_extra["verifyPassed"] = True
     if previous_completed_task_index is not None:
         response_extra.update({
             "taskCompleted": True,
@@ -2305,9 +2365,6 @@ async def _generate_and_store_observations(
             })
 
     # ── 2. Misconception observation ──────────────────────────────────────
-    # Tag with concept_id and topic_id so the next session on the same concept
-    # can surface this specific misconception in the teaching prompt rather than
-    # having it buried in a flat list of 200 generic observations.
     if misconception:
         observations.append({
             "type": "learning_observation",
@@ -2316,9 +2373,6 @@ async def _generate_and_store_observations(
             "confidence": 0.78,
             "source": "retrieval_answer",
             "session_id": session_id,
-            "concept_id": session.concept_id,
-            "topic_id": session.topic_id,
-            "subject_id": session.subject_id,
         })
 
     # ── 3. Subject-level strength observation (strong performance) ────────
@@ -2419,9 +2473,8 @@ async def submit_answer(
 
     # AI evaluation
     system_prompt = (
-        "You are UPRAD, a warm and exam-aware AI tutor on PeerUP, built for Nigerian "
-        "secondary school students. Evaluate answers fairly and constructively. "
-        "Return JSON only."
+        "You are an AI tutor evaluating a student's answer. "
+        "Be fair, constructive, and encouraging. Return JSON only."
     )
     prompt = f"""QUESTION: {question.question}
 QUESTION TYPE: {question.question_type}
@@ -2435,7 +2488,8 @@ Evaluate the student's answer. Return JSON:
   "is_correct": true or false,
   "score": 0-100,
   "understanding": "strong" or "partial" or "weak",
-  "feedback": "Structured feedback in this exact order: (1) Start with what the student got right, even if small. (2) Name the specific gap or error clearly. (3) Give one corrective sentence. (4) End with one short line of encouragement. Keep total feedback under 90 words.",
+  "feedback": "Constructive feedback — what was right, what was wrong, how to improve.",
+  "correction_note": "If understanding is weak or partial: 80-120 words correcting the specific misconception RIGHT NOW, with the key idea restated simply. If strong: null.",
   "misconception": "Identified misconception if any, or null",
   "needs_reteach": true or false,
   "recommended_strategy": "suggested reteaching strategy if needs_reteach is true, or null",
@@ -2619,6 +2673,25 @@ Scoring guide:
     except Exception as obs_exc:
         logger.warning("Observation generation failed (non-fatal): %s", obs_exc)
 
+    correction_note = None
+    if understanding in ("weak", "partial"):
+        correction_note = _safe_str(parsed.get("correction_note")) or None
+        if not correction_note and answer.feedback:
+            # Fallback: use first part of feedback as immediate correction
+            correction_note = answer.feedback[:400]
+        if correction_note:
+            await _add_message(
+                session_id, "ai", "feedback",
+                f"**Quick correction**\n\n{correction_note}",
+                db,
+                extra={
+                    "questionId": question_id,
+                    "answerId": answer.id,
+                    "correctionNote": True,
+                    "understanding": understanding,
+                },
+            )
+
     result = {
         **answer.serialize(),
         "understanding":       understanding,
@@ -2635,6 +2708,7 @@ Scoring guide:
         "correctAnswer":       question.expected_answer if question.question_type != "multiple_choice" else None,
         "correctOptionLabel":  _correct_option_label(question),
         "taskIndex":           task_index,
+        "correctionNote":      correction_note,
     }
     return result
 
@@ -2890,15 +2964,8 @@ async def generate_adaptive_reteach(
     curriculum_ctx = _build_curriculum_context(subject, topic, concept, session, _learner_profile_reteach)
 
     system_prompt = (
-        "You are UPRAD, a warm and exam-aware AI tutor on PeerUP, a peer learning platform "
-        "built for Nigerian secondary school students. You teach to the NERDC curriculum. "
-        "Your tone is encouraging, clear, and direct — like a knowledgeable older student "
-        "who genuinely wants you to pass your exams. "
-        "The student struggled. Use a completely different teaching approach — "
-        "do NOT repeat previous explanations. Try a fresh angle: a real-world analogy, "
-        "a worked example from scratch, a step-by-step breakdown, or a simpler version first. "
-        "When it helps, use everyday Nigerian life examples. "
-        "For mathematics, show every working step clearly. "
+        "You are an adaptive AI tutor. The student struggled with this concept. "
+        "Use a completely different teaching approach — do NOT repeat previous explanations. "
         "Return JSON only."
     )
     prompt = f"""{curriculum_ctx}
@@ -3089,31 +3156,34 @@ async def generate_session_summary(
         session.subject_id, session.topic_id, session.concept_id, db
     )
 
-    # Build a rich answer breakdown that includes question text, the student's
-    # actual answer, and the feedback — so the summary AI can write specific,
-    # meaningful commentary instead of generic score-based platitudes.
-    question_by_id = {q.id: q for q in session.questions}
-    rich_answer_rows = []
-    for i, a in enumerate(all_answers[:10]):
-        q = question_by_id.get(a.question_id)
-        q_text    = q.question if q else "(question text unavailable)"
-        q_type    = q.question_type if q else ""
-        feedback  = a.feedback or "(no feedback recorded)"
-        misc      = (a.ai_evaluation or {}).get("misconception") or ""
-        misc_line = f"\n    Misconception identified: {misc}" if misc else ""
-        rich_answer_rows.append(
-            f"  Q{i+1} [{q_type}]: {q_text}\n"
-            f"    Student answered: {a.student_answer or '(no answer)'}\n"
+    # Build rich per-question detail (question text + student answer + feedback)
+    q_by_id = {q.id: q for q in (session.questions or [])}
+    detail_lines = []
+    for i, a in enumerate(all_answers[:12]):
+        q = q_by_id.get(a.question_id)
+        qtext = (q.question if q else "Question")[:240]
+        feedback = (a.feedback or "")[:220]
+        detail_lines.append(
+            f"  Q{i+1}: {qtext}\n"
+            f"    Student answer: {(a.student_answer or '')[:180]}\n"
             f"    Score: {a.score}/100 | Correct: {a.is_correct}\n"
-            f"    Feedback: {feedback}{misc_line}"
+            f"    Feedback: {feedback}"
         )
-    answer_details = "\n".join(rich_answer_rows) or "  No answers submitted."
+    answer_details = "\n".join(detail_lines) or "  No answers submitted."
 
     score_display = f"{overall_score}/100" if overall_score is not None else "N/A"
+    if overall_score is None:
+        review_days, mastery_level = 1, "unknown"
+    elif overall_score >= 80:
+        review_days, mastery_level = 3, "strong"
+    elif overall_score >= 60:
+        review_days, mastery_level = 1, "partial"
+    else:
+        review_days, mastery_level = 0, "weak"
 
     system_prompt = (
         "You are an AI tutor generating a learning session summary. "
-        "Be specific, constructive, and encouraging. Return JSON only."
+        "Be specific about the actual questions and answers. Return JSON only."
     )
     prompt = f"""SESSION SUMMARY REQUEST
 Subject: {subject.name} | Topic: {topic.name} | Concept: {concept.name}
@@ -3126,22 +3196,21 @@ Questions answered (unique): {questions_answered}
 Questions correct: {questions_correct}
 Overall score (best-per-question): {score_display}
 
-Answer breakdown:
+Answer breakdown (use this content — do not invent questions):
 {answer_details}
 
-Generate a comprehensive session summary. You have the full question text, the student's actual answers,
-and the feedback for each question above — use this to write a specific, meaningful summary.
-Name the exact things the student got right and the exact things they struggled with.
-Do not write generic statements like "you showed understanding" — say WHAT they understood and WHERE they struggled.
+Generate a comprehensive session summary grounded in the actual answers above.
 
 Return JSON:
 {{
-  "summary_text": "2–3 paragraph narrative summary of what the student learned and their performance.",
+  "summary_text": "2–3 paragraph narrative of what the student learned and where they struggled, referencing real question ideas.",
   "key_ideas": ["Key idea 1", "Key idea 2"],
   "strengths": ["What they understood well"],
   "areas_for_practice": ["What needs more work"],
-  "recommended_next": "Brief recommendation for next study step",
-  "teaching_methods_used": {strategies_used}
+  "recommended_next": "Brief next study step",
+  "teaching_methods_used": {strategies_used},
+  "review_after_days": {review_days},
+  "mastery_level": "{mastery_level}"
 }}
 """
     try:
@@ -3194,10 +3263,27 @@ Return JSON:
 
     await db.flush()
 
+    review_days = int(parsed.get("review_after_days") or review_days)
+    mastery_level = _safe_str(parsed.get("mastery_level"), mastery_level) or mastery_level
+    from datetime import timedelta
+    review_date = (_now() + timedelta(days=max(0, review_days))).date().isoformat()
+
+    summary_body = summary.summary_text or "Session complete."
+    summary_body += (
+        f"\n\n**Review plan:** come back on **{review_date}** "
+        f"(mastery: {mastery_level}). Spaced review beats one long session."
+    )
     await _add_message(
         session_id, "ai", "summary",
-        summary.summary_text or "Session complete.",
+        summary_body,
         db,
+        extra={
+            "reviewDate": review_date,
+            "reviewAfterDays": review_days,
+            "masteryLevel": mastery_level,
+            "finalTask": True,
+            "taskCompleted": True,
+        },
     )
 
     if session.status not in ("completed", "abandoned"):
@@ -3206,6 +3292,22 @@ Return JSON:
 
     await db.commit()
     await db.refresh(summary)
+
+    # Persist concept mastery map so the next session opens like a real teacher.
+    try:
+        await lp_svc.upsert_concept_mastery(
+            user_id,
+            concept_id=session.concept_id,
+            concept_name=concept.name,
+            mastery_level=mastery_level,
+            known_misconceptions=_safe_list(parsed.get("areas_for_practice"))[:6],
+            strong_on=_safe_list(parsed.get("strengths"))[:6],
+            weak_on=_safe_list(parsed.get("areas_for_practice"))[:6],
+            review_after_days=review_days,
+            db=db,
+        )
+    except Exception as mastery_exc:
+        logger.warning("Concept mastery update failed (non-fatal): %s", mastery_exc)
 
     # Persist this completed AI-learning evidence into the existing progress
     # architecture. The operation is idempotent and never touches challenge
@@ -3224,7 +3326,11 @@ Return JSON:
     except Exception as progress_exc:
         logger.warning("AI learning progress update failed (non-fatal): %s", progress_exc)
 
-    return summary.serialize()
+    out = summary.serialize()
+    out["reviewDate"] = review_date
+    out["reviewAfterDays"] = review_days
+    out["masteryLevel"] = mastery_level
+    return out
 
 
 # ─────────────────────────────────────────────────────────────────────────────
