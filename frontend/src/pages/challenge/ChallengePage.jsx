@@ -4,6 +4,8 @@ import * as api from "../../api";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import { ChallengeIcon, CloseIcon, ChevronRight } from "../../components/DashIcons";
+import katex from "katex";
+import "katex/dist/katex.min.css";
 import "../../styles/challenge.css";
 
 const ACTIVE_STATUSES = new Set([
@@ -12,6 +14,38 @@ const ACTIVE_STATUSES = new Set([
 ]);
 
 /* ─── Primitives ─────────────────────────────────────────────────────── */
+
+
+function MathText({ text }) {
+  if (!text) return null;
+  const source = String(text);
+  const parts = source.split(/(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$)/g);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (!part) return null;
+        if (part.startsWith("$$") && part.endsWith("$$")) {
+          try {
+            return <span key={i} className="ch-math ch-math-display" dangerouslySetInnerHTML={{ __html: katex.renderToString(part.slice(2, -2).trim(), { displayMode: true, throwOnError: false, strict: "ignore" }) }} />;
+          } catch { return <span key={i}>{part}</span>; }
+        }
+        if (part.startsWith("$") && part.endsWith("$") && part.length > 2) {
+          try {
+            return <span key={i} className="ch-math" dangerouslySetInnerHTML={{ __html: katex.renderToString(part.slice(1, -1).trim(), { throwOnError: false, strict: "ignore" }) }} />;
+          } catch { return <span key={i}>{part}</span>; }
+        }
+        // Light bare-macro pass
+        const soft = part.replace(/(\\frac\s*\{[^{}]*\}\s*\{[^{}]*\}|\\leq?|\\geq?|\\neq?|\\times|\\cdot|\\sqrt\s*(?:\[[^\]]*\])?\s*\{[^{}]*\})/g, (m) => {
+          try { return katex.renderToString(m, { throwOnError: false, strict: "ignore" }); } catch { return m; }
+        });
+        if (soft !== part && soft.includes("katex")) {
+          return <span key={i} className="ch-math" dangerouslySetInnerHTML={{ __html: soft }} />;
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+}
 
 function Avatar({ url, name, size = 44, online = false }) {
   const initial = (name || "P").trim().charAt(0).toUpperCase();
@@ -444,7 +478,7 @@ function LiveQuiz({ challenge, now, onAnswer, submitting }) {
           <span className="ch-diff">{q.difficulty || "medium"}</span>
           <span className="ch-meta-hint">Theory + objectives</span>
         </div>
-        <h2 className="ch-quiz-question">{q.question}</h2>
+        <h2 className="ch-quiz-question"><MathText text={q.question} /></h2>
 
         <div className="ch-options" role="listbox" aria-label="Answer options">
           {Object.entries(q.options || {}).map(([label, text]) => (
@@ -458,7 +492,7 @@ function LiveQuiz({ challenge, now, onAnswer, submitting }) {
               onClick={() => setSelected(label)}
             >
               <span className="ch-option-letter">{label}</span>
-              <span className="ch-option-text">{text}</span>
+              <span className="ch-option-text"><MathText text={text} /></span>
             </button>
           ))}
         </div>
@@ -515,7 +549,7 @@ function RevealView({ challenge, onNext }) {
       </div>
 
       <div className="ch-quiz-card ch-reveal-card">
-        <h2 className="ch-quiz-question">{q.question}</h2>
+        <h2 className="ch-quiz-question"><MathText text={q.question} /></h2>
 
         <div className="ch-reveal-options">
           {Object.entries(q.options || {}).map(([label, text]) => {

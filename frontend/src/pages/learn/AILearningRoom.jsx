@@ -1315,7 +1315,7 @@ function QuizArtifact({ question, index, total, answer, setAnswer, onSubmit, sub
       <span className="ar-quiz-count">{index + 1}/{total}</span>
     </div>
     <div className="ar-quiz-progress">{Array.from({ length: total }, (_, i) => <i key={i} className={i < index ? "done" : i === index ? "current" : ""} />)}</div>
-    <div className="ar-quiz-question">{question.question}</div>
+    <div className="ar-quiz-question"><RichText content={question.question} onCopy={() => {}} copiedId={null} /></div>
     <button type="button" className="ar-hint-toggle" onClick={() => { setHintOpen(v => !v); setHintUsed(true); }} disabled={submitting}>{hintOpen ? "Hide hint" : "Need a hint?"}</button>
     {hintOpen && <div className="ar-practice-hint"><strong>Hint</strong><span>{hint}</span></div>}
     {mc ? <div className="ar-options">{options.map((opt, i) => { const value = typeof opt === "string" ? opt : (opt.value ?? opt.label ?? opt.text); const text = typeof opt === "string" ? opt : (opt.text ?? opt.label ?? opt.value); return <button key={`${question.id}-${i}`} className={`ar-option ${answer === value ? "selected" : ""}`} onClick={() => setAnswer(value)} disabled={submitting}><span>{String.fromCharCode(65 + i)}</span><b>{text}</b></button>; })}</div> : <textarea className="ar-answer-box" rows={5} value={answer} onChange={e => setAnswer(e.target.value)} placeholder="Work it out, then give UPRAD your answer…" disabled={submitting} />}
@@ -1325,7 +1325,9 @@ function QuizArtifact({ question, index, total, answer, setAnswer, onSubmit, sub
 
 function RichText({ content, onCopy, copiedId }) {
   if (!content) return null;
-  const lines = String(content).replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+  // Normalize AI math into KaTeX-friendly delimiters before block parsing.
+  const normalized = normalizeMathSource(String(content));
+  const lines = normalized.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
   const blocks = [];
   let i = 0;
 
@@ -1363,8 +1365,45 @@ function RichText({ content, onCopy, copiedId }) {
       continue;
     }
 
+    // Display math block: $$ ... $$ or \[ ... \] spanning lines
+    if (trimmed === "$$" || trimmed === "\\[" || trimmed.startsWith("$$") && !trimmed.endsWith("$$") && trimmed !== "$$") {
+      const closeToken = trimmed.startsWith("\\[") ? "\\]" : "$$";
+      const mathLines = [];
+      if (trimmed !== "$$" && trimmed !== "\\[" && trimmed.startsWith("$$")) {
+        mathLines.push(trimmed.replace(/^\$\$/, ""));
+      }
+      i += 1;
+      while (i < lines.length) {
+        const t = lines[i].trim();
+        if (t === closeToken || t.endsWith(closeToken)) {
+          if (t !== closeToken) mathLines.push(t.slice(0, -closeToken.length));
+          i += 1;
+          break;
+        }
+        mathLines.push(lines[i]);
+        i += 1;
+      }
+      blocks.push(
+        <div className="ar-math-block" key={`mathb-${blocks.length}`}>
+          {renderMath(mathLines.join("\n"), true)}
+        </div>
+      );
+      continue;
+    }
+    // Single-line display math $$...$$ or \[...\]
+    if ((trimmed.startsWith("$$") && trimmed.endsWith("$$") && trimmed.length > 4) ||
+        (trimmed.startsWith("\\[") && trimmed.endsWith("\\]") && trimmed.length > 4)) {
+      const body = trimmed.startsWith("$$") ? trimmed.slice(2, -2) : trimmed.slice(2, -2);
+      blocks.push(
+        <div className="ar-math-block" key={`mathb-${blocks.length}`}>
+          {renderMath(body, true)}
+        </div>
+      );
+      i += 1;
+      continue;
+    }
+
     // Heading syntax used by the tutor: `=== Heading` (also accepts `=== Heading ===`).
-    // Keep normal Markdown headings working too, but never expose the raw marker.
     const equalsHeading = trimmed.match(/^={3,6}\s+(.+?)(?:\s+={3,6})?$/);
     const markdownHeading = trimmed.match(/^(#{1,6})\s+(.+?)\s*#*$/);
     if (equalsHeading || markdownHeading) {
@@ -1376,15 +1415,14 @@ function RichText({ content, onCopy, copiedId }) {
       continue;
     }
 
-    // Horizontal rule: don't show raw --- / *** / ___.
+    // Horizontal rule
     if (/^(?:\*\s*){3,}$/.test(trimmed) || /^(?:-\s*){3,}$/.test(trimmed) || /^(?:_\s*){3,}$/.test(trimmed)) {
       blocks.push(<hr className="ar-rich-rule" key={`rule-${i}`} />);
       i += 1;
       continue;
     }
 
-    // Markdown table. A table is recognized only when a separator row follows
-    // the header, preventing ordinary pipe-heavy text from becoming a table.
+    // Markdown table
     if (i + 1 < lines.length && trimmed.includes("|") && isTableSeparator(lines[i + 1])) {
       const headers = splitTableRow(trimmed);
       const rows = [];
@@ -1410,7 +1448,7 @@ function RichText({ content, onCopy, copiedId }) {
       continue;
     }
 
-    // Consecutive unordered list items.
+    // Unordered list
     if (/^[-*+]\s+/.test(trimmed)) {
       const items = [];
       while (i < lines.length && /^\s*[-*+]\s+/.test(lines[i])) {
@@ -1421,7 +1459,7 @@ function RichText({ content, onCopy, copiedId }) {
       continue;
     }
 
-    // Consecutive ordered list items.
+    // Ordered list
     if (/^\d+[.)]\s+/.test(trimmed)) {
       const items = [];
       while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) {
@@ -1432,7 +1470,7 @@ function RichText({ content, onCopy, copiedId }) {
       continue;
     }
 
-    // Consecutive blockquote lines.
+    // Blockquote
     if (/^>\s?/.test(trimmed)) {
       const quoteLines = [];
       while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
@@ -1443,9 +1481,7 @@ function RichText({ content, onCopy, copiedId }) {
       continue;
     }
 
-    // Normal paragraph. Preserve intentional single newlines as visible line breaks
-    // while still treating blank lines as paragraph boundaries. This keeps AI output
-    // readable even when the model uses single newlines instead of blank-line Markdown.
+    // Normal paragraph
     const paragraphLines = [trimmed];
     i += 1;
     while (i < lines.length) {
@@ -1453,7 +1489,8 @@ function RichText({ content, onCopy, copiedId }) {
       const next = nextRaw.trim();
       if (!next || next.startsWith("```") || /^(#{1,6})\s+/.test(next) ||
           /^(?:\*\s*){3,}$/.test(next) || /^(?:-\s*){3,}$/.test(next) || /^(?:_\s*){3,}$/.test(next) ||
-          /^[-*+]\s+/.test(next) || /^\d+[.)]\s+/.test(next) || /^>\s?/.test(next)) break;
+          /^[-*+]\s+/.test(next) || /^\d+[.)]\s+/.test(next) || /^>\s?/.test(next) ||
+          next === "$$" || next === "\\[" || (next.startsWith("$$") && next.endsWith("$$"))) break;
       if (next.includes("|") && i + 1 < lines.length && isTableSeparator(lines[i + 1])) break;
       paragraphLines.push(next);
       i += 1;
@@ -1478,13 +1515,91 @@ function splitTableRow(line) {
   return value.split("|").map(cell => cell.trim());
 }
 
+/** Wrap bare LaTeX commands in $...$ so KaTeX can render them. */
+function normalizeMathSource(text) {
+  let s = String(text || "");
+  // Unicode operators → keep as-is (they render); also map common words
+  // Protect fenced code
+  const protectedBlocks = [];
+  s = s.replace(/```[\s\S]*?```/g, (m) => {
+    protectedBlocks.push(m);
+    return `\u0000CODE${protectedBlocks.length - 1}\u0000`;
+  });
+  // Protect already-delimited math
+  s = s.replace(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$[^$\n]+\$)/g, (m) => {
+    protectedBlocks.push(m);
+    return `\u0000MATH${protectedBlocks.length - 1}\u0000`;
+  });
+
+  // Bare LaTeX macros commonly emitted without delimiters
+  const bareMacros = [
+    /\\frac\s*\{[^{}]*\}\s*\{[^{}]*\}/g,
+    /\\sqrt\s*(?:\[[^\]]*\])?\s*\{[^{}]*\}/g,
+    /\\sum(?:_\{[^{}]*\})?(?:\^\{[^{}]*\})?/g,
+    /\\prod(?:_\{[^{}]*\})?(?:\^\{[^{}]*\})?/g,
+    /\\int(?:_\{[^{}]*\})?(?:\^\{[^{}]*\})?/g,
+    /\\lim(?:_\{[^{}]*\})?/g,
+    /\\partial/g,
+    /\\nabla/g,
+    /\\infty/g,
+    /\\pm/g,
+    /\\mp/g,
+    /\\times/g,
+    /\\cdot/g,
+    /\\div/g,
+    /\\leq?|\\geq?|\\neq?|\\ne|\\approx|\\equiv|\\sim|\\propto|\\ll|\\gg/g,
+    /\\in\b|\\notin|\\subset|\\subseteq|\\supset|\\supseteq|\\cup|\\cap|\\emptyset|\\varnothing/g,
+    /\\forall|\\exists|\\land|\\lor|\\neg|\\lnot|\\implies|\\Rightarrow|\\iff|\\Leftrightarrow/g,
+    /\\angle|\\measuredangle|\\perp|\\parallel|\\circ/g,
+    /\\vec\s*\{[^{}]*\}/g,
+    /\\overline\s*\{[^{}]*\}/g,
+    /\\underline\s*\{[^{}]*\}/g,
+    /\\mathbf\s*\{[^{}]*\}/g,
+    /\\mathrm\s*\{[^{}]*\}/g,
+    /\\text\s*\{[^{}]*\}/g,
+    /\\left\s*[(\[{|.][\s\S]*?\\right\s*[)\]}|.]/g,
+    /\\alpha|\\beta|\\gamma|\\delta|\\epsilon|\\varepsilon|\\zeta|\\eta|\\theta|\\vartheta|\\iota|\\kappa|\\lambda|\\mu|\\nu|\\xi|\\pi|\\varpi|\\rho|\\sigma|\\tau|\\upsilon|\\phi|\\varphi|\\chi|\\psi|\\omega/g,
+    /\\Gamma|\\Delta|\\Theta|\\Lambda|\\Xi|\\Pi|\\Sigma|\\Upsilon|\\Phi|\\Psi|\\Omega/g,
+  ];
+  for (const re of bareMacros) {
+    s = s.replace(re, (m) => `$${m}$`);
+  }
+
+  // Simple powers / subscripts outside math: x^2, x_1 (letter/number base)
+  s = s.replace(/(?<![\\$A-Za-z])([A-Za-z]|[0-9]+)(\^[A-Za-z0-9]|_\{[^{}]+\}|\^[0-9]+|_{[0-9]+}|_[0-9])(?![A-Za-z0-9{])/g, (m) => {
+    if (m.includes("$")) return m;
+    return `$${m}$`;
+  });
+
+  // Restore protected
+  s = s.replace(/\u0000(?:CODE|MATH)(\d+)\u0000/g, (_, n) => protectedBlocks[Number(n)]);
+  // Collapse accidental $$ $$ from double wrapping
+  s = s.replace(/\$\$([^$]+)\$\$/g, (m, inner) => {
+    if (inner.includes("\\") || /[_^]/.test(inner)) return m;
+    return m;
+  });
+  s = s.replace(/\$\s*\$([^$]+)\$\s*\$/g, "$$$1$$");
+  s = s.replace(/\$\$(\\[a-zA-Z]+(?:\{[^{}]*\})*)\$\$/g, "$$$1$"); // single macro shouldn't be display
+  return s;
+}
+
 function renderMath(latex, displayMode = false) {
   try {
+    let src = String(latex || "").trim();
+    // Strip leftover outer $ if any
+    if (src.startsWith("$$") && src.endsWith("$$")) src = src.slice(2, -2).trim();
+    if (src.startsWith("$") && src.endsWith("$")) src = src.slice(1, -1).trim();
     return (
       <span
         className={displayMode ? "ar-math ar-math-display" : "ar-math"}
         dangerouslySetInnerHTML={{
-          __html: katex.renderToString(latex.trim(), { displayMode, throwOnError: false, strict: "ignore" })
+          __html: katex.renderToString(src, {
+            displayMode,
+            throwOnError: false,
+            strict: "ignore",
+            trust: false,
+            output: "html",
+          }),
         }}
       />
     );
@@ -1495,8 +1610,7 @@ function renderMath(latex, displayMode = false) {
 
 function inlineMarkdown(text) {
   const source = String(text);
-  // Parse LaTeX delimiters before Markdown emphasis so `\(AM = MB\)` is
-  // rendered as mathematics instead of exposing the raw `\(` / `\)` markers.
+  // Parse LaTeX delimiters before Markdown emphasis so math is not broken by * _
   const tokens = source.split(/(\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$|\\\([\s\S]*?\\\)|\$[^$\n]+\$|==[^=\n]+==|\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\n]+\*|_[^_\n]+_|~~[^~]+~~)/g);
   return tokens.map((p, i) => {
     if (!p) return null;
@@ -1512,6 +1626,7 @@ function inlineMarkdown(text) {
     return p;
   });
 }
+
 async function copyText(text, id, onCopy) { try { await navigator.clipboard?.writeText(text); onCopy(id); setTimeout(() => onCopy(null), 1300); } catch {} }
 function formatFamiliarity(v) { return ({ new: "new to this", seen_before: "seen it before", know_basics: "basics understood", know_well: "confident", need_help: "needs help" })[v] || v; }
 function formatIntent(v) { return ({ teach_me: "learn the concept", explain_simply: "simple explanation", give_examples: "learn through examples", go_deeper: "go deeper", already_know: "probe understanding", quiz_me: "diagnostic first", broaden: "broaden context", teach_it_back: "explain it back (Feynman)", custom: "custom goal" })[v] || v; }

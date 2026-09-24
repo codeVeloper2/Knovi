@@ -402,6 +402,8 @@ Misconceptions:
 What the AI taught:
 {context_b.teaching_text}
 
+MATHEMATICS NOTATION: Wrap all formulas in $...$ or $$...$$ KaTeX delimiters (e.g. $-3x > 12$, $\frac{a}{b}$). Never leave raw \frac without delimiters.
+
 GENERATION RULES
 1. Generate exactly {blueprint.questionCount} questions.
 2. Use only the listed objective IDs. Every question must use exactly one objective ID from the shared list (map theory questions to the closest related objective).

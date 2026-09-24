@@ -2572,3 +2572,28 @@
   line-height: 1.45;
 }
 .ar-practice-hint strong { white-space: nowrap; }
+
+
+/* KaTeX on dark surfaces */
+.ar-rich .katex { font-size: 1.05em; color: #e8eef8; }
+.ar-rich .katex .mord, .ar-rich .katex .mbin, .ar-rich .katex .mrel, .ar-rich .katex .mopen, .ar-rich .katex .mclose { color: inherit; }
+.ar-math { display: inline-block; vertical-align: middle; margin: 0 0.15em; max-width: 100%; overflow-x: auto; }
+.ar-math-display, .ar-math-block {
+  display: block;
+  overflow-x: auto;
+  margin: 14px 0;
+  padding: 12px 14px;
+  text-align: center;
+  border-radius: 12px;
+  background: rgba(91, 110, 245, 0.08);
+  border: 1px solid rgba(130, 170, 220, 0.14);
+}
+.ar-math-display .katex-display, .ar-math-block .katex-display { margin: 0; }
+.ar-math-fallback {
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.88em;
+  color: #c7d2fe;
+}
+.ar-quiz-question .ar-rich p { margin: 0; font-size: inherit; }
+.ar-quiz-question .katex { font-size: 1.1em; }

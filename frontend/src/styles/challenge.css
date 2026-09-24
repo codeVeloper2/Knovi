@@ -957,3 +957,8 @@
   .ch-modal-backdrop { place-items: center; }
   .ch-modal { border-radius: 20px; }
 }
+
+.ch-math { display: inline-block; vertical-align: middle; margin: 0 0.1em; }
+.ch-math-display { display: block; overflow-x: auto; margin: 10px 0; text-align: center; }
+.ch-quiz-question .katex { font-size: 1.08em; color: #e8eef8; }
+.ch-option-text .katex { font-size: 1em; color: #e8eef8; }
