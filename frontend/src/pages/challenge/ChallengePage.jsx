@@ -176,11 +176,95 @@ function RevealView({ challenge, onNext }) {
   return <div className="challenge-page challenge-detail-page"><div className="challenge-live-top"><div><span className="challenge-eyebrow">Question {q.questionNumber} of {challenge.questionCount}</span><strong>Question Reveal</strong></div><span className={q.isCorrect ? "challenge-result-pill correct" : "challenge-result-pill wrong"}>{q.isCorrect ? "Correct" : "Review this one"}</span></div><div className="challenge-question card challenge-reveal-card"><h2>{q.question}</h2><div className="challenge-reveal-options">{Object.entries(q.options || {}).map(([label, text]) => <div key={label} className={`challenge-reveal-option ${label === q.correctAnswer ? "correct" : ""} ${label === own?.answer && !own?.isCorrect ? "wrong" : ""}`}><span>{label}</span><p>{text}</p></div>)}</div><div className="challenge-answer-comparison"><div><small>Your answer</small><strong>{answerLabel(own?.answer)}</strong>{own?.timedOut && <em>Timed out</em>}</div><div><small>{challenge.mode === "ai" ? "UPRAD evaluation" : "Opponent's answer"}</small><strong>{challenge.mode === "ai" ? (q.isCorrect ? "UPRAD marked this correct" : "UPRAD marked this for review") : answerLabel(opponent?.answer)}</strong>{opponent?.timedOut && <em>Timed out</em>}</div></div><div className="challenge-explanation"><small>Explanation</small><p>{q.explanation}</p></div><button type="button" className="btn btn-primary" onClick={onNext}>Next Question</button></div></div>;
 }
 
-function ResultsView({ challenge, results, review, loading, onReview, onBack }) {
+function ResultsView({ challenge, results, review, loading, onReview, onBack, onRematch, rematchBusy }) {
   if (loading || !results) return <div className="challenge-focus"><InitialLoader label="Loading results…" /></div>;
   const perQuestion = results.perQuestion || [];
   const correct = perQuestion.filter(item => item.isCorrect).length;
-  return <div className="challenge-page challenge-results-page"><ChallengeHeader onBack={onBack} title="Challenge Complete" subtitle={`${challenge.conceptName} · ${fmtDate(results.completedAt)}`} /><div className="challenge-results-hero card"><div className="challenge-trophy">🏆</div><h2>{challenge.mode === "ai" ? "AI Challenge complete" : "Your challenge results"}</h2><div className="challenge-score-grid"><div><small>Your Score</small><strong>{results.score}/{results.totalQuestions}</strong><span>{results.accuracy}% accuracy</span></div>{challenge.mode === "ai" ? <div><small>Challenge partner</small><strong>UPRAD</strong><span>AI evaluation</span></div> : <div><small>Opponent Score</small><strong>{results.opponent.score}/{results.opponent.totalQuestions}</strong><span>{results.opponent.accuracy}% accuracy</span></div>}</div></div><div className="challenge-results-grid"><section className="card"><SectionTitle title="Performance" /><div className="challenge-stat-list"><div><span>Answered</span><strong>{results.questionsAnswered}/{results.totalQuestions}</strong></div><div><span>Correct</span><strong>{correct}</strong></div><div><span>Accuracy</span><strong>{results.accuracy}%</strong></div></div>{results.summary && <p className="challenge-summary">{results.summary}</p>}</section><section className="card"><SectionTitle title="Areas to review" />{results.weakAreas?.length ? <ul className="challenge-review-list">{results.weakAreas.map((item, i) => <li key={i}><span>•</span><div><strong>{item.area || item.title || item.objective || "Review area"}</strong><p>{item.reason || item.description || "Practice this area again in Learn."}</p></div></li>)}</ul> : <p className="challenge-muted">No weak-area signal was returned for this challenge.</p>}</section></div><div className="challenge-results-actions"><button type="button" className="btn btn-primary" onClick={onReview}>View Question Review</button><button type="button" className="btn btn-ghost" onClick={onBack}>Back to Challenge</button></div>{review && <ReviewPanel review={review} challenge={challenge} />}</div>;
+  const myScore = Number(results.score ?? 0);
+  const oppScore = challenge.mode === "ai" ? null : Number(results.opponent?.score ?? 0);
+  const outcome = challenge.mode === "ai"
+    ? (myScore >= Math.ceil((results.totalQuestions || 1) * 0.6) ? "win" : "review")
+    : myScore > oppScore ? "win" : myScore < oppScore ? "loss" : "draw";
+  const outcomeCopy = {
+    win: { title: "You won!", sub: "Stronger on this run. Keep the edge with a rematch.", emoji: "🏆", cls: "is-win" },
+    loss: { title: "Opponent won", sub: "Close the gap — review misses, then challenge again.", emoji: "⚔️", cls: "is-loss" },
+    draw: { title: "It's a draw", sub: "Same score. Rematch to break the tie.", emoji: "🤝", cls: "is-draw" },
+    review: { title: "Challenge complete", sub: "Review the theory and try UPRAD again.", emoji: "📘", cls: "is-review" },
+  }[outcome];
+
+  return (
+    <div className="challenge-page challenge-results-page">
+      <ChallengeHeader onBack={onBack} title="Challenge Complete" subtitle={`${challenge.conceptName} · ${fmtDate(results.completedAt)}`} />
+      <div className={`challenge-results-hero card ${outcomeCopy.cls}`}>
+        <div className={`challenge-outcome-badge ${outcomeCopy.cls}`}>
+          <span className="challenge-outcome-emoji">{outcomeCopy.emoji}</span>
+          <div>
+            <strong>{outcomeCopy.title}</strong>
+            <p>{outcomeCopy.sub}</p>
+          </div>
+        </div>
+        <div className="challenge-trophy">{outcomeCopy.emoji}</div>
+        <h2>{challenge.mode === "ai" ? "AI Challenge complete" : "Your challenge results"}</h2>
+        <div className="challenge-score-grid">
+          <div>
+            <small>Your Score</small>
+            <strong>{results.score}/{results.totalQuestions}</strong>
+            <span>{results.accuracy}% accuracy</span>
+          </div>
+          {challenge.mode === "ai" ? (
+            <div>
+              <small>Challenge partner</small>
+              <strong>UPRAD</strong>
+              <span>AI evaluation</span>
+            </div>
+          ) : (
+            <div>
+              <small>Opponent Score</small>
+              <strong>{results.opponent.score}/{results.opponent.totalQuestions}</strong>
+              <span>{results.opponent.accuracy}% accuracy</span>
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="challenge-results-grid">
+        <section className="card">
+          <SectionTitle title="Performance" />
+          <div className="challenge-stat-list">
+            <div><span>Answered</span><strong>{results.questionsAnswered}/{results.totalQuestions}</strong></div>
+            <div><span>Correct</span><strong>{correct}</strong></div>
+            <div><span>Accuracy</span><strong>{results.accuracy}%</strong></div>
+          </div>
+          {results.summary && <p className="challenge-summary">{results.summary}</p>}
+        </section>
+        <section className="card">
+          <SectionTitle title="Areas to review" />
+          {results.weakAreas?.length ? (
+            <ul className="challenge-review-list">
+              {results.weakAreas.map((item, i) => (
+                <li key={i}>
+                  <span>•</span>
+                  <div>
+                    <strong>{item.area || item.title || item.objective || "Review area"}</strong>
+                    <p>{item.reason || item.description || "Practice this area again in Learn."}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="challenge-muted">No weak-area signal was returned for this challenge.</p>
+          )}
+        </section>
+      </div>
+      <div className="challenge-results-actions">
+        <button type="button" className="btn btn-primary" onClick={onRematch} disabled={rematchBusy}>
+          {rematchBusy ? "Starting…" : challenge.mode === "ai" ? "Challenge UPRAD again" : "Rematch / Challenge again"}
+        </button>
+        <button type="button" className="btn btn-ghost" onClick={onReview}>View Question Review</button>
+        <button type="button" className="btn btn-ghost" onClick={onBack}>Back to Challenge</button>
+      </div>
+      {review && <ReviewPanel review={review} challenge={challenge} />}
+    </div>
+  );
 }
 
 function ReviewPanel({ review, challenge }) {
@@ -208,6 +292,7 @@ export default function ChallengePage() {
   const [results, setResults] = useState(null);
   const [review, setReview] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [rematchBusy, setRematchBusy] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const wsRef = useRef(null);
 
@@ -277,9 +362,80 @@ export default function ChallengePage() {
   }
 
   async function handleReview() {
-    if (review) return;
     try { setReview(await api.getChallengeReview(challengeId)); } catch (err) { toast.error(err.message || "Review isn't ready yet."); }
   }
+
+  async function handleRematch() {
+    if (!challenge || rematchBusy) return;
+    setRematchBusy(true);
+    try {
+      let sourceSessionId = challenge.sourceSessionAId || challenge.sourceSessionId || challenge.source_session_a_id;
+      if (!sourceSessionId) {
+        try {
+          const sessions = await api.getAISessions({ limit: 50, offset: 0 });
+          const match = (Array.isArray(sessions) ? sessions : []).find(s =>
+            Number(s.conceptId) === Number(challenge.conceptId) &&
+            (s.status === "completed" || s.status === "teaching" || s.status === "practice")
+          );
+          sourceSessionId = match?.id;
+        } catch (_) {}
+      }
+      if (challenge.mode === "ai") {
+        if (!sourceSessionId) throw new Error("No learning session found for this concept.");
+        const result = await api.createAIChallenge({
+          subjectId: challenge.subjectId,
+          topicId: challenge.topicId,
+          conceptId: challenge.conceptId,
+          sourceSessionId: Number(sourceSessionId),
+          questionCount: challenge.questionCount || 5,
+        });
+        const id = result?.challenge?.id || result?.id || result?.challengeId;
+        if (!id) throw new Error("Could not start a new AI challenge.");
+        toast.success("New AI challenge started.");
+        navigate(`/app/challenge/${id}`);
+        return;
+      }
+      if (sourceSessionId) {
+        const status = await api.joinChallengeMatchmaking({
+          subjectId: challenge.subjectId,
+          topicId: challenge.topicId,
+          conceptId: challenge.conceptId,
+          sourceSessionId: Number(sourceSessionId),
+          questionCount: challenge.questionCount || 5,
+        });
+        if (status?.status === "matched" && status?.challengeId) {
+          toast.success("Peer found — rematch ready.");
+          navigate(`/app/challenge/${status.challengeId}`);
+          return;
+        }
+        toast.success("Looking for a peer for rematch… Open the Learning Room if needed.");
+        navigate("/app/challenge");
+        return;
+      }
+      if (challenge.opponent?.id) {
+        const result = await api.createChallenge({
+          opponentId: challenge.opponent.id,
+          subjectId: challenge.subjectId,
+          topicId: challenge.topicId,
+          conceptId: challenge.conceptId,
+          questionCount: challenge.questionCount || 5,
+        });
+        const id = result?.challenge?.id || result?.id;
+        if (id) {
+          toast.success("Rematch challenge sent.");
+          navigate(`/app/challenge/${id}`);
+          return;
+        }
+      }
+      toast.error("Could not start a rematch. Open Challenge and try again.");
+      navigate("/app/challenge");
+    } catch (err) {
+      toast.error(err.message || "Could not start a rematch.");
+    } finally {
+      setRematchBusy(false);
+    }
+  }
+
 
   function openChallenge(id) { navigate(`/app/challenge/${id}`); }
 
@@ -287,7 +443,7 @@ export default function ChallengePage() {
     if (!challenge && !error) return <div className="challenge-page"><ChallengeHeader onBack={() => navigate("/app/challenge")} /><InitialLoader /></div>;
     if (error && !challenge) return <div className="challenge-page"><ChallengeHeader onBack={() => navigate("/app/challenge")} /><ErrorState message={error} onRetry={loadChallenge} /></div>;
     const state = challenge?.status;
-    if (["completed", "expired"].includes(state)) return <ResultsView challenge={challenge} results={results} review={review} loading={!results} onReview={handleReview} onBack={() => navigate("/app/challenge")} />;
+    if (["completed", "expired"].includes(state)) return <ResultsView challenge={challenge} results={results} review={review} loading={!results} onReview={handleReview} onBack={() => navigate("/app/challenge")} onRematch={handleRematch} rematchBusy={rematchBusy} />;
     if (state === "pending" && challenge.role === "opponent") return <IncomingView challenge={challenge} busy={busy} onAccept={() => perform(() => api.acceptChallenge(challenge.id), "Challenge accepted.")} onDecline={() => perform(() => api.declineChallenge(challenge.id), "Challenge declined.")} onBack={() => navigate("/app/challenge")} />;
     if (state === "pending") return <div className="challenge-page"><ChallengeHeader onBack={() => navigate("/app/challenge")} /><div className="challenge-empty card"><div className="challenge-empty-icon"><ChallengeIcon /></div><h2>Waiting for the opponent</h2><p>{challenge.waitingReason}</p></div></div>;
     if (["accepted", "preparing", "waiting"].includes(state)) return <WaitingRoom challenge={challenge} busy={busy} onPrepare={() => perform(() => api.prepareChallenge(challenge.id), "Battle prepared.")} onReady={() => perform(() => api.startChallenge(challenge.id), "You're ready.")} onRefresh={loadChallenge} onBack={() => navigate("/app/challenge")} />;
