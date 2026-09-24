@@ -460,37 +460,75 @@ async def create_ai_challenge(
     return challenge
 
 
-async def join_matchmaking(
-    *, user_id: int, subject_id: int, topic_id: int, concept_id: int, source_session_id: int, class_level: str, question_count: int, db: AsyncSession
-) -> tuple[ChallengeMatchQueue, ChallengeSession | None]:
-    source = await _load_completed_session(user_id=user_id, session_id=source_session_id, subject_id=subject_id, topic_id=topic_id, concept_id=concept_id, db=db)
-    await _load_and_validate_curriculum(subject_id=subject_id, topic_id=topic_id, concept_id=concept_id, db=db)
-    now = now_utc()
-    await db.execute(
-        ChallengeMatchQueue.__table__.update().where(ChallengeMatchQueue.status == "waiting", ChallengeMatchQueue.expires_at <= now).values(status="expired")
+async def _find_waiting_candidate(
+    *,
+    user_id: int,
+    subject_id: int,
+    topic_id: int,
+    concept_id: int,
+    class_level: str,
+    now: datetime,
+    db: AsyncSession,
+) -> ChallengeMatchQueue | None:
+    """Pick another waiting student for the same curriculum context.
+
+    Prefer the same class level when available, but fall back to any class so
+    two students who finished the same concept are not stranded in the queue
+    because of a profile grade mismatch.
+    """
+    base = (
+        ChallengeMatchQueue.status == "waiting",
+        ChallengeMatchQueue.user_id != user_id,
+        ChallengeMatchQueue.subject_id == subject_id,
+        ChallengeMatchQueue.topic_id == topic_id,
+        ChallengeMatchQueue.concept_id == concept_id,
+        ChallengeMatchQueue.expires_at > now,
     )
-    existing = (await db.execute(select(ChallengeMatchQueue).where(ChallengeMatchQueue.user_id == user_id, ChallengeMatchQueue.status.in_({"waiting", "matched"})).order_by(ChallengeMatchQueue.created_at.desc()).limit(1))).scalar_one_or_none()
-    if existing:
-        challenge = None
-        if existing.challenge_id:
-            challenge = await db.get(ChallengeSession, existing.challenge_id)
-        return existing, challenge
+    preferred = None
+    if (class_level or "").strip():
+        preferred = (
+            await db.execute(
+                select(ChallengeMatchQueue)
+                .where(*base, ChallengeMatchQueue.class_level == class_level)
+                .order_by(ChallengeMatchQueue.created_at.asc())
+                .with_for_update(skip_locked=True)
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+    if preferred is not None:
+        return preferred
+    return (
+        await db.execute(
+            select(ChallengeMatchQueue)
+            .where(*base)
+            .order_by(ChallengeMatchQueue.created_at.asc())
+            .with_for_update(skip_locked=True)
+            .limit(1)
+        )
+    ).scalar_one_or_none()
 
-    candidate = (await db.execute(
-        select(ChallengeMatchQueue).where(
-            ChallengeMatchQueue.status == "waiting", ChallengeMatchQueue.user_id != user_id,
-            ChallengeMatchQueue.subject_id == subject_id, ChallengeMatchQueue.topic_id == topic_id, ChallengeMatchQueue.concept_id == concept_id,
-            ChallengeMatchQueue.class_level == class_level, ChallengeMatchQueue.expires_at > now,
-        ).order_by(ChallengeMatchQueue.created_at.asc()).with_for_update(skip_locked=True).limit(1)
-    )).scalar_one_or_none()
-    if candidate is None:
-        queue = ChallengeMatchQueue(user_id=user_id, subject_id=subject_id, topic_id=topic_id, concept_id=concept_id, source_session_id=source.id, class_level=class_level, status="waiting", expires_at=now + PENDING_TTL)
-        db.add(queue); await db.commit(); await db.refresh(queue)
-        return queue, None
 
+async def _pair_waiting_students(
+    *,
+    candidate: ChallengeMatchQueue,
+    joiner_user_id: int,
+    joiner_source_session_id: int,
+    joiner_class_level: str,
+    question_count: int,
+    db: AsyncSession,
+) -> tuple[ChallengeMatchQueue, ChallengeSession]:
+    """Create an accepted peer challenge and mark both queue rows matched."""
     challenge = await create_peer_challenge_from_sessions(
-        challenger_id=candidate.user_id, opponent_id=user_id, subject_id=subject_id, topic_id=topic_id, concept_id=concept_id,
-        source_session_a_id=candidate.source_session_id, source_session_b_id=source.id, question_count=question_count, db=db, commit=False
+        challenger_id=candidate.user_id,
+        opponent_id=joiner_user_id,
+        subject_id=candidate.subject_id,
+        topic_id=candidate.topic_id,
+        concept_id=candidate.concept_id,
+        source_session_a_id=candidate.source_session_id,
+        source_session_b_id=joiner_source_session_id,
+        question_count=question_count,
+        db=db,
+        commit=False,
     )
     matched_at = now_utc()
     # Matchmaking means both students have already opted into the Challenge;
@@ -498,20 +536,252 @@ async def join_matchmaking(
     challenge.status = "accepted"
     challenge.accepted_at = matched_at
     challenge.expires_at = matched_at + ACCEPTED_TTL
-    candidate.status = "matched"; candidate.challenge_id = challenge.id; candidate.matched_at = matched_at
-    queue = ChallengeMatchQueue(user_id=user_id, subject_id=subject_id, topic_id=topic_id, concept_id=concept_id, source_session_id=source.id, class_level=class_level, status="matched", challenge_id=challenge.id, matched_at=matched_at, expires_at=matched_at + PENDING_TTL)
-    db.add(queue); await db.commit(); await db.refresh(candidate); await db.refresh(queue)
+    candidate.status = "matched"
+    candidate.challenge_id = challenge.id
+    candidate.matched_at = matched_at
+    queue = ChallengeMatchQueue(
+        user_id=joiner_user_id,
+        subject_id=candidate.subject_id,
+        topic_id=candidate.topic_id,
+        concept_id=candidate.concept_id,
+        source_session_id=joiner_source_session_id,
+        class_level=joiner_class_level or "",
+        status="matched",
+        challenge_id=challenge.id,
+        matched_at=matched_at,
+        expires_at=matched_at + PENDING_TTL,
+    )
+    db.add(queue)
+    await db.commit()
+    await db.refresh(candidate)
+    await db.refresh(queue)
     return queue, challenge
 
 
+async def join_matchmaking(
+    *, user_id: int, subject_id: int, topic_id: int, concept_id: int, source_session_id: int, class_level: str, question_count: int, db: AsyncSession
+) -> tuple[ChallengeMatchQueue, ChallengeSession | None]:
+    source = await _load_completed_session(
+        user_id=user_id, session_id=source_session_id,
+        subject_id=subject_id, topic_id=topic_id, concept_id=concept_id, db=db,
+    )
+    await _load_and_validate_curriculum(subject_id=subject_id, topic_id=topic_id, concept_id=concept_id, db=db)
+    now = now_utc()
+    await db.execute(
+        ChallengeMatchQueue.__table__.update()
+        .where(ChallengeMatchQueue.status == "waiting", ChallengeMatchQueue.expires_at <= now)
+        .values(status="expired")
+    )
+
+    # Any prior waiting row for a *different* concept must not block this join.
+    stale_waiting = (
+        await db.execute(
+            select(ChallengeMatchQueue).where(
+                ChallengeMatchQueue.user_id == user_id,
+                ChallengeMatchQueue.status == "waiting",
+                or_(
+                    ChallengeMatchQueue.subject_id != subject_id,
+                    ChallengeMatchQueue.topic_id != topic_id,
+                    ChallengeMatchQueue.concept_id != concept_id,
+                ),
+            ).with_for_update()
+        )
+    ).scalars().all()
+    for row in stale_waiting:
+        row.status = "cancelled"
+
+    # Already matched for this concept → return that result.
+    existing_matched = (
+        await db.execute(
+            select(ChallengeMatchQueue).where(
+                ChallengeMatchQueue.user_id == user_id,
+                ChallengeMatchQueue.status == "matched",
+                ChallengeMatchQueue.subject_id == subject_id,
+                ChallengeMatchQueue.topic_id == topic_id,
+                ChallengeMatchQueue.concept_id == concept_id,
+            ).order_by(ChallengeMatchQueue.created_at.desc()).limit(1)
+        )
+    ).scalar_one_or_none()
+    if existing_matched is not None:
+        challenge = None
+        if existing_matched.challenge_id:
+            challenge = await db.get(ChallengeSession, existing_matched.challenge_id)
+        await db.commit()
+        return existing_matched, challenge
+
+    # Already waiting for this concept → try pairing again (covers the race
+    # where both students inserted waiting rows at the same time).
+    existing_waiting = (
+        await db.execute(
+            select(ChallengeMatchQueue).where(
+                ChallengeMatchQueue.user_id == user_id,
+                ChallengeMatchQueue.status == "waiting",
+                ChallengeMatchQueue.subject_id == subject_id,
+                ChallengeMatchQueue.topic_id == topic_id,
+                ChallengeMatchQueue.concept_id == concept_id,
+            ).with_for_update().limit(1)
+        )
+    ).scalar_one_or_none()
+
+    candidate = await _find_waiting_candidate(
+        user_id=user_id,
+        subject_id=subject_id,
+        topic_id=topic_id,
+        concept_id=concept_id,
+        class_level=class_level or "",
+        now=now,
+        db=db,
+    )
+    if candidate is not None:
+        if existing_waiting is not None:
+            # Pair using the existing waiting row as the joiner side.
+            challenge = await create_peer_challenge_from_sessions(
+                challenger_id=candidate.user_id,
+                opponent_id=user_id,
+                subject_id=subject_id,
+                topic_id=topic_id,
+                concept_id=concept_id,
+                source_session_a_id=candidate.source_session_id,
+                source_session_b_id=existing_waiting.source_session_id,
+                question_count=question_count,
+                db=db,
+                commit=False,
+            )
+            matched_at = now_utc()
+            challenge.status = "accepted"
+            challenge.accepted_at = matched_at
+            challenge.expires_at = matched_at + ACCEPTED_TTL
+            candidate.status = "matched"
+            candidate.challenge_id = challenge.id
+            candidate.matched_at = matched_at
+            existing_waiting.status = "matched"
+            existing_waiting.challenge_id = challenge.id
+            existing_waiting.matched_at = matched_at
+            await db.commit()
+            await db.refresh(existing_waiting)
+            return existing_waiting, challenge
+
+        return await _pair_waiting_students(
+            candidate=candidate,
+            joiner_user_id=user_id,
+            joiner_source_session_id=source.id,
+            joiner_class_level=class_level or "",
+            question_count=question_count,
+            db=db,
+        )
+
+    if existing_waiting is not None:
+        # Still alone in the queue for this concept.
+        existing_waiting.expires_at = now + PENDING_TTL
+        existing_waiting.source_session_id = source.id
+        existing_waiting.class_level = class_level or existing_waiting.class_level or ""
+        await db.commit()
+        await db.refresh(existing_waiting)
+        return existing_waiting, None
+
+    queue = ChallengeMatchQueue(
+        user_id=user_id,
+        subject_id=subject_id,
+        topic_id=topic_id,
+        concept_id=concept_id,
+        source_session_id=source.id,
+        class_level=class_level or "",
+        status="waiting",
+        expires_at=now + PENDING_TTL,
+    )
+    db.add(queue)
+    await db.commit()
+    await db.refresh(queue)
+    return queue, None
+
+
 async def matchmaking_status(user_id: int, db: AsyncSession) -> dict[str, Any]:
-    row = (await db.execute(select(ChallengeMatchQueue).where(ChallengeMatchQueue.user_id == user_id, ChallengeMatchQueue.status.in_({"waiting", "matched"})).order_by(ChallengeMatchQueue.created_at.desc()).limit(1))).scalar_one_or_none()
+    now = now_utc()
+    await db.execute(
+        ChallengeMatchQueue.__table__.update()
+        .where(ChallengeMatchQueue.status == "waiting", ChallengeMatchQueue.expires_at <= now)
+        .values(status="expired")
+    )
+
+    row = (
+        await db.execute(
+            select(ChallengeMatchQueue)
+            .where(ChallengeMatchQueue.user_id == user_id, ChallengeMatchQueue.status.in_({"waiting", "matched"}))
+            .order_by(ChallengeMatchQueue.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
     if not row:
+        await db.commit()
         return {"status": "none", "queueId": None, "challengeId": None}
+
+    if row.status == "waiting":
+        # Re-attempt pairing on every status poll so concurrent "both waiting"
+        # joins still resolve without requiring a second explicit join.
+        candidate = await _find_waiting_candidate(
+            user_id=user_id,
+            subject_id=row.subject_id,
+            topic_id=row.topic_id,
+            concept_id=row.concept_id,
+            class_level=row.class_level or "",
+            now=now,
+            db=db,
+        )
+        if candidate is not None:
+            try:
+                challenge = await create_peer_challenge_from_sessions(
+                    challenger_id=candidate.user_id,
+                    opponent_id=user_id,
+                    subject_id=row.subject_id,
+                    topic_id=row.topic_id,
+                    concept_id=row.concept_id,
+                    source_session_a_id=candidate.source_session_id,
+                    source_session_b_id=row.source_session_id,
+                    question_count=5,
+                    db=db,
+                    commit=False,
+                )
+                matched_at = now_utc()
+                challenge.status = "accepted"
+                challenge.accepted_at = matched_at
+                challenge.expires_at = matched_at + ACCEPTED_TTL
+                candidate.status = "matched"
+                candidate.challenge_id = challenge.id
+                candidate.matched_at = matched_at
+                row.status = "matched"
+                row.challenge_id = challenge.id
+                row.matched_at = matched_at
+                await db.commit()
+                await db.refresh(row)
+            except HTTPException:
+                # Opponent may have become ineligible; keep waiting.
+                await db.rollback()
+                row = (
+                    await db.execute(
+                        select(ChallengeMatchQueue)
+                        .where(ChallengeMatchQueue.user_id == user_id, ChallengeMatchQueue.status.in_({"waiting", "matched"}))
+                        .order_by(ChallengeMatchQueue.created_at.desc())
+                        .limit(1)
+                    )
+                ).scalar_one_or_none()
+                if not row:
+                    return {"status": "none", "queueId": None, "challengeId": None}
+        else:
+            await db.commit()
+
     if row.status == "waiting" and row.expires_at <= now_utc():
-        row.status = "expired"; await db.commit()
+        row.status = "expired"
+        await db.commit()
         return {"status": "expired", "queueId": row.id, "challengeId": None}
-    return {"status": row.status, "queueId": row.id, "challengeId": row.challenge_id, "subjectId": row.subject_id, "topicId": row.topic_id, "conceptId": row.concept_id}
+
+    return {
+        "status": row.status,
+        "queueId": row.id,
+        "challengeId": row.challenge_id,
+        "subjectId": row.subject_id,
+        "topicId": row.topic_id,
+        "conceptId": row.concept_id,
+    }
 
 
 async def leave_matchmaking(user_id: int, db: AsyncSession) -> dict[str, Any]:
