@@ -271,11 +271,14 @@ export default function AILearningRoom() {
   const challengeContextReady = Boolean(finalTaskMessage && session?.status !== "abandoned");
 
   const motivationLines = [
+    "Every construction you master is a new tool.",
     "You’re making progress — keep going.",
     "One idea at a time. You’ve got this.",
     "Stay curious. Your next breakthrough is close.",
     "Learn it. Practice it. Own it.",
     "Small steps become real mastery.",
+    "Clarity comes from practice, not perfection.",
+    "Master one idea, unlock the next.",
   ];
 
   const phaseLabel = {
@@ -775,18 +778,122 @@ export default function AILearningRoom() {
   if (error && !session) return <ErrorRoom message={error} onBack={() => navigate("/app/learn/ai")} />;
   if (phase === "abandoned") return <ErrorRoom message="This learning session was ended early." onBack={() => navigate("/app/learn/ai")} />;
 
+  const planTotal = learningPlan.length || 0;
+  const planStep = planTotal ? Math.min((currentTaskIndex ?? 0) + 1, planTotal) : 0;
+  const planLabel = planTotal ? `${planStep}/${planTotal}` : "—";
+  const motivationText = aiWorking ? "UPRAD is thinking about your next step…" : motivationLines[motivationIndex];
+
   return (
     <div className="ar-room">
       <header className="ar-header ar-header-rebuilt">
-        <div className="ar-header-context">
-          <button className="ar-icon-btn ar-back-btn" onClick={() => navigate("/app/learn/ai")} aria-label="Back">←</button>
-          <div className="ar-header-copy"><strong>AI Learning Room</strong></div>
+        {/* Top bar: back · title · voice · end */}
+        <div className="ar-hdr-top">
+          <div className="ar-hdr-left">
+            <button type="button" className="ar-icon-btn ar-back-btn" onClick={() => navigate("/app/learn/ai")} aria-label="Back">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+            <div className="ar-header-copy">
+              <strong className="ar-header-title">AI Learning Room</strong>
+              <span className="ar-header-sub">{phaseLabel}</span>
+            </div>
+          </div>
+          <div className="ar-header-actions">
+            <button
+              type="button"
+              className={`ar-icon-btn ar-voice-btn ${ttsEnabled ? "active" : ""}`}
+              onClick={toggleTts}
+              title={ttsEnabled ? "Tutor voice on" : "Tutor voice off"}
+              aria-label={ttsEnabled ? "Mute tutor voice" : "Enable tutor voice"}
+            >
+              {ttsEnabled ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M11 5L6 9H3v6h3l5 4V5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+                  <path d="M15.5 8.5a5 5 0 010 7M18 6a8.5 8.5 0 010 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                </svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M11 5L6 9H3v6h3l5 4V5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+                  <path d="M22 9l-6 6M16 9l6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                </svg>
+              )}
+            </button>
+            <button type="button" className="ar-header-action ar-tools-trigger" onClick={() => setMobilePanel("tools")}>Tools</button>
+            <button type="button" className="ar-end" onClick={endSession}>End</button>
+          </div>
         </div>
-        <div />
-        <div className="ar-header-actions">
-          <button className={`ar-icon-btn ar-voice-btn ${ttsEnabled ? "active" : ""}`} onClick={toggleTts} title={ttsEnabled ? "Voice on" : "Voice off"} aria-label="Toggle voice">{ttsEnabled ? "🔊" : "🔇"}</button>
-          <button className="ar-header-action ar-tools-trigger" onClick={() => setMobilePanel("tools")}>Tools</button>
-          <button className="ar-end" onClick={endSession}>End</button>
+
+        {/* Motivation line */}
+        <div className="ar-hdr-motivation" aria-live="polite">
+          <span className="ar-motivation-dot" />
+          <span key={motivationIndex} className="ar-motivation-text">{motivationText}</span>
+        </div>
+
+        {/* Breadcrumb + Learning plan dropdown */}
+        <div className="ar-hdr-meta">
+          <nav className="ar-breadcrumb" title={`${subjectName} › ${topicName || "Topic"} › ${conceptName}`} aria-label="Learning path">
+            <span className="ar-bc-seg">{subjectName}</span>
+            <svg className="ar-bc-sep" width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span className="ar-bc-seg">{topicName || "Topic"}</span>
+            <svg className="ar-bc-sep" width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <span className="ar-bc-seg ar-bc-current">{conceptName}</span>
+          </nav>
+
+          <div className="ar-plan-dropdown" ref={planMenuRef}>
+            <button
+              type="button"
+              className={`ar-plan-trigger ${planOpen ? "open" : ""}`}
+              onClick={() => setPlanOpen(v => !v)}
+              aria-expanded={planOpen}
+              aria-haspopup="true"
+            >
+              <span className="ar-plan-trigger-label">Learning plan</span>
+              <span className="ar-plan-trigger-count">{planLabel}</span>
+              <svg className="ar-plan-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+            {planOpen && (
+              <div className="ar-plan-menu" role="menu">
+                <div className="ar-plan-menu-head">
+                  <div>
+                    <span className="ar-eyebrow">LEARNING PLAN</span>
+                    <strong>{completedCount} of {planTotal} complete</strong>
+                  </div>
+                  <span className="ar-plan-menu-progress">{planProgress}%</span>
+                </div>
+                <div className="ar-plan-menu-track"><i style={{ width: `${planProgress}%` }} /></div>
+                <div className="ar-plan-menu-list">
+                  {learningPlan.length ? learningPlan.map((task, i) => {
+                    const done = completedTaskIndexes.includes(i);
+                    const current = currentTaskIndex === i;
+                    return (
+                      <div key={i} className={`ar-plan-menu-item ${done ? "done" : current ? "current" : "future"}`} role="menuitem">
+                        <span className="ar-plan-menu-number">{done ? (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        ) : i + 1}</span>
+                        <span className="ar-plan-menu-copy">
+                          <b>{taskTitle(task)}</b>
+                          <small>{taskDescription(task)}</small>
+                          <em>{done ? "Completed" : current ? "Current focus" : "Upcoming"}</em>
+                        </span>
+                      </div>
+                    );
+                  }) : (
+                    <div className="ar-empty-plan">
+                      <span>✦</span>
+                      <p>Your tutor is building the learning plan.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -797,7 +904,7 @@ export default function AILearningRoom() {
               <div className="ar-panel-head">
                 <div>
                   <span className="ar-eyebrow">LEARNING PLAN</span>
-                  <h2>{completedCount} of {learningPlan.length || 0} complete</h2>
+                  <h2>{completedCount} of {planTotal} complete</h2>
                 </div>
                 <button type="button" className="ar-sidebar-edge-toggle ar-left-edge-toggle" onClick={toggleLeftSidebar} aria-label="Collapse learning plan">‹</button>
               </div>
@@ -828,40 +935,6 @@ export default function AILearningRoom() {
           </aside>
         )}
         <main className="ar-main">
-          <div className="ar-context-strip ar-learning-room-context">
-            <div className="ar-context-subject" title={`${subjectName} • ${topicName || "Topic"} • ${conceptName}`}>
-              <span>{subjectName}</span><i>•</i><span>{topicName || "Topic"}</span><i>•</i><span>{conceptName}</span>
-            </div>
-            <div className="ar-context-motivation" aria-live="polite">
-              <span className="ar-motivation-dot" />
-              <span key={motivationIndex} className="ar-motivation-text">{aiWorking ? "UPRAD is thinking about your next step…" : motivationLines[motivationIndex]}</span>
-            </div>
-            <div className="ar-context-plan">
-              <div className="ar-plan-dropdown" ref={planMenuRef}>
-                <button type="button" className={`ar-plan-trigger ${planOpen ? "open" : ""}`} onClick={() => setPlanOpen(v => !v)} aria-expanded={planOpen} aria-haspopup="true">
-                  <span>Learning plan</span><b>{completedCount}/{learningPlan.length || 0}</b><span className="ar-plan-chevron">⌄</span>
-                </button>
-                {planOpen && (
-                  <div className="ar-plan-menu" role="menu">
-                    <div className="ar-plan-menu-head">
-                      <div><span className="ar-eyebrow">LEARNING PLAN</span><strong>{completedCount} of {learningPlan.length || 0} complete</strong></div>
-                      <span className="ar-plan-menu-progress">{planProgress}%</span>
-                    </div>
-                    <div className="ar-plan-menu-track"><i style={{ width: `${planProgress}%` }} /></div>
-                    <div className="ar-plan-menu-list">
-                      {learningPlan.length ? learningPlan.map((task, i) => (
-                        <div key={i} className={`ar-plan-menu-item ${completedTaskIndexes.includes(i) ? "done" : currentTaskIndex === i ? "current" : "future"}`}>
-                          <span className="ar-plan-menu-number">{completedTaskIndexes.includes(i) ? "✓" : i + 1}</span>
-                          <span className="ar-plan-menu-copy"><b>{taskTitle(task)}</b><small>{taskDescription(task)}</small><em>{completedTaskIndexes.includes(i) ? "Completed" : currentTaskIndex === i ? "Current focus" : "Upcoming"}</em></span>
-                        </div>
-                      )) : <div className="ar-empty-plan"><span>✦</span><p>Your tutor is building the learning plan.</p></div>}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
           {teachingLocked && <PracticeBanner />}
           {error && <div className="ar-error"><span>!</span>{error}<button onClick={() => setError(null)}>×</button></div>}
 
