@@ -1930,6 +1930,84 @@ Mark false if Q2+ requires knowledge not explicitly taught in the current task m
     if len(raw_questions) < count:
         raise HTTPException(502, f"The tutor returned only {len(raw_questions)} of {count} required mastery questions.")
 
+    # Second-pass answer-quality gate. Scope validation alone is not enough:
+    # a question can be about the right topic while its expected answer is
+    # logically inconsistent with the wording. This matters especially for
+    # mathematics, where phrases such as "at most", "not full", "strictly
+    # less than", and "at least" can describe different constraints in one
+    # scenario. Reject ambiguous or self-contradictory items before they reach
+    # the learner.
+    try:
+        quality_prompt = f"""You are a strict assessment-quality validator.
+CURRENT TASK MATERIAL:
+{teaching_summary}
+{retention_summary}
+
+QUESTIONS TO VALIDATE:
+{json.dumps(raw_questions, ensure_ascii=False)}
+
+For every question, independently solve it from its exact wording and compare
+that solution with expected_answer, options, and rubric. Do not assume the
+expected answer is correct. For mathematics, pay close attention to the exact
+logical condition described by the wording. Distinguish a general rule or
+capacity from the current state when the question explicitly describes both.
+For example, "at most 8" gives p <= 8, while "currently not full" gives p < 8.
+If a question combines those phrases, the requested current state must be
+represented rather than silently replacing it with the general capacity rule.
+
+Reject a question if its expected answer is wrong, its options contain no
+correct answer, the wording permits two materially different answers, the rubric
+contradicts the question, or the question requires an unstated condition.
+Return JSON only:
+{{"valid": true|false, "invalid_indexes": [0,1], "reason": "brief concrete reason"}}
+"""
+        quality_raw, _ = await call_with_fallback(
+            quality_prompt,
+            system="You are a strict assessment-quality checker. Never approve a mathematically incorrect or ambiguous item.",
+            temperature=0.0,
+            json_mode=True,
+        )
+        quality = parse_json(quality_raw)
+        if not bool(quality.get("valid", False)):
+            raw2, _ = await call_with_fallback(
+                prompt + "\
+IMPORTANT ASSESSMENT-QUALITY RULE: Each question and expected answer must be logically consistent with the exact wording. For mathematics, explicitly distinguish the rule/limit from the current state described in the scenario. Do not create an item whose wording supports one inequality while expected_answer/rubric claims another. Regenerate the full set.",
+                system=system_prompt, temperature=0.15, json_mode=True
+            )
+            parsed = parse_json(raw2)
+            raw_questions = _safe_list(parsed.get("questions"))
+            if len(raw_questions) < count:
+                raise HTTPException(502, "The tutor could not produce a complete, high-quality mastery assessment.")
+
+            quality_prompt2 = f"""You are a strict assessment-quality validator.
+CURRENT TASK MATERIAL:
+{teaching_summary}
+{retention_summary}
+
+REGENERATED QUESTIONS:
+{json.dumps(raw_questions, ensure_ascii=False)}
+
+Independently solve every item from its exact wording. Reject any item whose
+expected answer, options, or rubric is wrong or inconsistent. For mathematics,
+carefully distinguish current-state constraints from general rules/capacities
+and do not add unstated conditions. Return JSON only:
+{{"valid": true|false, "invalid_indexes": [0,1], "reason": "brief concrete reason"}}
+"""
+            quality_raw2, _ = await call_with_fallback(
+                quality_prompt2,
+                system="You are a strict assessment-quality checker. Never approve a mathematically incorrect or ambiguous item.",
+                temperature=0.0,
+                json_mode=True,
+            )
+            quality2 = parse_json(quality_raw2)
+            if not bool(quality2.get("valid", False)):
+                raise HTTPException(502, "The tutor could not produce a logically consistent mastery assessment.")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Quiz quality validation failed closed: %s", exc)
+        raise HTTPException(502, "The tutor could not verify that the mastery assessment is logically consistent.")
+
     # Deterministic guard for obvious future-task leakage. The semantic
     # validator remains authoritative, but exact multi-word terms from other
     # Learning Plan tasks are never allowed into the current task's quiz.
@@ -2515,8 +2593,8 @@ async def complete_practice_run(
     if needs_reteach:
         content = (
             "Your practice is complete, and I’ve restored our conversation. "
-            "I saw a few areas that need another pass, so we’ll stay on this Learning Plan task "
-            "and rebuild the weak parts before trying the check again."
+            "Most of your work was on track, but the check exposed a distinction we should make clearer. "
+            "We’ll stay on this Learning Plan task, clarify that distinction, and then try the check again."
         )
         extra = {
             "practiceComplete": True,
