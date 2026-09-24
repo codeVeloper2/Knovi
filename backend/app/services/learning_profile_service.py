@@ -172,12 +172,16 @@ async def append_observations_bulk(
 def build_learner_context(
     profile: Optional[AILearningProfile],
     subject_name: Optional[str] = None,
+    concept_id: Optional[int] = None,
+    topic_id: Optional[int] = None,
 ) -> str:
     """
     Build the LEARNER PROFILE section that is injected into AI prompts.
 
     Keeps the context concise:
     - Lists student-reported preferences (if any are set).
+    - Surfaces concept-specific misconceptions at the top when concept_id matches,
+      so the tutor can address them directly in this session.
     - Includes up to _MAX_CONTEXT_OBSERVATIONS relevant observations,
       prioritising those whose observation text mentions the current subject.
     - Returns an empty string when the profile is None or completely empty,
@@ -209,33 +213,61 @@ def build_learner_context(
     # ── AI-observed section ───────────────────────────────────────────────
     observations: list[dict] = list(profile.ai_observations or [])
     if observations:
-        # Prioritise observations that mention the current subject, then by
-        # recency (latest entries are at the end of the list).
+        # ── Concept-specific misconceptions (highest priority) ────────────
+        # Surface these at the top so the tutor addresses them directly this
+        # session, rather than having them buried in a generic flat list.
+        if concept_id is not None:
+            concept_misconceptions = [
+                obs for obs in observations
+                if obs.get("category") == "misconception"
+                and obs.get("concept_id") == concept_id
+            ]
+            if concept_misconceptions:
+                lines.append("\nKNOWN MISCONCEPTIONS FOR THIS CONCEPT (address these directly):")
+                for obs in concept_misconceptions[-3:]:  # most recent 3
+                    lines.append(f"  ⚠ {obs.get('observation', '')}")
+
+        # ── General observations (subject-prioritised) ────────────────────
         subject_lower = (subject_name or "").lower()
+
+        # Exclude already-shown concept misconceptions from the general list
+        shown_concept_misc_texts = set()
+        if concept_id is not None:
+            shown_concept_misc_texts = {
+                obs.get("observation", "")
+                for obs in observations
+                if obs.get("category") == "misconception"
+                and obs.get("concept_id") == concept_id
+            }
 
         def _relevance_key(obs: dict) -> tuple:
             text = (obs.get("observation") or "").lower()
             subject_match = subject_lower and subject_lower in text
             return (not subject_match, )  # True sorts after False → subject matches first
 
-        sorted_obs = sorted(observations, key=_relevance_key)
+        general_obs = [
+            obs for obs in observations
+            if obs.get("observation", "") not in shown_concept_misc_texts
+        ]
+        sorted_obs = sorted(general_obs, key=_relevance_key)
         top_obs = sorted_obs[:_MAX_CONTEXT_OBSERVATIONS]
 
-        lines.append("\nAI-OBSERVED LEARNING TENDENCIES (from past sessions)")
-        lines.append(
-            "  (These are patterns observed across sessions — not diagnoses. "
-            "Confidence reflects the strength of evidence.)"
-        )
-        for obs in top_obs:
-            cat        = obs.get("category", "observation")
-            text       = obs.get("observation", "")
-            conf       = obs.get("confidence", 0.0)
-            strategy   = obs.get("strategy")
-            conf_label = "high" if conf >= 0.8 else "moderate" if conf >= 0.65 else "tentative"
-            entry = f"  [{cat}, {conf_label} evidence] {text}"
-            if strategy:
-                entry += f" (strategy: {strategy})"
-            lines.append(entry)
+        if top_obs:
+            lines.append("\nAI-OBSERVED LEARNING TENDENCIES (from past sessions)")
+            lines.append(
+                "  (These are patterns observed across sessions — not diagnoses. "
+                "Confidence reflects the strength of evidence.)"
+            )
+            for obs in top_obs:
+                cat        = obs.get("category", "observation")
+                text       = obs.get("observation", "")
+                conf       = obs.get("confidence", 0.0)
+                strategy   = obs.get("strategy")
+                conf_label = "high" if conf >= 0.8 else "moderate" if conf >= 0.65 else "tentative"
+                entry = f"  [{cat}, {conf_label} evidence] {text}"
+                if strategy:
+                    entry += f" (strategy: {strategy})"
+                lines.append(entry)
 
     if not lines:
         return ""
