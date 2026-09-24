@@ -1362,12 +1362,20 @@ function RichText({ content, onCopy, copiedId }) {
         blocks.push(
           <div className="ar-calculation-wrap" key={`calc-${blocks.length}`}>
             <div className="ar-calculation-head">
-              <span>Calculation</span>
-              <button onClick={() => copyText(code, id, onCopy)}>{copiedId === id ? "Copied" : "Copy"}</button>
+              <span>CALCULATION</span>
+              <button
+                type="button"
+                className={`ar-calculation-copy ${copiedId === id ? "is-copied" : ""}`}
+                onClick={() => copyText(code, id, onCopy)}
+                title={copiedId === id ? "Copied" : "Copy calculation"}
+                aria-label={copiedId === id ? "Copied" : "Copy calculation"}
+              >
+                <CopySvg active={copiedId === id} />
+              </button>
             </div>
             <div className="ar-calculation-body">
               {codeLines.filter(line => line.trim()).map((line, j) => (
-                <div className="ar-calculation-step" key={j}>{inlineMarkdown(line.trim())}</div>
+                <div className="ar-calculation-step" key={j}>{inlineMarkdown(normalizeMathSource(line.trim()))}</div>
               ))}
             </div>
           </div>
@@ -1377,7 +1385,14 @@ function RichText({ content, onCopy, copiedId }) {
           <div className="ar-code-wrap" key={`code-${blocks.length}`}>
             <div className="ar-code-head">
               <span>{lang || "code"}</span>
-              <button onClick={() => copyText(code, id, onCopy)}>{copiedId === id ? "Copied" : "Copy"}</button>
+              <button
+                type="button"
+                onClick={() => copyText(code, id, onCopy)}
+                title={copiedId === id ? "Copied" : "Copy code"}
+                aria-label={copiedId === id ? "Copied" : "Copy code"}
+              >
+                <CopySvg active={copiedId === id} />
+              </button>
             </div>
             <pre><code>{code}</code></pre>
           </div>
@@ -1550,7 +1565,7 @@ function normalizeMathSource(text) {
   // A model sometimes returns `\\log_2 16\` instead of `\log_2 16`.
   // Do this only after fenced code is protected so real source code is untouched.
   s = s.replace(/\\\\(?=[A-Za-z])/g, "\\");
-  s = s.replace(/\\(?=\s|[.!?,;:])/g, "");
+  s = s.replace(/\\(?=\s|[.!?,;:]|$)/g, "");
   // Remove TeX spacing commands that sometimes leak outside math delimiters.
   s = s.replace(/\\[!,;:]/g, "");
 
@@ -1659,6 +1674,19 @@ function renderMath(latex, displayMode = false) {
   } catch {
     return <code className="ar-math-fallback">{latex}</code>;
   }
+}
+
+function CopySvg({ active = false }) {
+  return active ? (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  ) : (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
 }
 
 function inlineMarkdown(text) {

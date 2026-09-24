@@ -514,9 +514,80 @@
   text-transform: uppercase;
   letter-spacing: .1em;
 }
-.ar-code-head button { border: 0; background: transparent; color: #8fb5dd; cursor: pointer; font-size: 9px; }
+.ar-code-head button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #8fb5dd;
+  cursor: pointer;
+}
+.ar-code-head button:hover, .ar-code-head button:focus-visible { background: rgba(91,111,246,.12); color: #d9e7ff; }
+.ar-code-head button svg { display: block; }
 .ar-code-wrap pre { margin: 0; padding: 14px; overflow-x: auto; color: #d9ecff; font: 12px/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .ar-code-wrap pre code { padding: 0; border: 0; background: transparent; color: inherit; font-size: inherit; }
+.ar-calculation-wrap {
+  margin: 14px 0;
+  overflow: hidden;
+  border: 1px solid rgba(123,168,224,.18);
+  border-radius: 12px;
+  background: #06101e;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
+}
+.ar-calculation-head {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px 0 12px;
+  border-bottom: 1px solid rgba(123,168,224,.12);
+  color: #718aaa;
+  font-size: 8px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+}
+.ar-calculation-copy {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #8fb5dd;
+  cursor: pointer;
+}
+.ar-calculation-copy:hover,
+.ar-calculation-copy:focus-visible,
+.ar-calculation-copy.is-copied {
+  background: rgba(91,111,246,.13);
+  color: #e0ebff;
+}
+.ar-calculation-copy svg { display: block; }
+.ar-calculation-body { padding: 12px 14px 13px; overflow-x: auto; }
+.ar-calculation-step {
+  min-height: 25px;
+  display: flex;
+  align-items: center;
+  color: #d9ecff;
+  font-size: 13px;
+  line-height: 1.7;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.ar-calculation-step + .ar-calculation-step { margin-top: 2px; }
+.ar-calculation-step:last-child {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(123,168,224,.12);
+  color: #f7fbff;
+  font-weight: 800;
+}
+.ar-calculation-step .ar-math { font-family: inherit; }
+
 .ar-table-wrap { overflow-x: auto; margin: 12px 0; }
 .ar-rich table { width: 100%; border-collapse: collapse; font-size: 11px; }
 .ar-rich th,.ar-rich td { padding: 7px 9px; border: 1px solid var(--ar-border); text-align: left; }

@@ -43,6 +43,49 @@ from app.services import progress_service
 
 logger = logging.getLogger(__name__)
 
+# Single source of truth for math/Markdown output. This is injected into the
+# SYSTEM message for every AI path that can produce learner-visible content.
+_MATH_FORMATTING_SYSTEM = r"""
+MATH + MARKDOWN OUTPUT CONTRACT (MANDATORY):
+- The Learning Room renders Markdown and KaTeX. Never output raw LaTeX commands in normal prose.
+- Inline mathematics MUST be wrapped in single-dollar delimiters: $...$.
+- Display mathematics MUST be wrapped in double-dollar delimiters on their own lines: $$...$$.
+- Valid examples: $c=3$, $5^3=125$, $\log_{5}(125)=3$, $\frac{a}{b}$, $\sqrt{x}$, $x\geq -2$.
+- For logarithms, prefer explicit notation such as $\log_{5}(125)$ or $\log_{10}(100)$.
+- Never emit malformed forms such as \\log2 16, \\log5 125, raw \\log_b a, ((10)), ((c)), or a formula with no KaTeX delimiters.
+- Never put a trailing backslash after a formula. Never visibly double-escape LaTeX (for example \\log instead of \log).
+- Use Markdown emphasis only outside math: **bold**, *italic*, and ==highlight==.
+- Do not put ==...== inside a mathematical expression. Highlight the surrounding explanatory phrase instead.
+
+WORKED CALCULATIONS (MANDATORY):
+- Whenever you perform a step-by-step calculation, put the ENTIRE working inside a fenced block beginning with ```calculation and ending with ```.
+- The UI renders that block as a dedicated CALCULATION card with an SVG copy icon. Do NOT write "Calculation", "Copy", "Copied", or a copy-button label yourself.
+- Put exactly one meaningful mathematical step on each line.
+- Every mathematical line MUST use valid KaTeX delimiters ($...$ or $$...$$).
+- The final line may use ==Answer: $...$==.
+- Example:
+```calculation
+$5^1 = 5$
+$5^2 = 25$
+$5^3 = 125$
+==Answer: $c=3$==
+```
+- Do not use a generic code fence for mathematical working.
+- Keep explanatory prose outside the calculation block.
+
+GENERAL MATH SYNTAX:
+- Fractions: $\frac{a}{b}$
+- Powers/subscripts: $x^2$, $x_1$, $\log_{5}(125)$
+- Roots: $\sqrt{x}$
+- Inequalities: $x\geq -2$, $x<4$, $a\neq b$
+- Greek letters: $\alpha$, $\theta$, $\pi$
+- Multiplication: $\times$ or $\cdot$
+- Sets: $x\in A$, $A\subseteq B$
+- Sums/integrals: $\sum_{i=1}^{n} i$, $\int_0^1 x\,dx$
+- Never rely on Markdown underscores/carets to render math; use KaTeX delimiters.
+- If math appears inside JSON strings, preserve the same visible $...$ / $$...$$ delimiters.
+"""
+
 # ── Teaching strategy rotation ────────────────────────────────────────────────
 _STRATEGY_ROTATION = [
     "technical_explanation",
@@ -1039,7 +1082,7 @@ Teach ONLY this task deeply enough for the student to study it and later retriev
 Do not teach the whole concept again. Connect briefly to prerequisite ideas when needed.
 """
 
-    system_prompt = (
+    system_prompt = _MATH_FORMATTING_SYSTEM + "\n" + (
         "You are an expert AI tutor for PeerUP. Teach concepts clearly and adaptively. "
         "Teach like a real secondary-school teacher: check understanding, use questions, "
         "correct misconceptions quickly, and never rush to a test on empty confidence. "
@@ -1097,12 +1140,12 @@ READABLE RESPONSE LAYOUT (MANDATORY):
 
 MATHEMATICS NOTATION (MANDATORY for any formula, equation, inequality, or symbol):
 - Always wrap math in KaTeX delimiters so the Learning Room can render it.
-- Inline math: $...$ e.g. $-3x > 12$, $\frac{{a}}{{b}}$, $x^2$, $\leq$, $\geq$, $\neq$, $\sqrt{{x}}$, $\alpha$.
-- For logarithms, ALWAYS use delimiters around the complete expression: $\log_2 16$, $\log_5 125$, or $\log_{{10}}(100)$.
-- Never write raw LaTeX without delimiters. Never double-escape LaTeX in the visible answer (do not output `\\log` or `\\frac`).
+- Inline math: $...$ e.g. $-3x > 12$, $\\frac{{a}}{{b}}$, $x^2$, $\\leq$, $\\geq$, $\\neq$, $\\sqrt{{x}}$, $\\alpha$.
+- For logarithms, ALWAYS use delimiters around the complete expression: $\\log_2 16$, $\\log_5 125$, or $\\log_{{10}}(100)$.
+- Never write raw LaTeX without delimiters. Never double-escape LaTeX in the visible answer (do not output `\\log` or `\\\frac`).
 - Do not use `((...))` as a math delimiter. Use `$...$` instead.
-- Display math on its own line: $$...$$ e.g. $$x = \frac{{-b \pm \sqrt{{b^2-4ac}}}}{{2a}}$$
-- Never write raw LaTeX without delimiters (wrong: \frac{{1}}{{2}} alone). Always use $\frac{{1}}{{2}}$.
+- Display math on its own line: $$...$$ e.g. $$x = \\frac{{-b \\pm \\sqrt{{b^2-4ac}}}}{{2a}}$$
+- Never write raw LaTeX without delimiters (wrong: \\frac{{1}}{{2}} alone). Always use $\\frac{{1}}{{2}}$.
 - Prefer LaTeX for: inequalities, fractions, roots, exponents, greek letters, sums, integrals, sets.
 
 MATHEMATICS TEACHING MODE:
@@ -1310,7 +1353,7 @@ POST-SESSION FOLLOW-UP RULES:
         if m.role == "student" and m.message_type not in ("welcome", "system")
     )
 
-    system_prompt = (
+    system_prompt = _MATH_FORMATTING_SYSTEM + "\n" + (
         "You are an AI tutor on PeerUP, a peer learning platform for students. "
         "You always answer educational questions helpfully and warmly. "
         "Return JSON only — no markdown outside the response field."
@@ -1332,12 +1375,12 @@ IMPORTANT-POINT FORMATTING:
 
 MATHEMATICS NOTATION (MANDATORY for any formula, equation, inequality, or symbol):
 - Always wrap math in KaTeX delimiters so the Learning Room can render it.
-- Inline math: $...$ e.g. $-3x > 12$, $\frac{{a}}{{b}}$, $x^2$, $\leq$, $\geq$, $\neq$, $\sqrt{{x}}$, $\alpha$.
-- For logarithms, ALWAYS use delimiters around the complete expression: $\log_2 16$, $\log_5 125$, or $\log_{{10}}(100)$.
-- Never write raw LaTeX without delimiters. Never double-escape LaTeX in the visible answer (do not output `\\log` or `\\frac`).
+- Inline math: $...$ e.g. $-3x > 12$, $\\frac{{a}}{{b}}$, $x^2$, $\\leq$, $\\geq$, $\\neq$, $\\sqrt{{x}}$, $\\alpha$.
+- For logarithms, ALWAYS use delimiters around the complete expression: $\\log_2 16$, $\\log_5 125$, or $\\log_{{10}}(100)$.
+- Never write raw LaTeX without delimiters. Never double-escape LaTeX in the visible answer (do not output `\\log` or `\\\frac`).
 - Do not use `((...))` as a math delimiter. Use `$...$` instead.
-- Display math on its own line: $$...$$ e.g. $$x = \frac{{-b \pm \sqrt{{b^2-4ac}}}}{{2a}}$$
-- Never write raw LaTeX without delimiters (wrong: \frac{{1}}{{2}} alone). Always use $\frac{{1}}{{2}}$.
+- Display math on its own line: $$...$$ e.g. $$x = \\frac{{-b \\pm \\sqrt{{b^2-4ac}}}}{{2a}}$$
+- Never write raw LaTeX without delimiters (wrong: \\frac{{1}}{{2}} alone). Always use $\\frac{{1}}{{2}}$.
 - Prefer LaTeX for: inequalities, fractions, roots, exponents, greek letters, sums, integrals, sets.
 
 READABLE RESPONSE LAYOUT:
@@ -1559,7 +1602,7 @@ Passed means the explanation is roughly on-topic and shows partial or better und
         try:
             vraw, _ = await call_with_fallback(
                 verify_prompt,
-                system="You are a fair teacher doing a quick oral check. Return JSON only.",
+                system=_MATH_FORMATTING_SYSTEM + "\nYou are a fair teacher doing a quick oral check. Return JSON only.",
                 temperature=0.2,
                 json_mode=True,
             )
@@ -1904,7 +1947,7 @@ Previous key points: {', '.join(previous_teaching.key_points or [])}
 Previous worked examples: {', '.join((previous_teaching.worked_examples or [])[:3])}
 """
 
-    system_prompt = (
+    system_prompt = _MATH_FORMATTING_SYSTEM + "\n" + (
         "You are an expert AI tutor generating a compulsory retrieval quiz. "
         "The quiz is strictly scoped to the CURRENT Learning Plan task. "
         "Do not test future tasks or generic curriculum knowledge. Return JSON only."
@@ -2005,7 +2048,7 @@ Return JSON only: {{"valid": true|false, "invalid_indexes": [0,1], "reason": "br
     async def _validate_scope(questions_payload: list) -> tuple[bool, list[int], str]:
         verify_raw, _ = await call_with_fallback(
             _scope_verify_prompt(questions_payload),
-            system=(
+            system=_MATH_FORMATTING_SYSTEM + "\n" + (
                 "You are an assessment-scope checker. Reject only clear future-task or "
                 "untaught leakage. Shared topic wording alone is not a violation."
             ),
@@ -2164,7 +2207,7 @@ Return JSON only:
 """
         quality_raw, _ = await call_with_fallback(
             quality_prompt,
-            system="You are a strict assessment-quality checker. Never approve a mathematically incorrect or ambiguous item.",
+            system=_MATH_FORMATTING_SYSTEM + "\nYou are a strict assessment-quality checker. Never approve a mathematically incorrect or ambiguous item.",
             temperature=0.0,
             json_mode=True,
         )
@@ -2196,7 +2239,7 @@ and do not add unstated conditions. Return JSON only:
 """
             quality_raw2, _ = await call_with_fallback(
                 quality_prompt2,
-                system="You are a strict assessment-quality checker. Never approve a mathematically incorrect or ambiguous item.",
+                system=_MATH_FORMATTING_SYSTEM + "\nYou are a strict assessment-quality checker. Never approve a mathematically incorrect or ambiguous item.",
                 temperature=0.0,
                 json_mode=True,
             )
@@ -2503,7 +2546,7 @@ async def submit_answer(
     await db.flush()
 
     # AI evaluation
-    system_prompt = (
+    system_prompt = _MATH_FORMATTING_SYSTEM + "\n" + (
         "You are an AI tutor evaluating a student's answer. "
         "Be fair, constructive, and encouraging. Return JSON only."
     )
@@ -2994,7 +3037,7 @@ async def generate_adaptive_reteach(
     _learner_profile_reteach = await lp_svc.get_profile(session.user_id, db)
     curriculum_ctx = _build_curriculum_context(subject, topic, concept, session, _learner_profile_reteach)
 
-    system_prompt = (
+    system_prompt = _MATH_FORMATTING_SYSTEM + "\n" + (
         "You are an adaptive AI tutor. The student struggled with this concept. "
         "Use a completely different teaching approach — do NOT repeat previous explanations. "
         "Return JSON only."
@@ -3212,7 +3255,7 @@ async def generate_session_summary(
     else:
         review_days, mastery_level = 0, "weak"
 
-    system_prompt = (
+    system_prompt = _MATH_FORMATTING_SYSTEM + "\n" + (
         "You are an AI tutor generating a learning session summary. "
         "Be specific about the actual questions and answers. Return JSON only."
     )
