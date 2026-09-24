@@ -2215,7 +2215,7 @@ Evaluate the student's answer. Return JSON:
   "misconception": "Identified misconception if any, or null",
   "needs_reteach": true or false,
   "recommended_strategy": "suggested reteaching strategy if needs_reteach is true, or null",
-  "dimensions": {"understanding": 0-100, "skill_application": 0-100, "accuracy": 0-100, "independence": 0-100, "consistency": 0-100}
+  "dimensions": {{"understanding": 0-100, "skill_application": 0-100, "accuracy": 0-100, "independence": 0-100, "consistency": 0-100}}
 }}
 
 Scoring guide:
