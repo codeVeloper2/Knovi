@@ -1695,7 +1695,7 @@ async def generate_retrieval_questions(
     session_id: int, user_id: int, db: AsyncSession, *, count: int = 3, task_index: Optional[int] = None
 ) -> list[dict]:
     session = await _get_session_owned(
-        session_id, user_id, db, load_teaching=True
+        session_id, user_id, db, load_messages=True, load_teaching=True
     )
     # Allow question generation from teaching/reteaching — the AI may signal
     # start_quiz before the study timer has been started (agentic flow).
