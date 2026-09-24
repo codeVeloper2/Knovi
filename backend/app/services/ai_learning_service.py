@@ -1850,74 +1850,150 @@ For multiple_choice: options must be [{{"label":"A","text":"..."}}, ...] and exp
         logger.error("Question generation failed: %s", exc)
         raise HTTPException(502, f"AI service error: {exc}")
 
-    # Second-pass scope gate: reject any generated question that tests content
-    # outside the current task. This prevents future-task leakage such as
-    # dimensional analysis appearing in a base-quantities quiz.
+    # Second-pass scope gate: reject questions that test content outside the
+    # current task. Prefer targeted regeneration over failing the whole quiz.
     raw_questions = _safe_list(parsed.get("questions"))
     if not raw_questions:
         raise HTTPException(502, "AI returned no questions.")
     if len(raw_questions) < count:
         raise HTTPException(502, f"The tutor returned only {len(raw_questions)} of {count} required mastery questions.")
-    try:
-        verify_prompt = f"""You are a strict curriculum assessment validator.
+
+    def _scope_verify_prompt(questions_payload: list) -> str:
+        return f"""You are a strict curriculum assessment validator.
 CURRENT TASK MATERIAL:
 {teaching_summary}
 {retention_summary}
 
-FORBIDDEN OTHER TASKS:
+FORBIDDEN OTHER TASKS (do not test these as the main skill):
 {future_tasks}
 
 QUESTIONS TO VALIDATE:
-{json.dumps(raw_questions, ensure_ascii=False)}
+{json.dumps(questions_payload, ensure_ascii=False)}
 
-For Q2+ return whether it can be answered correctly using ONLY the current task material and direct reasoning from it.
-For Q1 on Task 2+, validate it only against the supplied retention material. If a question introduces a concept
-not taught in its allowed material, mark false. A question is invalid even if the student might know the concept from school generally.
+Rules:
+- Accept a question if a careful student can answer it from the CURRENT TASK MATERIAL (and for Task 2+ Q1 only, the RETENTION MATERIAL) plus ordinary reasoning.
+- Reject only when the question mainly tests a skill, formula, or procedure that belongs to a different Learning Plan task and is not taught in the allowed material.
+- Shared topic vocabulary (e.g. the concept name appearing in several task titles) is NOT by itself a scope violation.
+- When unsure, prefer valid=true if the question is a reasonable check of the current task.
+
 Return JSON only: {{"valid": true|false, "invalid_indexes": [0,1], "reason": "brief reason"}}
 """
+
+    async def _validate_scope(questions_payload: list) -> tuple[bool, list[int], str]:
         verify_raw, _ = await call_with_fallback(
-            verify_prompt,
-            system="You are a strict assessment-scope checker. Reject future-task or untaught knowledge.",
+            _scope_verify_prompt(questions_payload),
+            system=(
+                "You are an assessment-scope checker. Reject only clear future-task or "
+                "untaught leakage. Shared topic wording alone is not a violation."
+            ),
             temperature=0.1,
             json_mode=True,
         )
         verification = parse_json(verify_raw)
-        if not bool(verification.get("valid", False)):
-            # Regenerate once with an even stricter warning.
+        invalid = verification.get("invalid_indexes") or []
+        invalid_indexes = [
+            int(i) for i in invalid
+            if str(i).isdigit() and 0 <= int(i) < len(questions_payload)
+        ]
+        reason = _safe_str(verification.get("reason"), "")
+        is_valid = bool(verification.get("valid", False)) and not invalid_indexes
+        return is_valid, invalid_indexes, reason
+
+    try:
+        is_valid, invalid_indexes, scope_reason = await _validate_scope(raw_questions)
+        if not is_valid:
+            logger.warning(
+                "Quiz scope rejected (session=%s task=%s): %s indexes=%s",
+                session_id, task_index, scope_reason, invalid_indexes,
+            )
+            # Regenerate with concrete feedback from the validator.
+            feedback = scope_reason or "Previous questions left the allowed task scope."
+            bad = ", ".join(str(i + 1) for i in invalid_indexes) or "one or more items"
             raw2, _ = await call_with_fallback(
-                prompt + "\nIMPORTANT: Previous questions were outside their allowed scope. Regenerate with Q1 as the single prior-task retention check (Task 2+ only), and Q2+ strictly inside the current task. Do not assess future-task concepts.",
-                system=system_prompt, temperature=0.2, json_mode=True
+                prompt + (
+                    f"\nIMPORTANT SCOPE FIX: {feedback}\n"
+                    f"Regenerate the full set of {count} questions. "
+                    f"Questions that failed were roughly Q{bad}. "
+                    "Q1 on Task 2+ may be the single prior-task retention check; "
+                    "all other questions must stay strictly inside the CURRENT task. "
+                    "Do not assess future-task concepts."
+                ),
+                system=system_prompt, temperature=0.2, json_mode=True,
             )
             parsed = parse_json(raw2)
             raw_questions = _safe_list(parsed.get("questions"))
+            if len(raw_questions) < count:
+                raise HTTPException(
+                    502,
+                    f"The tutor returned only {len(raw_questions)} of {count} required mastery questions.",
+                )
 
-            # Fail closed: a validator failure must never silently fall back to
-            # an unvalidated quiz. Re-run the validator against the regenerated
-            # questions and refuse to create the practice run if scope remains
-            # uncertain.
-            verify_prompt2 = f"""You are a strict curriculum assessment validator.
-CURRENT TASK MATERIAL:
+            is_valid2, invalid_indexes2, scope_reason2 = await _validate_scope(raw_questions)
+            if not is_valid2:
+                # Keep in-scope items and refill only the gaps instead of
+                # failing the learner's practice attempt entirely.
+                kept = [
+                    q for i, q in enumerate(raw_questions)
+                    if i not in set(invalid_indexes2)
+                ]
+                need = max(0, count - len(kept))
+                logger.warning(
+                    "Quiz scope still partial (session=%s task=%s): kept=%s need=%s reason=%s",
+                    session_id, task_index, len(kept), need, scope_reason2,
+                )
+                if need > 0:
+                    refill_prompt = f"""CURRICULUM CONTEXT
+Subject: {subject.name} | Topic: {topic.name} | Concept: {concept.name}
+
+CURRENT LEARNING PLAN TASK
 {teaching_summary}
-{retention_summary}
 
-FORBIDDEN OTHER TASKS:
-{future_tasks}
+Generate exactly {need} retrieval/practice questions that test ONLY this current task.
+Do not test future Learning Plan tasks. Prefer calculation/application for mathematics.
+Previous scope failure reason: {scope_reason2 or scope_reason or "out of scope"}
 
-REGENERATED QUESTIONS TO VALIDATE:
-{json.dumps(raw_questions, ensure_ascii=False)}
-
-Return JSON only: {{"valid": true|false, "invalid_indexes": [0,1], "reason": "brief reason"}}.
-Mark false if Q2+ requires knowledge not explicitly taught in the current task material, or if Q1 (when present) requires knowledge outside the supplied retention material.
+Return JSON:
+{{
+  "questions": [
+    {{
+      "question": "Question text",
+      "question_type": "short_answer|multiple_choice|calculation|explanation|true_false|application",
+      "options": null,
+      "expected_answer": "Model answer for AI evaluation only",
+      "rubric": "What to look for when marking",
+      "stage": "guided_practice|independent_practice|transfer",
+      "skill": "understanding|application|accuracy|independence|transfer",
+      "hint": "A concise answer-neutral hint."
+    }}
+  ]
+}}
 """
-            verify_raw2, _ = await call_with_fallback(
-                verify_prompt2,
-                system="You are a strict assessment-scope checker. Reject future-task or untaught knowledge.",
-                temperature=0.05,
-                json_mode=True,
-            )
-            verification2 = parse_json(verify_raw2)
-            if not bool(verification2.get("valid", False)):
-                raise HTTPException(502, "The tutor could not produce a quiz safely scoped to the current Learning Plan task.")
+                    raw3, _ = await call_with_fallback(
+                        refill_prompt,
+                        system=system_prompt,
+                        temperature=0.25,
+                        json_mode=True,
+                    )
+                    refilled = _safe_list(parse_json(raw3).get("questions"))
+                    # Light-check the refill; drop any that still fail.
+                    if refilled:
+                        ok_refill, bad_refill, _ = await _validate_scope(refilled)
+                        if ok_refill:
+                            kept.extend(refilled)
+                        else:
+                            kept.extend(
+                                q for i, q in enumerate(refilled)
+                                if i not in set(bad_refill)
+                            )
+                raw_questions = kept[:count]
+                if len(raw_questions) < max(1, min(2, count)):
+                    raise HTTPException(
+                        502,
+                        "The tutor could not produce a quiz safely scoped to the current Learning Plan task.",
+                    )
+                # Pad short sets only if we still have at least one solid item:
+                # better a shorter in-scope check than blocking practice entirely.
+                parsed = {"questions": raw_questions}
     except HTTPException:
         raise
     except Exception as exc:
@@ -1927,8 +2003,10 @@ Mark false if Q2+ requires knowledge not explicitly taught in the current task m
     raw_questions = _safe_list(parsed.get("questions"))
     if not raw_questions:
         raise HTTPException(502, "AI returned no questions.")
-    if len(raw_questions) < count:
-        raise HTTPException(502, f"The tutor returned only {len(raw_questions)} of {count} required mastery questions.")
+    # After scope filtering we may have fewer than `count` items. Prefer a
+    # shorter in-scope practice run over blocking the learner entirely.
+    if len(raw_questions) < 1:
+        raise HTTPException(502, "AI returned no questions.")
 
     # Second-pass answer-quality gate. Scope validation alone is not enough:
     # a question can be about the right topic while its expected answer is
@@ -1976,7 +2054,7 @@ IMPORTANT ASSESSMENT-QUALITY RULE: Each question and expected answer must be log
             )
             parsed = parse_json(raw2)
             raw_questions = _safe_list(parsed.get("questions"))
-            if len(raw_questions) < count:
+            if not raw_questions:
                 raise HTTPException(502, "The tutor could not produce a complete, high-quality mastery assessment.")
 
             quality_prompt2 = f"""You are a strict assessment-quality validator.
@@ -2001,16 +2079,35 @@ and do not add unstated conditions. Return JSON only:
             )
             quality2 = parse_json(quality_raw2)
             if not bool(quality2.get("valid", False)):
-                raise HTTPException(502, "The tutor could not produce a logically consistent mastery assessment.")
+                bad = quality2.get("invalid_indexes") or []
+                bad_set = {
+                    int(i) for i in bad
+                    if str(i).isdigit() and 0 <= int(i) < len(raw_questions)
+                }
+                kept_q = [q for i, q in enumerate(raw_questions) if i not in bad_set]
+                if kept_q:
+                    logger.warning(
+                        "Quality gate partial accept (session=%s): kept=%s dropped=%s reason=%s",
+                        session_id, len(kept_q), len(bad_set), quality2.get("reason"),
+                    )
+                    raw_questions = kept_q
+                else:
+                    raise HTTPException(502, "The tutor could not produce a logically consistent mastery assessment.")
     except HTTPException:
         raise
     except Exception as exc:
         logger.error("Quiz quality validation failed closed: %s", exc)
         raise HTTPException(502, "The tutor could not verify that the mastery assessment is logically consistent.")
 
-    # Deterministic guard for obvious future-task leakage. The semantic
-    # validator remains authoritative, but exact multi-word terms from other
-    # Learning Plan tasks are never allowed into the current task's quiz.
+    # Deterministic guard for obvious future-task leakage. Ignore phrases that
+    # also appear in the current task text so shared concept wording (e.g.
+    # "linear inequalities") does not block an otherwise valid quiz.
+    current_blob = " ".join(
+        _safe_str(selected_task.get(k), "") for k in ("title", "focus", "description")
+    ).lower()
+    current_blob = re.sub(r"[^a-z0-9 ]+", " ", current_blob)
+    current_blob = re.sub(r"\s+", " ", current_blob).strip()
+
     forbidden_phrases: list[str] = []
     for i, other_task in enumerate(plan):
         if i == task_index or not isinstance(other_task, dict):
@@ -2019,18 +2116,28 @@ and do not add unstated conditions. Return JSON only:
             value = _safe_str(other_task.get(key), "")
             normalized = re.sub(r"[^a-z0-9 ]+", " ", value.lower())
             normalized = re.sub(r"\s+", " ", normalized).strip()
-            if len(normalized.split()) >= 2:
+            if len(normalized.split()) >= 2 and normalized not in current_blob:
                 forbidden_phrases.append(normalized)
-    for q in raw_questions:
-        # Q1 on later tasks is intentionally the delayed-retention question and
-        # is allowed to reference the immediately previous mastered task.
-        if task_index > 0 and q is raw_questions[0]:
+    filtered_questions: list = []
+    for qi, q in enumerate(raw_questions):
+        # Q1 on later tasks is the delayed-retention question and may reference
+        # the immediately previous mastered task.
+        if task_index > 0 and qi == 0:
+            filtered_questions.append(q)
             continue
         q_text = _safe_str(q.get("question"), "").lower()
         normalized_q = re.sub(r"[^a-z0-9 ]+", " ", q_text)
         normalized_q = re.sub(r"\s+", " ", normalized_q).strip()
         if any(phrase in normalized_q for phrase in forbidden_phrases):
-            raise HTTPException(502, "The tutor generated a question that references another Learning Plan task.")
+            logger.warning(
+                "Dropping question that references another Learning Plan task (session=%s)",
+                session_id,
+            )
+            continue
+        filtered_questions.append(q)
+    raw_questions = filtered_questions
+    if not raw_questions:
+        raise HTTPException(502, "The tutor generated a question that references another Learning Plan task.")
 
     # Determine next sequence number
     seq_result = await db.execute(
