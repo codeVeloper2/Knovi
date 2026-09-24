@@ -1343,7 +1343,7 @@ function RichText({ content, onCopy, copiedId }) {
 
     // Fenced code block.
     if (trimmed.startsWith("```")) {
-      const lang = trimmed.slice(3).trim();
+      const lang = trimmed.slice(3).trim().toLowerCase();
       const codeLines = [];
       i += 1;
       while (i < lines.length && !lines[i].trim().startsWith("```")) {
@@ -1353,15 +1353,36 @@ function RichText({ content, onCopy, copiedId }) {
       if (i < lines.length) i += 1;
       const code = codeLines.join("\n");
       const id = `code-${blocks.length}-${code.length}`;
-      blocks.push(
-        <div className="ar-code-wrap" key={`code-${blocks.length}`}>
-          <div className="ar-code-head">
-            <span>{lang || "code"}</span>
-            <button onClick={() => copyText(code, id, onCopy)}>{copiedId === id ? "Copied" : "Copy"}</button>
+
+      // The tutor uses a fenced `calculation` block for worked mathematics.
+      // Render it as a dedicated calculation card instead of a programming
+      // code block, while still preserving the copy action.
+      const isCalculation = ["calculation", "calculations", "math", "math-steps", "steps", "working"].includes(lang);
+      if (isCalculation) {
+        blocks.push(
+          <div className="ar-calculation-wrap" key={`calc-${blocks.length}`}>
+            <div className="ar-calculation-head">
+              <span>Calculation</span>
+              <button onClick={() => copyText(code, id, onCopy)}>{copiedId === id ? "Copied" : "Copy"}</button>
+            </div>
+            <div className="ar-calculation-body">
+              {codeLines.filter(line => line.trim()).map((line, j) => (
+                <div className="ar-calculation-step" key={j}>{inlineMarkdown(line.trim())}</div>
+              ))}
+            </div>
           </div>
-          <pre><code>{code}</code></pre>
-        </div>
-      );
+        );
+      } else {
+        blocks.push(
+          <div className="ar-code-wrap" key={`code-${blocks.length}`}>
+            <div className="ar-code-head">
+              <span>{lang || "code"}</span>
+              <button onClick={() => copyText(code, id, onCopy)}>{copiedId === id ? "Copied" : "Copy"}</button>
+            </div>
+            <pre><code>{code}</code></pre>
+          </div>
+        );
+      }
       continue;
     }
 
@@ -1525,14 +1546,46 @@ function normalizeMathSource(text) {
     protectedBlocks.push(m);
     return `\u0000CODE${protectedBlocks.length - 1}\u0000`;
   });
-  // Protect already-delimited math
-  s = s.replace(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$[^$\n]+\$)/g, (m) => {
+  // Normalize the most common JSON/LLM escaping mistakes before detecting math.
+  // A model sometimes returns `\\log_2 16\` instead of `\log_2 16`.
+  // Do this only after fenced code is protected so real source code is untouched.
+  s = s.replace(/\\\\(?=[A-Za-z])/g, "\\");
+  s = s.replace(/\\(?=\s|[.!?,;:])/g, "");
+  // Remove TeX spacing commands that sometimes leak outside math delimiters.
+  s = s.replace(/\\[!,;:]/g, "");
+
+  // Protect already-delimited math. A single-$ span is accepted only when it
+  // actually looks like mathematics; this prevents an unmatched $ in normal
+  // prose from swallowing half of a paragraph and rendering it as KaTeX.
+  const inlineMathPattern = /\$(?=[^$\n]{1,48}\$)(?=[^$\n]*(?:\\[A-Za-z]+|[0-9]|[=<>^_{}]))[^$\n]+\$/g;
+  s = s.replace(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|PLACEHOLDER)/g, (m) => {
+    protectedBlocks.push(m);
+    return `\u0000MATH${protectedBlocks.length - 1}\u0000`;
+  });
+  s = s.replace(inlineMathPattern, (m) => {
     protectedBlocks.push(m);
     return `\u0000MATH${protectedBlocks.length - 1}\u0000`;
   });
 
+  // Some model responses use `((10))`, `((100))`, or `((c))` as an
+  // accidental stand-in for inline math. Convert only simple numeric/identifier
+  // cases so ordinary parenthetical prose is not affected.
+  s = s.replace(/\(\(([A-Za-z][A-Za-z0-9]*|[0-9]+(?:\.[0-9]+)?)\)\)/g, (_, value) => `$${value}$`);
+
+  // Some models omit the underscore in logarithm bases: `\log2 16` or
+  // `\log5 125`. Normalize those into an unambiguous KaTeX form.
+  s = s.replace(/\\log([0-9]+)\s*(\([^()\n]+\)|[A-Za-z0-9]+(?:\^[A-Za-z0-9]+)?)/g, (_, base, operand) => `$\\log_{${base}} ${operand}$`);
+
+  // Parenthesized equations sometimes arrive without math delimiters. Convert
+  // only parentheses containing an unmistakable math operator.
+  s = s.replace(/\(([^()\n]*(?:[=<>^_]|\\[A-Za-z]+)[^()\n]*)\)/g, (_, expr) => `$${expr}$`);
+
   // Bare LaTeX macros commonly emitted without delimiters
   const bareMacros = [
+    // Logarithms are commonly emitted bare by the model: \log_2 16, \log_{10}(100), etc.
+    // Capture the base and operand together so they become one math span.
+    /\\(?:log|ln|lg)(?:_\{[^{}]*\}|_[A-Za-z0-9]+)?(?:\s*\([^()\n]*\)|\s+[A-Za-z0-9]+(?:\^[A-Za-z0-9]+)?)/g,
+    /\\(?:sin|cos|tan|cot|sec|csc)(?:_\{[^{}]*\}|_[A-Za-z0-9]+)?(?:\s*\([^()\n]*\)|\s+[A-Za-z0-9]+(?:\^[A-Za-z0-9]+)?)/g,
     /\\frac\s*\{[^{}]*\}\s*\{[^{}]*\}/g,
     /\\sqrt\s*(?:\[[^\]]*\])?\s*\{[^{}]*\}/g,
     /\\sum(?:_\{[^{}]*\})?(?:\^\{[^{}]*\})?/g,
@@ -1611,7 +1664,7 @@ function renderMath(latex, displayMode = false) {
 function inlineMarkdown(text) {
   const source = String(text);
   // Parse LaTeX delimiters before Markdown emphasis so math is not broken by * _
-  const tokens = source.split(/(\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$|\\\([\s\S]*?\\\)|\$[^$\n]+\$|==[^=\n]+==|\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\n]+\*|_[^_\n]+_|~~[^~]+~~)/g);
+  const tokens = source.split(/(\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$|\\\([\s\S]*?\\\)|\$(?=[^$\n]{1,32}\$)(?=[^$\n]*(?:\\[A-Za-z]+|[0-9]|[=<>^_{}]))[^$\n]+\$|==[^=\n]+==|\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\n]+\*|_[^_\n]+_|~~[^~]+~~)/g);
   return tokens.map((p, i) => {
     if (!p) return null;
     if (p.startsWith("\\[") && p.endsWith("\\]")) return <span key={i}>{renderMath(p.slice(2, -2), true)}</span>;

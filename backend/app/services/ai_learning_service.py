@@ -1098,6 +1098,9 @@ READABLE RESPONSE LAYOUT (MANDATORY):
 MATHEMATICS NOTATION (MANDATORY for any formula, equation, inequality, or symbol):
 - Always wrap math in KaTeX delimiters so the Learning Room can render it.
 - Inline math: $...$ e.g. $-3x > 12$, $\frac{{a}}{{b}}$, $x^2$, $\leq$, $\geq$, $\neq$, $\sqrt{{x}}$, $\alpha$.
+- For logarithms, ALWAYS use delimiters around the complete expression: $\log_2 16$, $\log_5 125$, or $\log_{{10}}(100)$.
+- Never write raw LaTeX without delimiters. Never double-escape LaTeX in the visible answer (do not output `\\log` or `\\frac`).
+- Do not use `((...))` as a math delimiter. Use `$...$` instead.
 - Display math on its own line: $$...$$ e.g. $$x = \frac{{-b \pm \sqrt{{b^2-4ac}}}}{{2a}}$$
 - Never write raw LaTeX without delimiters (wrong: \frac{{1}}{{2}} alone). Always use $\frac{{1}}{{2}}$.
 - Prefer LaTeX for: inequalities, fractions, roots, exponents, greek letters, sums, integrals, sets.
@@ -1105,6 +1108,7 @@ MATHEMATICS NOTATION (MANDATORY for any formula, equation, inequality, or symbol
 MATHEMATICS TEACHING MODE:
 - For Mathematics/General Mathematics/Mathematics-related topics, follow: explain idea → full worked example with steps → invite the student to try a SIMILAR problem in chat (guided practice) before any formal quiz.
 - Show each calculation step on its own line and box the final answer clearly.
+- When the worked example contains actual calculations, wrap the complete working in a fenced `calculation` block; do not rely only on a numbered list.
 - When the student attempts a similar problem, check their working step-by-step and correct the first wrong step immediately.
 - Do not ask only for verbal definitions when the skill is procedural. Formal Practice Mode still runs after micro-verification + readiness.
 
@@ -1329,6 +1333,9 @@ IMPORTANT-POINT FORMATTING:
 MATHEMATICS NOTATION (MANDATORY for any formula, equation, inequality, or symbol):
 - Always wrap math in KaTeX delimiters so the Learning Room can render it.
 - Inline math: $...$ e.g. $-3x > 12$, $\frac{{a}}{{b}}$, $x^2$, $\leq$, $\geq$, $\neq$, $\sqrt{{x}}$, $\alpha$.
+- For logarithms, ALWAYS use delimiters around the complete expression: $\log_2 16$, $\log_5 125$, or $\log_{{10}}(100)$.
+- Never write raw LaTeX without delimiters. Never double-escape LaTeX in the visible answer (do not output `\\log` or `\\frac`).
+- Do not use `((...))` as a math delimiter. Use `$...$` instead.
 - Display math on its own line: $$...$$ e.g. $$x = \frac{{-b \pm \sqrt{{b^2-4ac}}}}{{2a}}$$
 - Never write raw LaTeX without delimiters (wrong: \frac{{1}}{{2}} alone). Always use $\frac{{1}}{{2}}$.
 - Prefer LaTeX for: inequalities, fractions, roots, exponents, greek letters, sums, integrals, sets.
@@ -1339,6 +1346,14 @@ READABLE RESPONSE LAYOUT:
 - Use bullets or numbered steps when giving multiple points, instructions, or calculations.
 - Use a heading when changing to a clearly different part of the explanation.
 - For calculations, put meaningful steps on separate lines and make the final answer easy to spot.
+- For any multi-step arithmetic, algebra, equation solving, or numerical working, use a fenced `calculation` block so the Learning Room renders the working in its dedicated calculation card:
+```calculation
+$2x + 4 = 10$
+$2x = 6$
+$x = 3$
+==Answer: $x=3$==
+```
+- Do not put ordinary explanatory prose inside a calculation block. Use one mathematical step per line and keep the final line as the answer.
 
 action field rules:
 - null         → continue teaching/conversing normally
