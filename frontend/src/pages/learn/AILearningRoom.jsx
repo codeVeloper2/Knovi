@@ -213,6 +213,8 @@ export default function AILearningRoom() {
   });
   const [isTyping, setIsTyping] = useState(false);
   const [mobilePanel, setMobilePanel] = useState(null);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [motivationIndex, setMotivationIndex] = useState(0);
   const [leftOpen, setLeftOpen] = useState(() => {
     try { return localStorage.getItem("peerup.learningRoom.leftOpen") !== "false"; } catch { return true; }
   });
@@ -227,6 +229,7 @@ export default function AILearningRoom() {
   const [challengeDismissed, setChallengeDismissed] = useState(false);
 
   const bottomRef = useRef(null);
+  const planMenuRef = useRef(null);
   const timerRef = useRef(null);
   const ttsRef = useRef(false);
   const idleTimerRef = useRef(null);
@@ -267,6 +270,14 @@ export default function AILearningRoom() {
     .at(-1) || null;
   const challengeContextReady = Boolean(finalTaskMessage && session?.status !== "abandoned");
 
+  const motivationLines = [
+    "You’re making progress — keep going.",
+    "One idea at a time. You’ve got this.",
+    "Stay curious. Your next breakthrough is close.",
+    "Learn it. Practice it. Own it.",
+    "Small steps become real mastery.",
+  ];
+
   const phaseLabel = {
     preparing: "Preparing lesson",
     teaching: "Learning together",
@@ -275,6 +286,23 @@ export default function AILearningRoom() {
     practice: "Practice mode",
     summary: "Learning complete",
   }[phase] || "Learning";
+
+  useEffect(() => {
+    const timer = setInterval(() => setMotivationIndex(i => (i + 1) % motivationLines.length), 5000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    function closePlanMenu(e) {
+      if (planMenuRef.current && !planMenuRef.current.contains(e.target)) setPlanOpen(false);
+    }
+    document.addEventListener("mousedown", closePlanMenu);
+    document.addEventListener("touchstart", closePlanMenu);
+    return () => {
+      document.removeEventListener("mousedown", closePlanMenu);
+      document.removeEventListener("touchstart", closePlanMenu);
+    };
+  }, []);
 
   useEffect(() => {
     ttsRef.current = ttsEnabled;
@@ -749,37 +777,87 @@ export default function AILearningRoom() {
 
   return (
     <div className="ar-room">
-      <header className="ar-header">
-        <div className="ar-header-left">
-          <button className="ar-icon-btn" onClick={() => navigate("/app/learn/ai")} aria-label="Back">←</button>
-          <div className="ar-brand-avatar"><TutorAvatar size={34} /><span /></div>
+      <header className="ar-header ar-header-rebuilt">
+        <div className="ar-header-context">
+          <button className="ar-icon-btn ar-back-btn" onClick={() => navigate("/app/learn/ai")} aria-label="Back">←</button>
           <div className="ar-header-copy">
-            <div className="ar-header-title">{conceptName}</div>
-            <div className="ar-header-sub">{subjectName}{topicName ? ` · ${topicName}` : ""}</div>
+            <div className="ar-header-title" title={`${subjectName} • ${topicName} • ${conceptName}`}>
+              <span>{subjectName}</span><i>•</i><span>{topicName || "Topic"}</span><i>•</i><span>{conceptName}</span>
+            </div>
           </div>
         </div>
-        <div className="ar-header-center"><span className="ar-live-dot" /><span>{aiWorking ? "UPRAD is working…" : phaseLabel}</span></div>
-        <div className="ar-header-right">
-          <button className={`ar-icon-btn ar-voice-btn ${ttsEnabled ? "active" : ""}`} onClick={toggleTts} title={ttsEnabled ? "Voice on" : "Voice off"} aria-label="Toggle voice">
-            {ttsEnabled ? "🔊" : "🔇"}
-          </button>
-          <button className="ar-header-action ar-desktop-toggle" onClick={toggleLeftSidebar}>{leftOpen ? "Hide plan" : "Show plan"}</button>
-          <button className="ar-header-action ar-desktop-toggle" onClick={toggleRightSidebar}>{rightOpen ? "Hide tools" : "Show tools"}</button>
-          <button className="ar-header-action ar-mobile-only" onClick={() => setMobilePanel("plan")}>Plan</button>
-          <button className="ar-header-action ar-mobile-only" onClick={() => setMobilePanel("tools")}>Tools</button>
+
+        <div className="ar-header-motivation" aria-live="polite">
+          <span className="ar-motivation-dot" />
+          <span key={motivationIndex} className="ar-motivation-text">{aiWorking ? "UPRAD is thinking about your next step…" : motivationLines[motivationIndex]}</span>
+        </div>
+
+        <div className="ar-header-actions">
+          <div className="ar-plan-dropdown" ref={planMenuRef}>
+            <button type="button" className={`ar-plan-trigger ${planOpen ? "open" : ""}`} onClick={() => setPlanOpen(v => !v)} aria-expanded={planOpen} aria-haspopup="true">
+              <span>Learning plan</span><b>{completedCount}/{learningPlan.length || 0}</b><span className="ar-plan-chevron">⌄</span>
+            </button>
+            {planOpen && (
+              <div className="ar-plan-menu" role="menu">
+                <div className="ar-plan-menu-head">
+                  <div><span className="ar-eyebrow">LEARNING PLAN</span><strong>{completedCount} of {learningPlan.length || 0} complete</strong></div>
+                  <span className="ar-plan-menu-progress">{planProgress}%</span>
+                </div>
+                <div className="ar-plan-menu-track"><i style={{ width: `${planProgress}%` }} /></div>
+                <div className="ar-plan-menu-list">
+                  {learningPlan.length ? learningPlan.map((task, i) => (
+                    <div key={i} className={`ar-plan-menu-item ${completedTaskIndexes.includes(i) ? "done" : currentTaskIndex === i ? "current" : "future"}`}>
+                      <span className="ar-plan-menu-number">{completedTaskIndexes.includes(i) ? "✓" : i + 1}</span>
+                      <span className="ar-plan-menu-copy"><b>{taskTitle(task)}</b><small>{taskDescription(task)}</small><em>{completedTaskIndexes.includes(i) ? "Completed" : currentTaskIndex === i ? "Current focus" : "Upcoming"}</em></span>
+                    </div>
+                  )) : <div className="ar-empty-plan"><span>✦</span><p>Your tutor is building the learning plan.</p></div>}
+                </div>
+              </div>
+            )}
+          </div>
+          <button className={`ar-icon-btn ar-voice-btn ${ttsEnabled ? "active" : ""}`} onClick={toggleTts} title={ttsEnabled ? "Voice on" : "Voice off"} aria-label="Toggle voice">{ttsEnabled ? "🔊" : "🔇"}</button>
+          <button className="ar-header-action ar-tools-trigger" onClick={() => setMobilePanel("tools")}>Tools</button>
           <button className="ar-end" onClick={endSession}>End</button>
         </div>
       </header>
 
       <div className={`ar-layout ${leftOpen ? "ar-left-open" : "ar-left-collapsed"} ${rightOpen ? "ar-right-open" : "ar-right-collapsed"}`}>
         {leftOpen && (
-          <aside className={`ar-sidebar ar-plan-sidebar ${mobilePanel === "plan" ? "ar-mobile-open" : ""}`}>
-            <SidebarPlan plan={learningPlan} current={currentTaskIndex} completed={completedTaskIndexes} progress={planProgress} onClose={() => setMobilePanel(null)} />
-            <button type="button" className="ar-sidebar-edge-toggle ar-left-edge-toggle" onClick={toggleLeftSidebar}>‹</button>
+          <aside className="ar-sidebar ar-plan-sidebar">
+            <div className="ar-panel-inner">
+              <div className="ar-panel-head">
+                <div>
+                  <span className="ar-eyebrow">LEARNING PLAN</span>
+                  <h2>{completedCount} of {learningPlan.length || 0} complete</h2>
+                </div>
+                <button type="button" className="ar-sidebar-edge-toggle ar-left-edge-toggle" onClick={toggleLeftSidebar} aria-label="Collapse learning plan">‹</button>
+              </div>
+              <div className="ar-plan-progress">
+                <div className="ar-plan-ring" style={{ "--p": `${planProgress * 3.6}deg` }}><span>{planProgress}%</span></div>
+                <div>
+                  <strong>{currentTask ? taskTitle(currentTask) : "Preparing your plan"}</strong>
+                  <small>{currentTask ? "CURRENT FOCUS" : "Your tutor is building the learning plan."}</small>
+                </div>
+              </div>
+              <div className="ar-task-list">
+                {learningPlan.length ? learningPlan.map((task, i) => {
+                  const done = completedTaskIndexes.includes(i);
+                  const active = currentTaskIndex === i;
+                  return (
+                    <div key={i} className={`ar-task ${active ? "active" : ""} ${done ? "done" : ""}`} aria-current={active ? "step" : undefined}>
+                      <span className="ar-task-number">{done ? "✓" : i + 1}</span>
+                      <span className="ar-task-copy">
+                        <b>{taskTitle(task)}</b>
+                        <small>{taskDescription(task)}</small>
+                        <em>{done ? "✓ COMPLETED" : active ? "CURRENT FOCUS" : "UPCOMING"}</em>
+                      </span>
+                    </div>
+                  );
+                }) : <div className="ar-plan-note"><span>✦</span><p><b>Your tutor is building the learning plan.</b><br />Your tasks will appear here.</p></div>}
+              </div>
+            </div>
           </aside>
         )}
-        {!leftOpen && <button type="button" className="ar-sidebar-restore ar-left-restore" onClick={toggleLeftSidebar}>›</button>}
-
         <main className="ar-main">
           <div className="ar-context-strip">
             <div><span className="ar-eyebrow">LEARNING ROOM</span><strong>{phaseLabel}</strong></div>
