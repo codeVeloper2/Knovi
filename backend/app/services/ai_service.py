@@ -30,19 +30,49 @@ logger = logging.getLogger(__name__)
 
 def _strip_fences(text: str) -> str:
     """Remove markdown code fences from an AI response."""
-    text = text.strip()
+    text = (text or "").strip()
     if text.startswith("```"):
         parts = text.split("```", 2)
         if len(parts) >= 2:
             text = parts[1]
-            if text.startswith("json"):
-                text = text[4:]
+            if text.lstrip().startswith("json"):
+                text = text.lstrip()[4:]
     return text.strip()
 
 
 def parse_json(text: str) -> dict | list:
-    """Strip markdown fences then parse JSON. Raises json.JSONDecodeError on failure."""
-    return json.loads(_strip_fences(text))
+    """Strip markdown fences then parse JSON.
+
+    Models occasionally append trailing prose or a second object after a valid
+    JSON document ("Extra data: line N column M"). Prefer the first complete
+    value so a partial extra tail does not fail the whole tutor turn.
+    """
+    cleaned = _strip_fences(text)
+    if not cleaned:
+        raise json.JSONDecodeError("Empty AI response", cleaned, 0)
+
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+
+    # First complete JSON value (object or array), ignore trailing junk
+    decoder = json.JSONDecoder()
+    for i, ch in enumerate(cleaned):
+        if ch in "{[":
+            try:
+                obj, _end = decoder.raw_decode(cleaned, i)
+                return obj
+            except json.JSONDecodeError:
+                continue
+
+    # Last-resort: slice from first { to last }
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start != -1 and end > start:
+        return json.loads(cleaned[start : end + 1])
+
+    raise json.JSONDecodeError("Could not extract JSON from AI response", cleaned, 0)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
