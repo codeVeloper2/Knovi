@@ -1097,9 +1097,9 @@ READABLE RESPONSE LAYOUT (MANDATORY):
 
 MATHEMATICS NOTATION (MANDATORY for any formula, equation, inequality, or symbol):
 - Always wrap math in KaTeX delimiters so the Learning Room can render it.
-- Inline math: $...$ e.g. $-3x > 12$, $\frac{a}{b}$, $x^2$, $\leq$, $\geq$, $\neq$, $\sqrt{x}$, $\alpha$.
-- Display math on its own line: $$...$$ e.g. $$x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}$$
-- Never write raw LaTeX without delimiters (wrong: \frac{1}{2} alone). Always use $\frac{1}{2}$.
+- Inline math: $...$ e.g. $-3x > 12$, $\frac{{a}}{{b}}$, $x^2$, $\leq$, $\geq$, $\neq$, $\sqrt{{x}}$, $\alpha$.
+- Display math on its own line: $$...$$ e.g. $$x = \frac{{-b \pm \sqrt{{b^2-4ac}}}}{{2a}}$$
+- Never write raw LaTeX without delimiters (wrong: \frac{{1}}{{2}} alone). Always use $\frac{{1}}{{2}}$.
 - Prefer LaTeX for: inequalities, fractions, roots, exponents, greek letters, sums, integrals, sets.
 
 MATHEMATICS TEACHING MODE:
@@ -1328,9 +1328,9 @@ IMPORTANT-POINT FORMATTING:
 
 MATHEMATICS NOTATION (MANDATORY for any formula, equation, inequality, or symbol):
 - Always wrap math in KaTeX delimiters so the Learning Room can render it.
-- Inline math: $...$ e.g. $-3x > 12$, $\frac{a}{b}$, $x^2$, $\leq$, $\geq$, $\neq$, $\sqrt{x}$, $\alpha$.
-- Display math on its own line: $$...$$ e.g. $$x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}$$
-- Never write raw LaTeX without delimiters (wrong: \frac{1}{2} alone). Always use $\frac{1}{2}$.
+- Inline math: $...$ e.g. $-3x > 12$, $\frac{{a}}{{b}}$, $x^2$, $\leq$, $\geq$, $\neq$, $\sqrt{{x}}$, $\alpha$.
+- Display math on its own line: $$...$$ e.g. $$x = \frac{{-b \pm \sqrt{{b^2-4ac}}}}{{2a}}$$
+- Never write raw LaTeX without delimiters (wrong: \frac{{1}}{{2}} alone). Always use $\frac{{1}}{{2}}$.
 - Prefer LaTeX for: inequalities, fractions, roots, exponents, greek letters, sums, integrals, sets.
 
 READABLE RESPONSE LAYOUT:
