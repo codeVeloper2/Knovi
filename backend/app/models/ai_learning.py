@@ -340,6 +340,9 @@ class AISessionQuestion(Base):
     options:        Mapped[Optional[list]]= mapped_column(JSONB, nullable=True)
     expected_answer:Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     rubric:         Mapped[Optional[str]] = mapped_column(Text, nullable=True)   # marking guide for AI
+    hint:           Mapped[Optional[str]] = mapped_column(Text, nullable=True)   # learner hint; must not reveal the answer
+    stage:          Mapped[str]           = mapped_column(String(30), nullable=False, default="independent_practice")
+    skill:          Mapped[str]           = mapped_column(String(30), nullable=False, default="application")
     sequence:       Mapped[int]           = mapped_column(Integer, nullable=False, default=1)
     created_at:     Mapped[datetime]      = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
 
@@ -354,6 +357,9 @@ class AISessionQuestion(Base):
             "question": self.question,
             "questionType": self.question_type,
             "options": self.options,
+            "hint": self.hint,
+            "stage": self.stage,
+            "skill": self.skill,
             "sequence": self.sequence,
             "createdAt": self.created_at.isoformat(),
             # NOTE: expected_answer and rubric are NOT returned to the student

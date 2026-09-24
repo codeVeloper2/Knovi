@@ -298,6 +298,7 @@ async def submit_answer(
         session_id=session_id, user_id=user.id,
         question_id=body.question_id,
         student_answer=body.student_answer,
+        used_hint=bool(body.used_hint),
         response_time_seconds=body.response_time_seconds,
         db=db,
     )

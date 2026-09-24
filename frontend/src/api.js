@@ -648,11 +648,12 @@ export function generateRetrievalQuestions(sessionId, count = 3, taskIndex = nul
   return aiPost(`/api/learning/sessions/${sessionId}/questions?count=${count}${suffix}`);
 }
 
-export function submitAnswer(sessionId, questionId, studentAnswer, responseTimeSeconds = null) {
+export function submitAnswer(sessionId, questionId, studentAnswer, responseTimeSeconds = null, usedHint = false) {
   return aiPost(`/api/learning/sessions/${sessionId}/answers`, {
     question_id: questionId,
     student_answer: studentAnswer,
     response_time_seconds: responseTimeSeconds,
+    used_hint: usedHint,
   });
 }
 

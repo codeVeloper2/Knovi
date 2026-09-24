@@ -745,13 +745,6 @@
   .ar-header-right .ar-header-action { display:inline-flex;padding:7px 8px;font-size:9px; }
   .ar-header-right .ar-voice { display:grid; }
   .ar-end { display:none; }
-  .ar-header-rebuilt .ar-end { display: inline-flex !important; }
-  .ar-header.ar-header-rebuilt {
-    height: auto !important;
-    flex-basis: auto !important;
-    padding: 10px 12px 12px !important;
-    grid-template-columns: unset !important;
-  }
   .ar-layout { display:block;position:relative; }
   .ar-sidebar {
     display:block;
@@ -1134,7 +1127,6 @@
 
   .ar-end,
   .ar-desktop-toggle { display: none !important; }
-  .ar-header-rebuilt .ar-end { display: inline-flex !important; }
 
   /* ---------- Main layout ---------- */
   .ar-layout,
@@ -1622,8 +1614,6 @@
   .ar-header-copy { max-width: calc(100vw - 205px); }
   .ar-header-title { font-size: 13px; }
   .ar-header-sub { display: none; }
-  .ar-header-rebuilt .ar-header-sub { display: block !important; }
-  .ar-header-rebuilt .ar-header-copy { max-width: none; }
 
   .ar-header-right .ar-header-action {
     padding-left: 8px;
@@ -1956,563 +1946,170 @@
 .ar-rich mark.ar-rich-highlight { padding: 0.08em 0.28em; border-radius: 0.3em; }
 
 /* ==========================================================================
-   HEADER REBUILD — matches AI Learning Room reference
-   Top: back · title/subtitle · voice · End
-   Mid: green-dot motivation
-   Bottom: breadcrumb path · Learning plan dropdown
+   HEADER REBUILD — context · motivation · Learning Plan dropdown
    ========================================================================== */
 .ar-header-rebuilt {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0;
-  height: auto;
-  flex: 0 0 auto;
-  padding: 12px 18px 14px;
-  border-bottom: 1px solid var(--ar-border);
-  background: rgba(6, 18, 37, .96);
-  backdrop-filter: blur(18px);
+  grid-template-columns: minmax(0, 1fr) minmax(220px, .9fr) auto;
+  gap: 20px;
 }
-
-.ar-hdr-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 0;
-}
-
-.ar-hdr-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.ar-header-rebuilt .ar-back-btn {
-  width: 40px;
-  height: 40px;
-  flex: 0 0 40px;
-  border-radius: 12px;
-  color: var(--ar-text);
-  background: rgba(255, 255, 255, .04);
-  border: 1px solid rgba(123, 168, 224, .18);
-}
-
-.ar-header-rebuilt .ar-back-btn:hover {
-  background: rgba(91, 111, 246, .12);
-  border-color: rgba(91, 111, 246, .35);
-  color: #fff;
-}
-
-.ar-header-rebuilt .ar-header-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
+.ar-header-context { min-width: 0; display:flex; align-items:center; gap:10px; }
+.ar-header-context .ar-header-copy { min-width:0; }
 .ar-header-rebuilt .ar-header-title {
-  font-size: 16px;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  color: var(--ar-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.2;
+  display:flex; align-items:center; gap:7px; min-width:0;
+  font-size:12px; font-weight:800; color:var(--ar-text);
 }
+.ar-header-rebuilt .ar-header-title span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ar-header-rebuilt .ar-header-title i { font-style:normal; color:var(--ar-dim); flex:0 0 auto; }
+.ar-header-motivation { min-width:0; display:flex; align-items:center; justify-content:center; gap:8px; color:#9eb2cf; font-size:11px; font-weight:700; text-align:center; }
+.ar-motivation-dot { width:6px; height:6px; flex:0 0 6px; border-radius:50%; background:var(--ar-success); box-shadow:0 0 0 4px rgba(39,214,163,.08); }
+.ar-motivation-text { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; animation: arMotivationIn .35s ease; }
+@keyframes arMotivationIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+.ar-header-actions { display:flex; align-items:center; justify-content:flex-end; gap:7px; }
+.ar-plan-dropdown { position:relative; }
+.ar-plan-trigger { min-height:38px; display:flex; align-items:center; gap:8px; padding:0 11px; border:1px solid var(--ar-border); border-radius:10px; background:rgba(255,255,255,.025); color:var(--ar-text); cursor:pointer; }
+.ar-plan-trigger:hover,.ar-plan-trigger.open { border-color:var(--ar-border-strong); background:rgba(91,111,246,.10); }
+.ar-plan-trigger span:first-child { font-size:10px; font-weight:800; }
+.ar-plan-trigger b { font-size:9px; color:var(--ar-muted); }
+.ar-plan-chevron { color:var(--ar-muted); font-size:15px; line-height:1; transition:transform .18s ease; }
+.ar-plan-trigger.open .ar-plan-chevron { transform:rotate(180deg); }
+.ar-plan-menu { position:absolute; right:0; top:calc(100% + 9px); width:min(370px, calc(100vw - 24px)); max-height:min(70vh, 540px); overflow:auto; padding:13px; border:1px solid var(--ar-border-strong); border-radius:15px; background:rgba(8,24,46,.98); box-shadow:0 22px 60px rgba(0,0,0,.42); z-index:100; }
+.ar-plan-menu-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.ar-plan-menu-head div { display:flex; flex-direction:column; gap:3px; }
+.ar-plan-menu-head strong { font-size:12px; }
+.ar-plan-menu-progress { font-size:11px; font-weight:900; color:var(--ar-success); }
+.ar-plan-menu-track { height:4px; margin:10px 0 12px; overflow:hidden; border-radius:99px; background:rgba(255,255,255,.07); }
+.ar-plan-menu-track i { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,var(--ar-accent),var(--ar-accent-2)); }
+.ar-plan-menu-list { display:flex; flex-direction:column; gap:5px; }
+.ar-plan-menu-item { display:grid; grid-template-columns:28px minmax(0,1fr); gap:9px; padding:9px; border-radius:10px; }
+.ar-plan-menu-item.current { background:rgba(91,111,246,.12); border:1px solid rgba(91,111,246,.28); }
+.ar-plan-menu-item.done { opacity:.72; }
+.ar-plan-menu-item.future { opacity:.52; }
+.ar-plan-menu-number { width:25px; height:25px; display:grid; place-items:center; border-radius:50%; background:rgba(255,255,255,.06); color:var(--ar-muted); font-size:9px; font-weight:900; }
+.ar-plan-menu-item.done .ar-plan-menu-number { color:var(--ar-success); background:rgba(39,214,163,.10); }
+.ar-plan-menu-item.current .ar-plan-menu-number { color:#fff; background:var(--ar-accent); }
+.ar-plan-menu-copy { min-width:0; display:flex; flex-direction:column; gap:3px; }
+.ar-plan-menu-copy b { font-size:11px; line-height:1.35; }
+.ar-plan-menu-copy small { color:var(--ar-muted); font-size:9px; line-height:1.4; }
+.ar-plan-menu-copy em { font-style:normal; color:var(--ar-dim); font-size:8px; text-transform:uppercase; letter-spacing:.06em; font-weight:800; }
+.ar-plan-menu-item.current .ar-plan-menu-copy em { color:#9da8ff; }
+.ar-layout.ar-left-open, .ar-layout.ar-left-collapsed { grid-template-columns:minmax(0,1fr) 280px; }
+.ar-left-restore { display:none !important; }
 
-.ar-header-rebuilt .ar-header-sub {
-  font-size: 12px;
-  font-weight: 500;
-  color: #8fa3c0;
-  margin-top: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.25;
+@media (max-width:760px) {
+  .ar-header-rebuilt { height:68px; flex-basis:68px; padding:8px 10px; grid-template-columns:minmax(0,1fr) auto; gap:8px; }
+  .ar-header-context { gap:7px; }
+  .ar-back-btn { width:34px; height:34px; flex-basis:34px; font-size:18px; }
+  .ar-header-rebuilt .ar-header-title { font-size:10px; gap:5px; }
+  .ar-header-motivation { display:none; }
+  .ar-header-actions { gap:4px; }
+  .ar-plan-trigger { min-height:34px; padding:0 8px; gap:5px; }
+  .ar-plan-trigger span:first-child { font-size:9px; }
+  .ar-plan-trigger b { font-size:8px; }
+  .ar-header-actions .ar-voice-btn { width:34px; height:34px; }
+  .ar-tools-trigger { display:none !important; }
+  .ar-end { padding:7px 8px; font-size:9px; }
+  .ar-plan-menu { position:fixed; top:73px; right:10px; width:min(360px, calc(100vw - 20px)); max-height:calc(100dvh - 90px); }
+  .ar-layout.ar-left-open, .ar-layout.ar-left-collapsed { grid-template-columns:minmax(0,1fr); }
+  .ar-layout.ar-right-open .ar-main, .ar-layout.ar-right-collapsed .ar-main { min-width:0; }
 }
-
-.ar-header-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.ar-header-rebuilt .ar-voice-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  color: #9eb2cf;
-  background: rgba(255, 255, 255, .04);
-  border: 1px solid rgba(123, 168, 224, .18);
-  display: grid;
-  place-items: center;
-  padding: 0;
-}
-
-.ar-header-rebuilt .ar-voice-btn:hover {
-  color: var(--ar-text);
-  border-color: rgba(91, 111, 246, .35);
-  background: rgba(91, 111, 246, .1);
-}
-
-.ar-header-rebuilt .ar-voice-btn.active {
-  color: #fff;
-  border-color: rgba(91, 111, 246, .55);
-  background: rgba(91, 111, 246, .2);
-}
-
-.ar-header-rebuilt .ar-end {
-  min-height: 40px;
-  padding: 0 16px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 700;
-  color: #f9a8b4;
-  border: 1px solid rgba(255, 107, 124, .32);
-  background: rgba(255, 107, 124, .08);
-}
-
-.ar-header-rebuilt .ar-end:hover {
-  background: rgba(255, 107, 124, .16);
-  border-color: rgba(255, 107, 124, .45);
-  color: #ffc0c8;
-}
-
-/* Motivation strip */
-.ar-hdr-motivation {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-top: 12px;
-  min-width: 0;
-  color: #a8bdd8;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.35;
-}
-
-.ar-motivation-dot {
-  width: 7px;
-  height: 7px;
-  flex: 0 0 7px;
-  border-radius: 50%;
-  background: #2dd4a8;
-  box-shadow: 0 0 0 4px rgba(45, 212, 168, .12);
-}
-
-.ar-motivation-text {
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  animation: arMotivationIn .4s ease;
-}
-
-@keyframes arMotivationIn {
-  from { opacity: 0; transform: translateY(3px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* Breadcrumb + plan row */
-.ar-hdr-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 12px;
-  min-width: 0;
-}
-
-.ar-breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  flex: 1;
-  font-size: 12.5px;
-  font-weight: 650;
-  color: #c5d4ea;
-  overflow: hidden;
-}
-
-.ar-bc-seg {
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex-shrink: 1;
-}
-
-.ar-bc-current {
-  color: var(--ar-text);
-  font-weight: 750;
-  max-width: 180px;
-}
-
-.ar-bc-sep {
-  flex: 0 0 auto;
-  color: #5d7394;
-  opacity: .85;
-}
-
-/* Learning plan dropdown */
-.ar-plan-dropdown {
-  position: relative;
-  flex-shrink: 0;
-}
-
-.ar-plan-trigger {
-  min-height: 36px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 12px 0 14px;
-  border: 1px solid rgba(123, 168, 224, .22);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, .04);
-  color: var(--ar-text);
-  cursor: pointer;
-  transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
-}
-
-.ar-plan-trigger:hover,
-.ar-plan-trigger.open {
-  border-color: rgba(91, 111, 246, .45);
-  background: rgba(91, 111, 246, .12);
-  box-shadow: 0 0 0 3px rgba(91, 111, 246, .1);
-}
-
-.ar-plan-trigger-label {
-  font-size: 12.5px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.ar-plan-trigger-count {
-  font-size: 12px;
-  font-weight: 800;
-  color: #9da8ff;
-  font-variant-numeric: tabular-nums;
-}
-
-.ar-plan-chevron {
-  color: #8fa3c0;
-  transition: transform .2s ease;
-  flex: 0 0 auto;
-}
-
-.ar-plan-trigger.open .ar-plan-chevron {
-  transform: rotate(180deg);
-  color: #c5d0ff;
-}
-
-.ar-plan-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 10px);
-  width: min(380px, calc(100vw - 24px));
-  max-height: min(70vh, 520px);
-  overflow: auto;
-  padding: 14px;
-  border: 1px solid rgba(123, 168, 224, .22);
-  border-radius: 16px;
-  background: rgba(8, 22, 42, .98);
-  box-shadow: 0 24px 64px rgba(0, 0, 0, .48), 0 0 0 1px rgba(255, 255, 255, .03);
-  z-index: 120;
-  scrollbar-width: thin;
-}
-
-.ar-plan-menu-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.ar-plan-menu-head div {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.ar-plan-menu-head strong {
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.ar-plan-menu-progress {
-  font-size: 12px;
-  font-weight: 900;
-  color: #2dd4a8;
-  font-variant-numeric: tabular-nums;
-}
-
-.ar-plan-menu-track {
-  height: 4px;
-  margin: 11px 0 13px;
-  overflow: hidden;
-  border-radius: 99px;
-  background: rgba(255, 255, 255, .07);
-}
-
-.ar-plan-menu-track i {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--ar-accent), var(--ar-accent-2));
-  transition: width .35s ease;
-}
-
-.ar-plan-menu-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.ar-plan-menu-item {
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
-  gap: 10px;
-  padding: 10px;
-  border-radius: 12px;
-  border: 1px solid transparent;
-  transition: background .15s ease;
-}
-
-.ar-plan-menu-item.current {
-  background: rgba(91, 111, 246, .14);
-  border-color: rgba(91, 111, 246, .3);
-}
-
-.ar-plan-menu-item.done {
-  opacity: .78;
-}
-
-.ar-plan-menu-item.future {
-  opacity: .55;
-}
-
-.ar-plan-menu-number {
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, .06);
-  color: var(--ar-muted);
-  font-size: 11px;
-  font-weight: 900;
-}
-
-.ar-plan-menu-item.done .ar-plan-menu-number {
-  color: #2dd4a8;
-  background: rgba(45, 212, 168, .12);
-}
-
-.ar-plan-menu-item.current .ar-plan-menu-number {
-  color: #fff;
-  background: var(--ar-accent);
-}
-
-.ar-plan-menu-copy {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.ar-plan-menu-copy b {
-  font-size: 12.5px;
-  line-height: 1.35;
-  font-weight: 750;
-}
-
-.ar-plan-menu-copy small {
-  color: var(--ar-muted);
-  font-size: 11px;
-  line-height: 1.4;
-}
-
-.ar-plan-menu-copy em {
-  font-style: normal;
-  color: var(--ar-dim);
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: .06em;
-  font-weight: 800;
-}
-
-.ar-plan-menu-item.current .ar-plan-menu-copy em {
-  color: #9da8ff;
-}
-
-.ar-empty-plan {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px;
-  color: var(--ar-muted);
-  font-size: 13px;
-}
-
-.ar-layout.ar-left-open,
-.ar-layout.ar-left-collapsed {
-  grid-template-columns: minmax(0, 1fr) 280px;
-}
-
-.ar-left-restore {
-  display: none !important;
-}
-
-/* Hide legacy context strip if any remain */
-.ar-learning-room-context {
-  display: none !important;
-}
-
-/* ── Mobile / narrow ── */
-@media (max-width: 760px) {
+@media (max-width:760px) {
   .ar-header-rebuilt {
-    padding: 10px 12px 12px;
+    height:78px;
+    flex-basis:78px;
+    position:relative;
+    grid-template-columns:minmax(0,1fr) auto;
+    align-items:center;
+    padding:7px 9px 16px;
   }
-
-  .ar-hdr-top {
-    gap: 8px;
+  .ar-header-context { min-width:0; }
+  .ar-header-rebuilt .ar-header-title { font-size:8.5px; gap:4px; }
+  .ar-header-motivation {
+    display:flex;
+    position:absolute;
+    left:12px;
+    right:12px;
+    bottom:5px;
+    justify-content:flex-start;
+    font-size:8px;
+    line-height:1;
   }
-
-  .ar-hdr-left {
-    gap: 10px;
-  }
-
-  .ar-header-rebuilt .ar-back-btn,
-  .ar-header-rebuilt .ar-voice-btn {
-    width: 38px;
-    height: 38px;
-    flex-basis: 38px;
-    border-radius: 11px;
-  }
-
-  .ar-header-rebuilt .ar-header-title {
-    font-size: 15px;
-  }
-
-  .ar-header-rebuilt .ar-header-sub {
-    font-size: 11.5px;
-  }
-
-  .ar-header-rebuilt .ar-end {
-    min-height: 38px;
-    padding: 0 14px;
-    border-radius: 11px;
-    font-size: 12.5px;
-  }
-
-  .ar-tools-trigger {
-    display: none !important;
-  }
-
-  .ar-hdr-motivation {
-    margin-top: 10px;
-    font-size: 12.5px;
-    gap: 8px;
-  }
-
-  .ar-motivation-dot {
-    width: 6px;
-    height: 6px;
-    flex-basis: 6px;
-  }
-
-  .ar-hdr-meta {
-    margin-top: 10px;
-    gap: 8px;
-  }
-
-  .ar-breadcrumb {
-    font-size: 11.5px;
-    gap: 2px;
-  }
-
-  .ar-bc-seg {
-    max-width: 72px;
-  }
-
-  .ar-bc-current {
-    max-width: 100px;
-  }
-
-  .ar-plan-trigger {
-    min-height: 34px;
-    padding: 0 10px 0 12px;
-    gap: 6px;
-  }
-
-  .ar-plan-trigger-label {
-    font-size: 12px;
-  }
-
-  .ar-plan-trigger-count {
-    font-size: 11.5px;
-  }
-
-  .ar-plan-menu {
-    position: fixed;
-    top: auto;
-    right: 10px;
-    left: 10px;
-    width: auto;
-    max-height: min(62vh, 480px);
-  }
-
-  .ar-layout.ar-left-open,
-  .ar-layout.ar-left-collapsed {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .ar-layout.ar-right-open .ar-main,
-  .ar-layout.ar-right-collapsed .ar-main {
-    min-width: 0;
-  }
+  .ar-header-motivation .ar-motivation-dot { width:5px; height:5px; flex-basis:5px; }
+  .ar-header-actions { align-self:center; }
+  .ar-header-actions .ar-voice-btn { display:grid; width:32px; height:32px; }
+  .ar-end { display:none; }
+  .ar-plan-trigger { min-height:32px; }
+  .ar-plan-menu { top:83px; }
 }
 
-@media (max-width: 380px) {
-  .ar-header-rebuilt .ar-header-title {
-    font-size: 14px;
-  }
 
-  .ar-bc-seg:not(.ar-bc-current) {
-    max-width: 56px;
-  }
+/* AI Learning Room context row: this is the exact strip previously used for
+   “LEARNING ROOM / Learning together”. It now carries session identity,
+   rotating motivation, and the Learning Plan dropdown. */
+.ar-learning-room-context {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(180px,.9fr) auto;
+  align-items:center;
+  gap:18px;
+}
+.ar-context-subject {
+  min-width:0; display:flex; align-items:center; gap:7px;
+  font-size:12px; font-weight:800; color:var(--ar-text);
+}
+.ar-context-subject span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ar-context-subject i { font-style:normal; color:var(--ar-dim); flex:0 0 auto; }
+.ar-context-motivation {
+  min-width:0; display:flex; align-items:center; justify-content:center; gap:8px;
+  color:#9eb2cf; font-size:11px; font-weight:700; text-align:center;
+}
+.ar-context-plan { display:flex; justify-content:flex-end; min-width:0; }
 
-  .ar-plan-trigger-label {
-    display: none;
+@media (max-width:760px) {
+  .ar-learning-room-context {
+    grid-template-columns:minmax(0,1fr) auto;
+    grid-template-areas:"subject plan" "motivation motivation";
+    gap:5px 8px; min-height:58px; flex-basis:58px; padding:6px 10px;
   }
-
-  .ar-plan-trigger {
-    padding: 0 10px;
-  }
+  .ar-context-subject { grid-area:subject; font-size:8.5px; gap:4px; }
+  .ar-context-motivation { grid-area:motivation; justify-content:flex-start; font-size:8px; line-height:1; }
+  .ar-context-motivation .ar-motivation-dot { width:5px; height:5px; flex-basis:5px; }
+  .ar-context-plan { grid-area:plan; }
+  .ar-context-plan .ar-plan-trigger { min-height:30px; padding:0 7px; gap:4px; }
+  .ar-context-plan .ar-plan-trigger span:first-child { font-size:8px; }
+  .ar-context-plan .ar-plan-trigger b { font-size:7px; }
+  .ar-context-plan .ar-plan-menu { top:36px; right:0; }
 }
 
-/* Desktop: Learning Plan lives permanently in the left sidebar.
-   Dropdown still available for quick glance. */
+/* Desktop: Learning Plan lives permanently in the left sidebar. The compact
+   dropdown remains available only on smaller screens. */
 @media (min-width: 761px) {
-  .ar-layout.ar-left-open.ar-right-open {
-    grid-template-columns: 285px minmax(0, 1fr) 280px;
-  }
-  .ar-layout.ar-left-open.ar-right-collapsed {
-    grid-template-columns: 285px minmax(0, 1fr);
-  }
-  .ar-layout.ar-left-collapsed.ar-right-open {
-    grid-template-columns: 0 minmax(0, 1fr) 280px;
-  }
-  .ar-layout.ar-left-collapsed.ar-right-collapsed {
-    grid-template-columns: 0 minmax(0, 1fr);
-  }
-  .ar-layout.ar-left-collapsed .ar-plan-sidebar {
-    display: none;
-  }
+  .ar-layout.ar-left-open.ar-right-open { grid-template-columns: 285px minmax(0,1fr) 280px; }
+  .ar-layout.ar-left-open.ar-right-collapsed { grid-template-columns: 285px minmax(0,1fr); }
+  .ar-layout.ar-left-collapsed.ar-right-open { grid-template-columns: 0 minmax(0,1fr) 280px; }
+  .ar-layout.ar-left-collapsed.ar-right-collapsed { grid-template-columns: 0 minmax(0,1fr); }
+  .ar-layout.ar-left-collapsed .ar-plan-sidebar { display: none; }
 }
+
+/* Mastery-loop practice controls */
+.ar-hint-toggle {
+  border: 0;
+  background: transparent;
+  color: var(--ar-accent, #8ab4ff);
+  padding: 8px 0;
+  font: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+.ar-practice-hint {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 4px 0 14px;
+  padding: 11px 13px;
+  border: 1px solid rgba(138,180,255,.22);
+  border-radius: 12px;
+  background: rgba(138,180,255,.07);
+  color: inherit;
+  font-size: .9rem;
+  line-height: 1.45;
+}
+.ar-practice-hint strong { white-space: nowrap; }

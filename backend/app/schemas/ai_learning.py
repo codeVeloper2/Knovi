@@ -151,6 +151,9 @@ class QuestionOut(BaseModel):
     question:     str
     questionType: str
     options:      Optional[list]
+    hint:         Optional[str] = None
+    stage:        Optional[str] = None
+    skill:        Optional[str] = None
     sequence:     int
     createdAt:    str
     # expected_answer / rubric intentionally excluded from student-facing schema
@@ -164,6 +167,7 @@ class SubmitAnswerRequest(StrictModel):
     question_id:           int
     student_answer:        str = Field(min_length=1, max_length=5000)
     response_time_seconds: Optional[int] = Field(default=None, ge=0)
+    used_hint: Optional[bool] = False
 
 
 class AnswerOut(BaseModel):

@@ -207,6 +207,8 @@ export default function AILearningRoom() {
   const [answerInput, setAnswerInput] = useState("");
   const [checkResults, setCheckResults] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [hintOpen, setHintOpen] = useState(false);
+  const [hintUsed, setHintUsed] = useState(false);
   const [msgInput, setMsgInput] = useState("");
   const [ttsEnabled, setTtsEnabled] = useState(() => {
     try { return localStorage.getItem("peerup.learningRoom.ttsEnabled") === "true"; } catch { return false; }
@@ -271,14 +273,11 @@ export default function AILearningRoom() {
   const challengeContextReady = Boolean(finalTaskMessage && session?.status !== "abandoned");
 
   const motivationLines = [
-    "Every construction you master is a new tool.",
     "You’re making progress — keep going.",
     "One idea at a time. You’ve got this.",
     "Stay curious. Your next breakthrough is close.",
     "Learn it. Practice it. Own it.",
     "Small steps become real mastery.",
-    "Clarity comes from practice, not perfection.",
-    "Master one idea, unlock the next.",
   ];
 
   const phaseLabel = {
@@ -675,13 +674,16 @@ export default function AILearningRoom() {
   async function beginPractice(taskIndex = currentTaskIndex) {
     setAiWorking(true); setError(null);
     try {
-      const qs = await api.generateRetrievalQuestions(sessionId, 3, taskIndex);
+      // The Learning Room now uses a mastery loop: guided practice →
+      // independent practice → transfer. Five questions give the system enough
+      // varied evidence to judge mastery instead of treating 3/3 as proof.
+      const qs = await api.generateRetrievalQuestions(sessionId, 5, taskIndex);
       const arr = Array.isArray(qs) ? qs : (qs?.questions || []);
       if (!arr.length) throw new Error("The tutor could not prepare a practice check.");
       const fresh = await api.getAISession(sessionId);
       let msgs = fresh?.messages || [];
       try { const s = await api.getSessionMessages(sessionId); if (Array.isArray(s)) msgs = s; } catch {}
-      setSession(fresh); setMessages(msgs); setQuestions(arr); setQIndex(0); setAnswerInput(""); setPhase("practice");
+      setSession(fresh); setMessages(msgs); setQuestions(arr); setQIndex(0); setAnswerInput(""); setHintOpen(false); setHintUsed(false); setPhase("practice");
     } catch (err) { setError(err.message || "Could not start practice mode."); }
     finally { setAiWorking(false); }
   }
@@ -691,7 +693,7 @@ export default function AILearningRoom() {
     const answer = answerInput.trim();
     setSubmitting(true); setError(null);
     try {
-      const evaluation = await api.submitAnswer(sessionId, currentQuestion.id, answer, null);
+      const evaluation = await api.submitAnswer(sessionId, currentQuestion.id, answer, null, hintUsed);
       setCheckResults(prev => ({ ...prev, [currentQuestion.id]: { ...evaluation, questionId: currentQuestion.id, studentAnswer: answer, question: currentQuestion.question, questionType: currentQuestion.questionType, options: currentQuestion.options || null } }));
       const fresh = await api.getAISession(sessionId);
       let canonical = fresh?.messages || [];
@@ -699,6 +701,8 @@ export default function AILearningRoom() {
       setSession(fresh); setMessages(canonical);
       const next = qIndex + 1;
       setAnswerInput("");
+      setHintOpen(false);
+      setHintUsed(false);
       if (next < questions.length) { setQIndex(next); return; }
       await finishPracticeRun();
     } catch (err) { setError(err.message || "Could not evaluate that answer."); }
@@ -778,122 +782,18 @@ export default function AILearningRoom() {
   if (error && !session) return <ErrorRoom message={error} onBack={() => navigate("/app/learn/ai")} />;
   if (phase === "abandoned") return <ErrorRoom message="This learning session was ended early." onBack={() => navigate("/app/learn/ai")} />;
 
-  const planTotal = learningPlan.length || 0;
-  const planStep = planTotal ? Math.min((currentTaskIndex ?? 0) + 1, planTotal) : 0;
-  const planLabel = planTotal ? `${planStep}/${planTotal}` : "—";
-  const motivationText = aiWorking ? "UPRAD is thinking about your next step…" : motivationLines[motivationIndex];
-
   return (
     <div className="ar-room">
       <header className="ar-header ar-header-rebuilt">
-        {/* Top bar: back · title · voice · end */}
-        <div className="ar-hdr-top">
-          <div className="ar-hdr-left">
-            <button type="button" className="ar-icon-btn ar-back-btn" onClick={() => navigate("/app/learn/ai")} aria-label="Back">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
-            <div className="ar-header-copy">
-              <strong className="ar-header-title">AI Learning Room</strong>
-              <span className="ar-header-sub">{phaseLabel}</span>
-            </div>
-          </div>
-          <div className="ar-header-actions">
-            <button
-              type="button"
-              className={`ar-icon-btn ar-voice-btn ${ttsEnabled ? "active" : ""}`}
-              onClick={toggleTts}
-              title={ttsEnabled ? "Tutor voice on" : "Tutor voice off"}
-              aria-label={ttsEnabled ? "Mute tutor voice" : "Enable tutor voice"}
-            >
-              {ttsEnabled ? (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M11 5L6 9H3v6h3l5 4V5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
-                  <path d="M15.5 8.5a5 5 0 010 7M18 6a8.5 8.5 0 010 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-                </svg>
-              ) : (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M11 5L6 9H3v6h3l5 4V5z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
-                  <path d="M22 9l-6 6M16 9l6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
-                </svg>
-              )}
-            </button>
-            <button type="button" className="ar-header-action ar-tools-trigger" onClick={() => setMobilePanel("tools")}>Tools</button>
-            <button type="button" className="ar-end" onClick={endSession}>End</button>
-          </div>
+        <div className="ar-header-context">
+          <button className="ar-icon-btn ar-back-btn" onClick={() => navigate("/app/learn/ai")} aria-label="Back">←</button>
+          <div className="ar-header-copy"><strong>AI Learning Room</strong></div>
         </div>
-
-        {/* Motivation line */}
-        <div className="ar-hdr-motivation" aria-live="polite">
-          <span className="ar-motivation-dot" />
-          <span key={motivationIndex} className="ar-motivation-text">{motivationText}</span>
-        </div>
-
-        {/* Breadcrumb + Learning plan dropdown */}
-        <div className="ar-hdr-meta">
-          <nav className="ar-breadcrumb" title={`${subjectName} › ${topicName || "Topic"} › ${conceptName}`} aria-label="Learning path">
-            <span className="ar-bc-seg">{subjectName}</span>
-            <svg className="ar-bc-sep" width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            <span className="ar-bc-seg">{topicName || "Topic"}</span>
-            <svg className="ar-bc-sep" width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            <span className="ar-bc-seg ar-bc-current">{conceptName}</span>
-          </nav>
-
-          <div className="ar-plan-dropdown" ref={planMenuRef}>
-            <button
-              type="button"
-              className={`ar-plan-trigger ${planOpen ? "open" : ""}`}
-              onClick={() => setPlanOpen(v => !v)}
-              aria-expanded={planOpen}
-              aria-haspopup="true"
-            >
-              <span className="ar-plan-trigger-label">Learning plan</span>
-              <span className="ar-plan-trigger-count">{planLabel}</span>
-              <svg className="ar-plan-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
-            {planOpen && (
-              <div className="ar-plan-menu" role="menu">
-                <div className="ar-plan-menu-head">
-                  <div>
-                    <span className="ar-eyebrow">LEARNING PLAN</span>
-                    <strong>{completedCount} of {planTotal} complete</strong>
-                  </div>
-                  <span className="ar-plan-menu-progress">{planProgress}%</span>
-                </div>
-                <div className="ar-plan-menu-track"><i style={{ width: `${planProgress}%` }} /></div>
-                <div className="ar-plan-menu-list">
-                  {learningPlan.length ? learningPlan.map((task, i) => {
-                    const done = completedTaskIndexes.includes(i);
-                    const current = currentTaskIndex === i;
-                    return (
-                      <div key={i} className={`ar-plan-menu-item ${done ? "done" : current ? "current" : "future"}`} role="menuitem">
-                        <span className="ar-plan-menu-number">{done ? (
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                        ) : i + 1}</span>
-                        <span className="ar-plan-menu-copy">
-                          <b>{taskTitle(task)}</b>
-                          <small>{taskDescription(task)}</small>
-                          <em>{done ? "Completed" : current ? "Current focus" : "Upcoming"}</em>
-                        </span>
-                      </div>
-                    );
-                  }) : (
-                    <div className="ar-empty-plan">
-                      <span>✦</span>
-                      <p>Your tutor is building the learning plan.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+        <div />
+        <div className="ar-header-actions">
+          <button className={`ar-icon-btn ar-voice-btn ${ttsEnabled ? "active" : ""}`} onClick={toggleTts} title={ttsEnabled ? "Voice on" : "Voice off"} aria-label="Toggle voice">{ttsEnabled ? "🔊" : "🔇"}</button>
+          <button className="ar-header-action ar-tools-trigger" onClick={() => setMobilePanel("tools")}>Tools</button>
+          <button className="ar-end" onClick={endSession}>End</button>
         </div>
       </header>
 
@@ -904,7 +804,7 @@ export default function AILearningRoom() {
               <div className="ar-panel-head">
                 <div>
                   <span className="ar-eyebrow">LEARNING PLAN</span>
-                  <h2>{completedCount} of {planTotal} complete</h2>
+                  <h2>{completedCount} of {learningPlan.length || 0} complete</h2>
                 </div>
                 <button type="button" className="ar-sidebar-edge-toggle ar-left-edge-toggle" onClick={toggleLeftSidebar} aria-label="Collapse learning plan">‹</button>
               </div>
@@ -935,6 +835,40 @@ export default function AILearningRoom() {
           </aside>
         )}
         <main className="ar-main">
+          <div className="ar-context-strip ar-learning-room-context">
+            <div className="ar-context-subject" title={`${subjectName} • ${topicName || "Topic"} • ${conceptName}`}>
+              <span>{subjectName}</span><i>•</i><span>{topicName || "Topic"}</span><i>•</i><span>{conceptName}</span>
+            </div>
+            <div className="ar-context-motivation" aria-live="polite">
+              <span className="ar-motivation-dot" />
+              <span key={motivationIndex} className="ar-motivation-text">{aiWorking ? "UPRAD is thinking about your next step…" : motivationLines[motivationIndex]}</span>
+            </div>
+            <div className="ar-context-plan">
+              <div className="ar-plan-dropdown" ref={planMenuRef}>
+                <button type="button" className={`ar-plan-trigger ${planOpen ? "open" : ""}`} onClick={() => setPlanOpen(v => !v)} aria-expanded={planOpen} aria-haspopup="true">
+                  <span>Learning plan</span><b>{completedCount}/{learningPlan.length || 0}</b><span className="ar-plan-chevron">⌄</span>
+                </button>
+                {planOpen && (
+                  <div className="ar-plan-menu" role="menu">
+                    <div className="ar-plan-menu-head">
+                      <div><span className="ar-eyebrow">LEARNING PLAN</span><strong>{completedCount} of {learningPlan.length || 0} complete</strong></div>
+                      <span className="ar-plan-menu-progress">{planProgress}%</span>
+                    </div>
+                    <div className="ar-plan-menu-track"><i style={{ width: `${planProgress}%` }} /></div>
+                    <div className="ar-plan-menu-list">
+                      {learningPlan.length ? learningPlan.map((task, i) => (
+                        <div key={i} className={`ar-plan-menu-item ${completedTaskIndexes.includes(i) ? "done" : currentTaskIndex === i ? "current" : "future"}`}>
+                          <span className="ar-plan-menu-number">{completedTaskIndexes.includes(i) ? "✓" : i + 1}</span>
+                          <span className="ar-plan-menu-copy"><b>{taskTitle(task)}</b><small>{taskDescription(task)}</small><em>{completedTaskIndexes.includes(i) ? "Completed" : currentTaskIndex === i ? "Current focus" : "Upcoming"}</em></span>
+                        </div>
+                      )) : <div className="ar-empty-plan"><span>✦</span><p>Your tutor is building the learning plan.</p></div>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
           {teachingLocked && <PracticeBanner />}
           {error && <div className="ar-error"><span>!</span>{error}<button onClick={() => setError(null)}>×</button></div>}
 
@@ -970,7 +904,7 @@ export default function AILearningRoom() {
             {phase === "preparing" && <PreparingCard />}
             {phase === "studying" && <StudyCard seconds={timerSeconds} task={currentTask} />}
             {phase === "practice" && currentQuestion && (
-              <QuizArtifact question={currentQuestion} index={qIndex} total={questions.length} answer={answerInput} setAnswer={setAnswerInput} onSubmit={submitAnswer} submitting={submitting} results={checkResults} />
+              <QuizArtifact question={currentQuestion} index={qIndex} total={questions.length} answer={answerInput} setAnswer={setAnswerInput} onSubmit={submitAnswer} submitting={submitting} results={checkResults} hintOpen={hintOpen} setHintOpen={setHintOpen} />
             )}
             <div ref={bottomRef} />
           </section>
@@ -1226,15 +1160,22 @@ function PracticeBanner() {
 function PreparingCard() { return <div className="ar-preparing-card"><div className="ar-preparing-orb">✦</div><div><span className="ar-eyebrow">BUILDING YOUR LESSON</span><h3>UPRAD is assembling the right starting point</h3><p>It is combining the concept, your starting level, and the learning goal into a focused conversation.</p><div className="ar-loading-line"><i /><i /><i /></div></div></div>; }
 function StudyCard({ seconds, task }) { return <div className="ar-study-card"><div className="ar-study-orbit"><span>{formatTime(seconds)}</span><small>Focus</small></div><div className="ar-study-copy"><span className="ar-eyebrow">STUDY MODE</span><h3>{taskTitle(task) || "Study the current idea"}</h3><p>Review what UPRAD taught, then come back to the conversation.</p></div></div>; }
 
-function QuizArtifact({ question, index, total, answer, setAnswer, onSubmit, submitting, results }) {
+function QuizArtifact({ question, index, total, answer, setAnswer, onSubmit, submitting, results, hintOpen, setHintOpen }) {
   const options = Array.isArray(question.options) ? question.options : [];
   const mc = question.questionType === "multiple_choice" && options.length;
+  const stage = question.stage === "retention" ? "RETENTION CHECK" : question.stage === "guided_practice" ? "GUIDED PRACTICE" : question.stage === "transfer" ? "TRANSFER" : "INDEPENDENT PRACTICE";
+  const hint = question.hint || "Think about the method UPRAD just taught and identify the relationship you need before calculating.";
   return <section className="ar-quiz-artifact ar-practice-card">
-    <div className="ar-artifact-head"><div><span className="ar-eyebrow">PRACTICE · Q{index + 1}</span><h2>Show what you understand</h2></div><span className="ar-quiz-count">{index + 1}/{total}</span></div>
+    <div className="ar-artifact-head">
+      <div><span className="ar-eyebrow">{stage} · Q{index + 1}</span><h2>{question.stage === "retention" ? "Recall something you mastered earlier" : index < 2 ? "Practice with support" : index < 4 ? "Show it independently" : "Apply it in a new situation"}</h2></div>
+      <span className="ar-quiz-count">{index + 1}/{total}</span>
+    </div>
     <div className="ar-quiz-progress">{Array.from({ length: total }, (_, i) => <i key={i} className={i < index ? "done" : i === index ? "current" : ""} />)}</div>
     <div className="ar-quiz-question">{question.question}</div>
-    {mc ? <div className="ar-options">{options.map((opt, i) => { const value = typeof opt === "string" ? opt : (opt.value ?? opt.label ?? opt.text); const text = typeof opt === "string" ? opt : (opt.text ?? opt.label ?? opt.value); return <button key={`${question.id}-${i}`} className={`ar-option ${answer === value ? "selected" : ""}`} onClick={() => setAnswer(value)} disabled={submitting}><span>{String.fromCharCode(65 + i)}</span><b>{text}</b></button>; })}</div> : <textarea className="ar-answer-box" rows={5} value={answer} onChange={e => setAnswer(e.target.value)} placeholder="Explain your answer in your own words…" disabled={submitting} />}
-    <div className="ar-quiz-foot"><span>{Object.keys(results).length} response{Object.keys(results).length !== 1 ? "s" : ""} recorded.</span><button onClick={onSubmit} disabled={!answer.trim() || submitting}>{submitting ? "Evaluating…" : index + 1 === total ? "Finish practice" : "Submit →"}</button></div>
+    <button type="button" className="ar-hint-toggle" onClick={() => { setHintOpen(v => !v); setHintUsed(true); }} disabled={submitting}>{hintOpen ? "Hide hint" : "Need a hint?"}</button>
+    {hintOpen && <div className="ar-practice-hint"><strong>Hint</strong><span>{hint}</span></div>}
+    {mc ? <div className="ar-options">{options.map((opt, i) => { const value = typeof opt === "string" ? opt : (opt.value ?? opt.label ?? opt.text); const text = typeof opt === "string" ? opt : (opt.text ?? opt.label ?? opt.value); return <button key={`${question.id}-${i}`} className={`ar-option ${answer === value ? "selected" : ""}`} onClick={() => setAnswer(value)} disabled={submitting}><span>{String.fromCharCode(65 + i)}</span><b>{text}</b></button>; })}</div> : <textarea className="ar-answer-box" rows={5} value={answer} onChange={e => setAnswer(e.target.value)} placeholder="Work it out, then give UPRAD your answer…" disabled={submitting} />}
+    <div className="ar-quiz-foot"><span>{Object.keys(results).length} response{Object.keys(results).length !== 1 ? "s" : ""} recorded.</span><button onClick={onSubmit} disabled={!answer.trim() || submitting}>{submitting ? "Evaluating…" : index + 1 === total ? "Finish mastery check" : "Submit →"}</button></div>
   </section>;
 }
 

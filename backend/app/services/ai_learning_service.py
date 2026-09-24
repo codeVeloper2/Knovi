@@ -283,12 +283,10 @@ def _derive_learning_state(messages: list) -> dict:
         if message.role == "ai":
             latest_ai_seq = max(latest_ai_seq, message.sequence)
         extra = message.extra or {}
-        # A confirmed transition is the canonical completion event.
-        # Keep accepting taskCompleted for backwards compatibility with older
-        # persisted transition messages, but do not require both flags.
+        # Mastery is the canonical completion event for new Learning Room runs.
         if message.role == "ai" and (
-            extra.get("taskCompleted") is True
-            or extra.get("transitionConfirmed") is True
+            extra.get("masteryConfirmed") is True
+            or (extra.get("taskCompleted") is True and extra.get("transitionConfirmed") is True and extra.get("masteryConfirmed") is not False)
         ):
             try:
                 task_index = int(extra.get("taskIndex"))
@@ -346,6 +344,7 @@ def _has_confirmed_task_transition(messages: list, target_task_index: int) -> bo
         if (
             extra.get("taskCompleted") is True
             and extra.get("transitionConfirmed") is True
+            and extra.get("masteryConfirmed") is True
             and task_index == previous_index
             and current_index == target_task_index
         ):
@@ -1013,6 +1012,7 @@ async def teach_concept(session_id: int, user_id: int, db: AsyncSession, task_in
                     "taskIndex": previous_task_index,
                     "currentTaskIndex": task_index,
                     "transitionConfirmed": True,
+                    "masteryConfirmed": True,
                 })
                 transition_msg.extra = updated_extra
                 await db.flush()
@@ -1499,6 +1499,7 @@ Rules:
             "taskCompleted": True,
             "taskIndex": previous_completed_task_index,
             "transitionConfirmed": True,
+            "masteryConfirmed": True,
         })
     created = await _add_ai_response(session_id, "teaching", response_text, db, extra=response_extra)
     await db.commit()
@@ -1755,6 +1756,31 @@ async def generate_retrieval_questions(
         for i, t in enumerate(plan) if i != task_index
     ) or "(none)"
 
+    # Delayed retention: once the learner reaches Task 2+, the first question
+    # revisits the previously mastered task. This is deliberately one small
+    # retrieval item, not a second full quiz.
+    retention_summary = ""
+    if task_index > 0:
+        previous_task_index = task_index - 1
+        previous_teaching = None
+        for message in reversed(sorted(session.messages, key=lambda m: m.sequence)):
+            if message.role == "ai" and (message.extra or {}).get("taskIndex") == previous_task_index:
+                teaching_id = (message.extra or {}).get("teachingId")
+                if teaching_id:
+                    previous_teaching = next((t for t in session.teaching if t.id == teaching_id), None)
+                    if previous_teaching:
+                        break
+        if previous_teaching:
+            previous_task = plan[previous_task_index]
+            retention_summary = f"""
+RETENTION MATERIAL — ONLY FOR Q1
+Previous mastered task: Task {previous_task_index + 1}: {previous_task.get('title', '')}
+Previous focus: {previous_task.get('focus', '')}
+Previous teaching explanation: {previous_teaching.explanation or ''}
+Previous key points: {', '.join(previous_teaching.key_points or [])}
+Previous worked examples: {', '.join((previous_teaching.worked_examples or [])[:3])}
+"""
+
     system_prompt = (
         "You are an expert AI tutor generating a compulsory retrieval quiz. "
         "The quiz is strictly scoped to the CURRENT Learning Plan task. "
@@ -1763,15 +1789,25 @@ async def generate_retrieval_questions(
     prompt = f"""CURRICULUM CONTEXT
 Subject: {subject.name} | Topic: {topic.name} | Concept: {concept.name}
 
-CURRENT LEARNING PLAN TASK — THE ONLY ASSESSMENT SCOPE
+CURRENT LEARNING PLAN TASK
 {teaching_summary}
+{retention_summary}
 
-FUTURE/OTHER TASKS — FORBIDDEN IN THIS QUIZ
+FUTURE/OTHER TASKS — FORBIDDEN IN THIS QUIZ (except the explicitly scoped prior-task Q1 retention check)
 {future_tasks}
 
-Generate exactly {count} retrieval questions that test ONLY what the current task actually taught.
-A fact may be used only if it appears in the current task teaching content above or is a direct
-reasoning application of that content. Do NOT introduce terminology, procedures, formulas, or
+Generate exactly {count} retrieval/practice questions. This is a mastery loop, not a 3-question quiz.
+For Task 1, every question must test ONLY the current task. For Task 2+, Q1 is a DELAYED RETENTION CHECK
+using ONLY the RETENTION MATERIAL below; Q2 onward must test ONLY the current task. The retention
+question must not introduce new material. Current-task facts may be used only if taught in the current
+task material or directly reasoned from it.
+For a 5-question run use this progression:
+- Q1 guided_practice: straightforward application + a useful answer-neutral hint.
+- Q2 guided_practice: different example/context + a useful hint.
+- Q3 independent_practice: no scaffolding; hint only recalls the method.
+- Q4 independent_practice: new problem requiring independent application.
+- Q5 transfer: slightly unfamiliar but directly grounded application.
+If count is smaller, preserve this progression as far as possible. Do NOT introduce terminology, procedures, formulas, or
 applications that belong to another task. In particular, merely appearing in the broader concept
 or curriculum does not make a fact testable here.
 
@@ -1795,7 +1831,10 @@ Return JSON:
       "question_type": "short_answer|multiple_choice|calculation|explanation|true_false|application",
       "options": null,
       "expected_answer": "Model answer for AI evaluation only",
-      "rubric": "What to look for when marking"
+      "rubric": "What to look for when marking",
+      "stage": "retention|guided_practice|independent_practice|transfer",
+      "skill": "understanding|application|accuracy|independence|transfer",
+      "hint": "A concise answer-neutral hint that helps the learner recall the method without revealing the answer."
     }}
   ]
 }}
@@ -1817,10 +1856,13 @@ For multiple_choice: options must be [{{"label":"A","text":"..."}}, ...] and exp
     raw_questions = _safe_list(parsed.get("questions"))
     if not raw_questions:
         raise HTTPException(502, "AI returned no questions.")
+    if len(raw_questions) < count:
+        raise HTTPException(502, f"The tutor returned only {len(raw_questions)} of {count} required mastery questions.")
     try:
         verify_prompt = f"""You are a strict curriculum assessment validator.
 CURRENT TASK MATERIAL:
 {teaching_summary}
+{retention_summary}
 
 FORBIDDEN OTHER TASKS:
 {future_tasks}
@@ -1828,9 +1870,9 @@ FORBIDDEN OTHER TASKS:
 QUESTIONS TO VALIDATE:
 {json.dumps(raw_questions, ensure_ascii=False)}
 
-For each question, return whether it can be answered correctly using ONLY the current task material
-and direct reasoning from it. If a question introduces a concept not taught in the current task, mark false.
-A question is invalid even if the student might know the concept from school generally.
+For Q2+ return whether it can be answered correctly using ONLY the current task material and direct reasoning from it.
+For Q1 on Task 2+, validate it only against the supplied retention material. If a question introduces a concept
+not taught in its allowed material, mark false. A question is invalid even if the student might know the concept from school generally.
 Return JSON only: {{"valid": true|false, "invalid_indexes": [0,1], "reason": "brief reason"}}
 """
         verify_raw, _ = await call_with_fallback(
@@ -1843,7 +1885,7 @@ Return JSON only: {{"valid": true|false, "invalid_indexes": [0,1], "reason": "br
         if not bool(verification.get("valid", False)):
             # Regenerate once with an even stricter warning.
             raw2, _ = await call_with_fallback(
-                prompt + "\nIMPORTANT: Previous questions leaked future-task knowledge. Regenerate and keep every question strictly inside the current task. Do not mention or assess any future-task concept.",
+                prompt + "\nIMPORTANT: Previous questions were outside their allowed scope. Regenerate with Q1 as the single prior-task retention check (Task 2+ only), and Q2+ strictly inside the current task. Do not assess future-task concepts.",
                 system=system_prompt, temperature=0.2, json_mode=True
             )
             parsed = parse_json(raw2)
@@ -1856,6 +1898,7 @@ Return JSON only: {{"valid": true|false, "invalid_indexes": [0,1], "reason": "br
             verify_prompt2 = f"""You are a strict curriculum assessment validator.
 CURRENT TASK MATERIAL:
 {teaching_summary}
+{retention_summary}
 
 FORBIDDEN OTHER TASKS:
 {future_tasks}
@@ -1864,7 +1907,7 @@ REGENERATED QUESTIONS TO VALIDATE:
 {json.dumps(raw_questions, ensure_ascii=False)}
 
 Return JSON only: {{"valid": true|false, "invalid_indexes": [0,1], "reason": "brief reason"}}.
-Mark false if any question requires knowledge not explicitly taught in the current task material.
+Mark false if Q2+ requires knowledge not explicitly taught in the current task material, or if Q1 (when present) requires knowledge outside the supplied retention material.
 """
             verify_raw2, _ = await call_with_fallback(
                 verify_prompt2,
@@ -1884,6 +1927,8 @@ Mark false if any question requires knowledge not explicitly taught in the curre
     raw_questions = _safe_list(parsed.get("questions"))
     if not raw_questions:
         raise HTTPException(502, "AI returned no questions.")
+    if len(raw_questions) < count:
+        raise HTTPException(502, f"The tutor returned only {len(raw_questions)} of {count} required mastery questions.")
 
     # Deterministic guard for obvious future-task leakage. The semantic
     # validator remains authoritative, but exact multi-word terms from other
@@ -1899,6 +1944,10 @@ Mark false if any question requires knowledge not explicitly taught in the curre
             if len(normalized.split()) >= 2:
                 forbidden_phrases.append(normalized)
     for q in raw_questions:
+        # Q1 on later tasks is intentionally the delayed-retention question and
+        # is allowed to reference the immediately previous mastered task.
+        if task_index > 0 and q is raw_questions[0]:
+            continue
         q_text = _safe_str(q.get("question"), "").lower()
         normalized_q = re.sub(r"[^a-z0-9 ]+", " ", q_text)
         normalized_q = re.sub(r"\s+", " ", normalized_q).strip()
@@ -1920,6 +1969,17 @@ Mark false if any question requires knowledge not explicitly taught in the curre
         qtype = q.get("question_type", "short_answer")
         if qtype not in VALID_QTYPES:
             qtype = "short_answer"
+        # Stage is server-assigned so the AI cannot accidentally turn a
+        # mastery run into five identical easy questions.
+        if task_index > 0 and i == 1:
+            stage = "retention"
+        elif (i - (1 if task_index > 0 else 0)) <= 2:
+            stage = "guided_practice"
+        elif (i - (1 if task_index > 0 else 0)) <= 4:
+            stage = "independent_practice"
+        else:
+            stage = "transfer"
+        skill = _safe_str(q.get("skill"), "application")
         obj = AISessionQuestion(
             session_id=session_id,
             question=_safe_str(q.get("question"), "Question unavailable."),
@@ -1927,6 +1987,9 @@ Mark false if any question requires knowledge not explicitly taught in the curre
             options=q.get("options") if qtype == "multiple_choice" else None,
             expected_answer=_safe_str(q.get("expected_answer")),
             rubric=_safe_str(q.get("rubric")),
+            hint=_safe_str(q.get("hint")),
+            stage=stage,
+            skill=skill,
             sequence=last_seq + i,
         )
         db.add(obj)
@@ -2091,6 +2154,7 @@ async def submit_answer(
     student_answer: str,
     response_time_seconds: Optional[int],
     db: AsyncSession,
+    used_hint: bool = False,
 ) -> dict:
     session = await _get_session_owned(session_id, user_id, db)
     if session.status not in ("retrieval", "practice"):
@@ -2150,7 +2214,8 @@ Evaluate the student's answer. Return JSON:
   "feedback": "Constructive feedback — what was right, what was wrong, how to improve.",
   "misconception": "Identified misconception if any, or null",
   "needs_reteach": true or false,
-  "recommended_strategy": "suggested reteaching strategy if needs_reteach is true, or null"
+  "recommended_strategy": "suggested reteaching strategy if needs_reteach is true, or null",
+  "dimensions": {"understanding": 0-100, "skill_application": 0-100, "accuracy": 0-100, "independence": 0-100, "consistency": 0-100}
 }}
 
 Scoring guide:
@@ -2239,8 +2304,32 @@ Scoring guide:
         if isinstance(value, int) and value >= 0:
             task_index = value
 
+    raw_dims = parsed.get("dimensions") if isinstance(parsed.get("dimensions"), dict) else {}
+    def _dim(name: str, fallback: int) -> int:
+        value = _safe_int(raw_dims.get(name), 0, 100)
+        return fallback if value is None else value
+    # Keep the evaluator's dimensions, but ensure every dimension has a safe
+    # deterministic fallback from the actual scored response.
+    # Independence is not merely an AI opinion: using a hint is observable
+    # evidence of support. A hinted response can still be correct, but it cannot
+    # receive full independence credit.
+    base_independence = _dim("independence", score_val or 0)
+    if used_hint:
+        base_independence = min(base_independence, 65 if question.stage == "guided_practice" else 70)
+    dimensions = {
+        "understanding": _dim("understanding", score_val or 0),
+        "skill_application": _dim("skill_application", score_val or 0),
+        "accuracy": _dim("accuracy", score_val or 0),
+        "independence": base_independence,
+        "consistency": _dim("consistency", score_val or 0),
+    }
+
     answer.ai_evaluation = {
         "understanding":        understanding,
+        "dimensions":            dimensions,
+        "usedHint":              used_hint,
+        "stage":                 question.stage,
+        "skill":                 question.skill,
         "misconception":        parsed.get("misconception"),
         "needsReteach":         needs_reteach,
         "recommendedStrategy":  parsed.get("recommended_strategy"),
@@ -2312,6 +2401,10 @@ Scoring guide:
         "needsReteach":        needs_reteach,
         "misconception":       parsed.get("misconception"),
         "recommendedStrategy": parsed.get("recommended_strategy"),
+        "dimensions":          dimensions,
+        "usedHint":            used_hint,
+        "stage":               question.stage,
+        "skill":               question.skill,
         "question":            question.question,
         "questionType":        question.question_type,
         "options":             question.options,
@@ -2351,18 +2444,38 @@ async def complete_practice_run(
     if {a.question_id for a in answers} != ids:
         raise HTTPException(409, "The practice run contains unanswered questions.")
 
-    # A completed quiz is not automatically followed by reteaching. Use the
-    # actual scores/understanding from this run rather than trusting a model
-    # flag from an individual answer. A run needs reteaching when its average
-    # score is below 70, or when there is a clearly weak answer (<50 / weak).
-    scored = [a.score for a in answers if a.score is not None]
+    # Mastery is deliberately stricter than the old 3-question pass gate.
+    current_answers = [a for a in answers if (a.ai_evaluation or {}).get("stage") != "retention"]
+    retention_answers = [a for a in answers if (a.ai_evaluation or {}).get("stage") == "retention"]
+    scored = [a.score for a in current_answers if a.score is not None]
     average_score = (sum(scored) / len(scored)) if scored else 0
+    retention_scored = [a.score for a in retention_answers if a.score is not None]
+    retention_score = (sum(retention_scored) / len(retention_scored)) if retention_scored else None
+    dims = [a.ai_evaluation.get("dimensions", {}) for a in current_answers if isinstance(a.ai_evaluation, dict)]
+    def avg_dim(name: str) -> float:
+        vals = [float(d.get(name)) for d in dims if isinstance(d, dict) and isinstance(d.get(name), (int, float))]
+        return sum(vals) / len(vals) if vals else average_score
+    understanding_avg = avg_dim("understanding")
+    application_avg = avg_dim("skill_application")
+    accuracy_avg = avg_dim("accuracy")
+    independence_avg = avg_dim("independence")
+    consistency_avg = avg_dim("consistency")
     has_clear_weak_answer = any(
         (a.score is not None and a.score < 50)
         or (a.ai_evaluation or {}).get("understanding") == "weak"
-        for a in answers
+        for a in current_answers
     )
-    needs_reteach = average_score < 70 or has_clear_weak_answer
+    mastery_confirmed = (
+        len(answers) >= 4
+        and average_score >= 80
+        and understanding_avg >= 75
+        and application_avg >= 75
+        and accuracy_avg >= 80
+        and independence_avg >= 75
+        and consistency_avg >= 70
+        and not has_clear_weak_answer
+    )
+    needs_reteach = not mastery_confirmed
 
     # Recover the task from the persisted evaluation metadata. This works even
     # when the quiz was started directly without the optional study timer.
@@ -2412,6 +2525,8 @@ async def complete_practice_run(
             "currentTaskIndex": task_index,
             "questionIds": sorted(ids),
             "needsReteach": True,
+            "masteryConfirmed": False,
+            "masteryMetrics": {"averageScore": round(average_score), "understanding": round(understanding_avg), "application": round(application_avg), "accuracy": round(accuracy_avg), "independence": round(independence_avg), "consistency": round(consistency_avg), "retentionScore": round(retention_score) if retention_score is not None else None},
         }
     elif has_next:
         content = (
@@ -2430,6 +2545,8 @@ async def complete_practice_run(
             "taskTransition": True,
             "questionIds": sorted(ids),
             "needsReteach": False,
+            "masteryConfirmed": True,
+            "masteryMetrics": {"averageScore": round(average_score), "understanding": round(understanding_avg), "application": round(application_avg), "accuracy": round(accuracy_avg), "independence": round(independence_avg), "consistency": round(consistency_avg), "retentionScore": round(retention_score) if retention_score is not None else None},
         }
     else:
         content = (
@@ -2445,6 +2562,8 @@ async def complete_practice_run(
             "finalTask": True,
             "questionIds": sorted(ids),
             "needsReteach": False,
+            "masteryConfirmed": True,
+            "masteryMetrics": {"averageScore": round(average_score), "understanding": round(understanding_avg), "application": round(application_avg), "accuracy": round(accuracy_avg), "independence": round(independence_avg), "consistency": round(consistency_avg), "retentionScore": round(retention_score) if retention_score is not None else None},
         }
 
     # This is a tutor message, not a student/system message. It therefore
@@ -2460,6 +2579,8 @@ async def complete_practice_run(
         "questionIds": sorted(ids),
         "taskIndex": task_index,
         "taskCompleted": bool(extra.get("taskCompleted")),
+        "masteryConfirmed": bool(extra.get("masteryConfirmed")),
+        "masteryMetrics": extra.get("masteryMetrics") or {},
         "nextTaskIndex": next_task_index if has_next else None,
     }
 
