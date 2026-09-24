@@ -339,20 +339,10 @@ export default function AILearningRoom() {
 
     pollId = window.setInterval(async () => {
       try {
-        // Re-join while waiting so concurrent "both waiting" races resolve even
-        // if the status endpoint cannot pair for any reason.
-        let result = await api.getChallengeMatchmakingStatus();
-        if (!cancelled && result?.status === "waiting" && session) {
-          try {
-            result = await api.joinChallengeMatchmaking({
-              subjectId: session.subjectId,
-              topicId: session.topicId,
-              conceptId: session.conceptId,
-              sourceSessionId: Number(sessionId),
-              questionCount: 5,
-            }) || result;
-          } catch (_) { /* status poll remains the source of truth */ }
-        }
+        // Status endpoint re-attempts pairing server-side. Avoid re-POST join
+        // while waiting — that produced noisy 409s when sessions were not yet
+        // marked completed.
+        const result = await api.getChallengeMatchmakingStatus();
         if (cancelled) return;
         setChallengeMatch(result || { status: "none" });
         if (["matched", "cancelled", "expired", "none"].includes(result?.status)) {

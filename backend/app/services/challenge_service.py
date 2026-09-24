@@ -384,10 +384,21 @@ async def _load_completed_session(
         raise HTTPException(404, "The AI learning session was not found.")
     if (session.subject_id, session.topic_id, session.concept_id) != (subject_id, topic_id, concept_id):
         raise HTTPException(409, "The learning session does not match the selected curriculum context.")
-    if session.status != "completed":
-        raise HTTPException(409, "You must complete all AI learning checks for this topic before entering a Challenge.")
     if not session.teaching:
-        raise HTTPException(409, "The completed AI learning session has no teaching evidence.")
+        raise HTTPException(409, "The AI learning session has no teaching evidence yet.")
+
+    # Matchmaking used to require status == "completed", but the Learning Room
+    # often finishes the plan while still in teaching/practice. Treat any
+    # non-abandoned session with teaching evidence as challenge-eligible, and
+    # soft-promote it to completed so peer pairing is stable.
+    if session.status == "abandoned":
+        raise HTTPException(409, "This learning session was abandoned and cannot enter a Challenge.")
+    if session.status == "created":
+        raise HTTPException(409, "You must start learning this topic before entering a Challenge.")
+    if session.status != "completed":
+        session.status = "completed"
+        if getattr(session, "completed_at", None) is None:
+            session.completed_at = now_utc()
     return session
 
 
@@ -633,42 +644,62 @@ async def join_matchmaking(
         db=db,
     )
     if candidate is not None:
-        if existing_waiting is not None:
-            # Pair using the existing waiting row as the joiner side.
-            challenge = await create_peer_challenge_from_sessions(
-                challenger_id=candidate.user_id,
-                opponent_id=user_id,
-                subject_id=subject_id,
-                topic_id=topic_id,
-                concept_id=concept_id,
-                source_session_a_id=candidate.source_session_id,
-                source_session_b_id=existing_waiting.source_session_id,
+        try:
+            if existing_waiting is not None:
+                # Pair using the existing waiting row as the joiner side.
+                challenge = await create_peer_challenge_from_sessions(
+                    challenger_id=candidate.user_id,
+                    opponent_id=user_id,
+                    subject_id=subject_id,
+                    topic_id=topic_id,
+                    concept_id=concept_id,
+                    source_session_a_id=candidate.source_session_id,
+                    source_session_b_id=existing_waiting.source_session_id,
+                    question_count=question_count,
+                    db=db,
+                    commit=False,
+                )
+                matched_at = now_utc()
+                challenge.status = "accepted"
+                challenge.accepted_at = matched_at
+                challenge.expires_at = matched_at + ACCEPTED_TTL
+                candidate.status = "matched"
+                candidate.challenge_id = challenge.id
+                candidate.matched_at = matched_at
+                existing_waiting.status = "matched"
+                existing_waiting.challenge_id = challenge.id
+                existing_waiting.matched_at = matched_at
+                await db.commit()
+                await db.refresh(existing_waiting)
+                return existing_waiting, challenge
+
+            return await _pair_waiting_students(
+                candidate=candidate,
+                joiner_user_id=user_id,
+                joiner_source_session_id=source.id,
+                joiner_class_level=class_level or "",
                 question_count=question_count,
                 db=db,
-                commit=False,
             )
-            matched_at = now_utc()
-            challenge.status = "accepted"
-            challenge.accepted_at = matched_at
-            challenge.expires_at = matched_at + ACCEPTED_TTL
-            candidate.status = "matched"
-            candidate.challenge_id = challenge.id
-            candidate.matched_at = matched_at
-            existing_waiting.status = "matched"
-            existing_waiting.challenge_id = challenge.id
-            existing_waiting.matched_at = matched_at
-            await db.commit()
-            await db.refresh(existing_waiting)
-            return existing_waiting, challenge
-
-        return await _pair_waiting_students(
-            candidate=candidate,
-            joiner_user_id=user_id,
-            joiner_source_session_id=source.id,
-            joiner_class_level=class_level or "",
-            question_count=question_count,
-            db=db,
-        )
+        except Exception:
+            # Peer was not pairable (e.g. session context race). Stay in queue.
+            await db.rollback()
+            # Re-load source after rollback
+            source = await _load_completed_session(
+                user_id=user_id, session_id=source_session_id,
+                subject_id=subject_id, topic_id=topic_id, concept_id=concept_id, db=db,
+            )
+            existing_waiting = (
+                await db.execute(
+                    select(ChallengeMatchQueue).where(
+                        ChallengeMatchQueue.user_id == user_id,
+                        ChallengeMatchQueue.status == "waiting",
+                        ChallengeMatchQueue.subject_id == subject_id,
+                        ChallengeMatchQueue.topic_id == topic_id,
+                        ChallengeMatchQueue.concept_id == concept_id,
+                    ).with_for_update().limit(1)
+                )
+            ).scalar_one_or_none()
 
     if existing_waiting is not None:
         # Still alone in the queue for this concept.
@@ -753,7 +784,7 @@ async def matchmaking_status(user_id: int, db: AsyncSession) -> dict[str, Any]:
                 row.matched_at = matched_at
                 await db.commit()
                 await db.refresh(row)
-            except HTTPException:
+            except Exception:
                 # Opponent may have become ineligible; keep waiting.
                 await db.rollback()
                 row = (
