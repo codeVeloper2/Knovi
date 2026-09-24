@@ -593,12 +593,15 @@ export default function AILearningRoom() {
   }
 
   function addLocalMessage(role, content, extra = {}, messageType = "teaching") {
+    const id = `local-${Date.now()}-${Math.random()}`;
     setMessages(prev => [...prev, {
-      id: `local-${Date.now()}-${Math.random()}`,
+      id,
       role, content, extra, messageType,
       sequence: prev.length + 1,
       createdAt: new Date().toISOString(),
+      _landing: Boolean(extra?._landing),
     }]);
+    return id;
   }
 
   function revealCanonicalMessages(canonical, groupId = null) {
@@ -627,11 +630,72 @@ export default function AILearningRoom() {
     return new Promise(res => setTimeout(res, total));
   }
 
+  function playStudentSendFlight(text) {
+    return new Promise((resolve) => {
+      const composer = document.querySelector(".ar-composer");
+      const endEl = document.querySelector(".ar-msg-student-bubble.is-landing");
+      if (!composer || !endEl) {
+        resolve();
+        return;
+      }
+      const composerRect = composer.getBoundingClientRect();
+      const endRect = endEl.getBoundingClientRect();
+      const startW = Math.min(72, endRect.width || 72);
+      const startH = 34;
+      const startX = composerRect.right - startW - 16;
+      const startY = composerRect.top + 4;
+      const layer = document.createElement("div");
+      layer.className = "ar-flight-layer";
+      const bubble = document.createElement("div");
+      bubble.className = "ar-flight-bubble";
+      bubble.innerHTML = `<span class="ar-flight-text"></span>`;
+      bubble.querySelector(".ar-flight-text").textContent = text;
+      layer.appendChild(bubble);
+      document.body.appendChild(layer);
+      Object.assign(bubble.style, {
+        left: "0px",
+        top: "0px",
+        width: startW + "px",
+        minHeight: startH + "px",
+        opacity: "0.9",
+        transform: `translate(${startX}px, ${startY}px) scale(0.9)`,
+      });
+      bubble.getBoundingClientRect();
+      const duration = 500;
+      const ease = "cubic-bezier(0.22, 0.9, 0.28, 1)";
+      bubble.classList.add("is-flying");
+      bubble.style.transition = [
+        `transform ${duration}ms ${ease}`,
+        `width ${duration}ms ${ease}`,
+        `min-height ${duration}ms ${ease}`,
+        `opacity ${duration * 0.7}ms ease`,
+      ].join(", ");
+      requestAnimationFrame(() => {
+        bubble.style.transform = `translate(${endRect.left}px, ${endRect.top}px) scale(1)`;
+        bubble.style.width = endRect.width + "px";
+        bubble.style.minHeight = endRect.height + "px";
+        bubble.style.opacity = "1";
+      });
+      setTimeout(() => {
+        layer.remove();
+        resolve();
+      }, duration + 40);
+    });
+  }
+
   async function sendMessage(raw) {
     const content = (raw || msgInput).trim();
     if (!content || aiWorking || !canType) return;
     setMsgInput(""); setError(null); setAiWorking(true); setTypingMessageId(null);
-    addLocalMessage("student", content, {}, "question");
+    // Local student bubble starts invisible while the flight animation runs.
+    const localId = addLocalMessage("student", content, { _landing: true }, "question");
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await playStudentSendFlight(content);
+    setMessages((prev) => prev.map((m) => (
+      (m.id === localId || m.localId === localId || (m.role === "student" && m.content === content && m.extra?._landing))
+        ? { ...m, extra: { ...(m.extra || {}), _landing: false }, _landing: false }
+        : m
+    )));
     try {
       const msg = await api.sendStudentMessage(sessionId, content);
       const fresh = await api.getAISession(sessionId);
@@ -1104,8 +1168,8 @@ function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave, is
 
   if (!ai) {
     return (
-      <div className="ar-msg-student">
-        <div className="ar-msg-student-bubble">
+      <div className="ar-msg-student" data-msg-id={msg.id || msg.localId || ""}>
+        <div className={`ar-msg-student-bubble ${msg._landing ? "is-landing" : ""}`}>
           <RichText content={msg.content} onCopy={onCopy} copiedId={copiedId} />
         </div>
         <time className="ar-msg-time ar-msg-time-right">{formatClock(msg.createdAt)}</time>

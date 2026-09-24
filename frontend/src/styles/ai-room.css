@@ -1738,28 +1738,99 @@
   color: #9fbfff;
 }
 
-/* ── Student message — bubble right ── */
+/* ── Student message — bubble right (WhatsApp edge curve) ── */
 .ar-msg-student {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   max-width: 900px;
   margin: 0 auto 22px;
+  width: 100%;
 }
 
 .ar-msg-student-bubble {
+  position: relative;
   max-width: min(72%, 580px);
   padding: 12px 15px;
-  border-radius: 16px 4px 16px 16px;
-  background: linear-gradient(145deg, rgba(66,80,194,.45), rgba(29,71,113,.4));
-  border: 1px solid rgba(123,145,246,.22);
-  color: #e8f1ff;
+  border-radius: 16px 16px 0 16px;
+  background: #3d6bff;
+  color: #fff;
+  box-shadow: 0 8px 22px rgba(61, 107, 255, .28);
+}
+
+.ar-msg-student-bubble::after {
+  content: "";
+  position: absolute;
+  right: -7px;
+  bottom: 0;
+  width: 8px;
+  height: 14px;
+  background: transparent;
+  border-bottom-left-radius: 12px;
+  box-shadow: -5px 0 0 0 #3d6bff;
+  pointer-events: none;
+}
+
+.ar-msg-student-bubble.is-landing,
+.ar-msg-student-bubble.is-landing::after {
+  visibility: hidden;
+}
+
+.ar-flight-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 90;
+  overflow: hidden;
+}
+
+.ar-flight-bubble {
+  position: fixed;
+  max-width: min(280px, 72vw);
+  padding: 12px 15px;
+  border-radius: 16px 16px 0 16px;
+  background: #3d6bff;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.55;
+  box-shadow: 0 12px 32px rgba(61, 107, 255, .35);
+  transform-origin: 90% 100%;
+  white-space: pre-wrap;
+  word-break: break-word;
+  will-change: transform, width, min-height, opacity;
+}
+
+.ar-flight-bubble::after {
+  content: "";
+  position: absolute;
+  right: -7px;
+  bottom: 0;
+  width: 8px;
+  height: 14px;
+  background: transparent;
+  border-bottom-left-radius: 12px;
+  box-shadow: -5px 0 0 0 #3d6bff;
+}
+
+.ar-flight-bubble .ar-flight-text {
+  display: block;
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.ar-flight-bubble.is-flying .ar-flight-text {
+  animation: arFlightTextLand .42s cubic-bezier(.22, 1, .36, 1) .16s forwards;
+}
+
+@keyframes arFlightTextLand {
+  from { opacity: 0; transform: translateY(8px) scale(.98); filter: blur(2px); }
+  to { opacity: 1; transform: none; filter: none; }
 }
 
 .ar-msg-student-bubble .ar-rich {
   font-size: 14px;
   line-height: 1.6;
-  color: #dce8ff;
+  color: #fff;
 }
 
 .ar-msg-time-right {

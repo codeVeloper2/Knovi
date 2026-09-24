@@ -202,7 +202,7 @@ function MessageBubble({ msg, first, last, onLongPress, onReplyDrag, onImage, on
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
-  const bubbleClass = ["pu-bubble", msg.type === "image" || msg.type === "document" ? "media" : "", msg.deleted ? "deleted" : "", last ? "last-in-group" : ""].filter(Boolean).join(" ");
+  const bubbleClass = ["pu-bubble", msg.type === "image" || msg.type === "document" ? "media" : "", msg.deleted ? "deleted" : "", last ? "last-in-group" : "", msg._landing ? "is-landing" : ""].filter(Boolean).join(" ");
   const rowClass = ["pu-message-row", msg.outgoing ? "outgoing" : "incoming", last ? "last-in-group" : "", draggingUi ? "dragging" : "", emojiOpen ? "active-picker" : ""].filter(Boolean).join(" ");
 
   return (
@@ -432,6 +432,57 @@ export default function Chat() {
     setReplyTo(null); setPending(null); setModal(null);
   };
 
+  const playSendFlight = (text) => new Promise((resolve) => {
+    const composer = document.querySelector(".pu-composer");
+    const endEl = document.querySelector(`.pu-message-row.outgoing[data-msg-id^="temp-"] .pu-bubble`);
+    if (!composer || !endEl) {
+      resolve();
+      return;
+    }
+    const composerRect = composer.getBoundingClientRect();
+    const endRect = endEl.getBoundingClientRect();
+    const startW = Math.min(72, endRect.width || 72);
+    const startH = 34;
+    const startX = composerRect.right - startW - 18;
+    const startY = composerRect.top + 6;
+    const layer = document.createElement("div");
+    layer.className = "pu-flight-layer";
+    const bubble = document.createElement("div");
+    bubble.className = "pu-flight-bubble";
+    bubble.innerHTML = `<span class="pu-flight-text"></span>`;
+    bubble.querySelector(".pu-flight-text").textContent = text;
+    layer.appendChild(bubble);
+    document.body.appendChild(layer);
+    Object.assign(bubble.style, {
+      left: "0px",
+      top: "0px",
+      width: startW + "px",
+      minHeight: startH + "px",
+      opacity: "0.9",
+      transform: `translate(${startX}px, ${startY}px) scale(0.9)`,
+    });
+    bubble.getBoundingClientRect();
+    const duration = 500;
+    const ease = "cubic-bezier(0.22, 0.9, 0.28, 1)";
+    bubble.classList.add("is-flying");
+    bubble.style.transition = [
+      `transform ${duration}ms ${ease}`,
+      `width ${duration}ms ${ease}`,
+      `min-height ${duration}ms ${ease}`,
+      `opacity ${duration * 0.7}ms ease`,
+    ].join(", ");
+    requestAnimationFrame(() => {
+      bubble.style.transform = `translate(${endRect.left}px, ${endRect.top}px) scale(1)`;
+      bubble.style.width = endRect.width + "px";
+      bubble.style.minHeight = endRect.height + "px";
+      bubble.style.opacity = "1";
+    });
+    setTimeout(() => {
+      layer.remove();
+      resolve();
+    }, duration + 40);
+  });
+
   const send = async () => {
     if (!screen) return;
     // Empty send → thumbs-up (same as reference UI)
@@ -468,10 +519,21 @@ export default function Chat() {
     const savedInput = text;
     const savedPending = pending;
     const savedReply = replyTo;
+    const useFlight = !savedPending && !!savedInput;
+    if (useFlight) optimistic._landing = true;
     setMessages((prev) => [...prev, optimistic]);
     setInput("");
     setPending(null);
     setReplyTo(null);
+
+    if (useFlight) {
+      // Wait a frame so the placeholder is laid out, then fly the bubble up.
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      await playSendFlight(savedInput);
+      setMessages((prev) =>
+        prev.map((m) => (String(m.id) === tempId ? { ...m, _landing: false } : m))
+      );
+    }
 
     // Update chat list preview immediately
     setChats((prev) =>
