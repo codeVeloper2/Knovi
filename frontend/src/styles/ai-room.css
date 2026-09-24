@@ -2041,10 +2041,47 @@
   .ar-plan-menu { top:83px; }
 }
 
+
+/* AI Learning Room context row: this is the exact strip previously used for
+   “LEARNING ROOM / Learning together”. It now carries session identity,
+   rotating motivation, and the Learning Plan dropdown. */
+.ar-learning-room-context {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(180px,.9fr) auto;
+  align-items:center;
+  gap:18px;
+}
+.ar-context-subject {
+  min-width:0; display:flex; align-items:center; gap:7px;
+  font-size:12px; font-weight:800; color:var(--ar-text);
+}
+.ar-context-subject span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ar-context-subject i { font-style:normal; color:var(--ar-dim); flex:0 0 auto; }
+.ar-context-motivation {
+  min-width:0; display:flex; align-items:center; justify-content:center; gap:8px;
+  color:#9eb2cf; font-size:11px; font-weight:700; text-align:center;
+}
+.ar-context-plan { display:flex; justify-content:flex-end; min-width:0; }
+
+@media (max-width:760px) {
+  .ar-learning-room-context {
+    grid-template-columns:minmax(0,1fr) auto;
+    grid-template-areas:"subject plan" "motivation motivation";
+    gap:5px 8px; min-height:58px; flex-basis:58px; padding:6px 10px;
+  }
+  .ar-context-subject { grid-area:subject; font-size:8.5px; gap:4px; }
+  .ar-context-motivation { grid-area:motivation; justify-content:flex-start; font-size:8px; line-height:1; }
+  .ar-context-motivation .ar-motivation-dot { width:5px; height:5px; flex-basis:5px; }
+  .ar-context-plan { grid-area:plan; }
+  .ar-context-plan .ar-plan-trigger { min-height:30px; padding:0 7px; gap:4px; }
+  .ar-context-plan .ar-plan-trigger span:first-child { font-size:8px; }
+  .ar-context-plan .ar-plan-trigger b { font-size:7px; }
+  .ar-context-plan .ar-plan-menu { top:36px; right:0; }
+}
+
 /* Desktop: Learning Plan lives permanently in the left sidebar. The compact
    dropdown remains available only on smaller screens. */
 @media (min-width: 761px) {
-  .ar-header-rebuilt .ar-plan-dropdown { display: none; }
   .ar-layout.ar-left-open.ar-right-open { grid-template-columns: 285px minmax(0,1fr) 280px; }
   .ar-layout.ar-left-open.ar-right-collapsed { grid-template-columns: 285px minmax(0,1fr); }
   .ar-layout.ar-left-collapsed.ar-right-open { grid-template-columns: 0 minmax(0,1fr) 280px; }

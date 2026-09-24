@@ -780,41 +780,10 @@ export default function AILearningRoom() {
       <header className="ar-header ar-header-rebuilt">
         <div className="ar-header-context">
           <button className="ar-icon-btn ar-back-btn" onClick={() => navigate("/app/learn/ai")} aria-label="Back">←</button>
-          <div className="ar-header-copy">
-            <div className="ar-header-title" title={`${subjectName} • ${topicName} • ${conceptName}`}>
-              <span>{subjectName}</span><i>•</i><span>{topicName || "Topic"}</span><i>•</i><span>{conceptName}</span>
-            </div>
-          </div>
+          <div className="ar-header-copy"><strong>AI Learning Room</strong></div>
         </div>
-
-        <div className="ar-header-motivation" aria-live="polite">
-          <span className="ar-motivation-dot" />
-          <span key={motivationIndex} className="ar-motivation-text">{aiWorking ? "UPRAD is thinking about your next step…" : motivationLines[motivationIndex]}</span>
-        </div>
-
+        <div />
         <div className="ar-header-actions">
-          <div className="ar-plan-dropdown" ref={planMenuRef}>
-            <button type="button" className={`ar-plan-trigger ${planOpen ? "open" : ""}`} onClick={() => setPlanOpen(v => !v)} aria-expanded={planOpen} aria-haspopup="true">
-              <span>Learning plan</span><b>{completedCount}/{learningPlan.length || 0}</b><span className="ar-plan-chevron">⌄</span>
-            </button>
-            {planOpen && (
-              <div className="ar-plan-menu" role="menu">
-                <div className="ar-plan-menu-head">
-                  <div><span className="ar-eyebrow">LEARNING PLAN</span><strong>{completedCount} of {learningPlan.length || 0} complete</strong></div>
-                  <span className="ar-plan-menu-progress">{planProgress}%</span>
-                </div>
-                <div className="ar-plan-menu-track"><i style={{ width: `${planProgress}%` }} /></div>
-                <div className="ar-plan-menu-list">
-                  {learningPlan.length ? learningPlan.map((task, i) => (
-                    <div key={i} className={`ar-plan-menu-item ${completedTaskIndexes.includes(i) ? "done" : currentTaskIndex === i ? "current" : "future"}`}>
-                      <span className="ar-plan-menu-number">{completedTaskIndexes.includes(i) ? "✓" : i + 1}</span>
-                      <span className="ar-plan-menu-copy"><b>{taskTitle(task)}</b><small>{taskDescription(task)}</small><em>{completedTaskIndexes.includes(i) ? "Completed" : currentTaskIndex === i ? "Current focus" : "Upcoming"}</em></span>
-                    </div>
-                  )) : <div className="ar-empty-plan"><span>✦</span><p>Your tutor is building the learning plan.</p></div>}
-                </div>
-              </div>
-            )}
-          </div>
           <button className={`ar-icon-btn ar-voice-btn ${ttsEnabled ? "active" : ""}`} onClick={toggleTts} title={ttsEnabled ? "Voice on" : "Voice off"} aria-label="Toggle voice">{ttsEnabled ? "🔊" : "🔇"}</button>
           <button className="ar-header-action ar-tools-trigger" onClick={() => setMobilePanel("tools")}>Tools</button>
           <button className="ar-end" onClick={endSession}>End</button>
@@ -859,11 +828,37 @@ export default function AILearningRoom() {
           </aside>
         )}
         <main className="ar-main">
-          <div className="ar-context-strip">
-            <div><span className="ar-eyebrow">LEARNING ROOM</span><strong>{phaseLabel}</strong></div>
-            <div className="ar-context-progress">
-              <span>{learningPlan.length ? `${completedCount}/${learningPlan.length} steps` : "Continuous"}</span>
-              <div><i style={{ width: `${planProgress}%` }} /></div>
+          <div className="ar-context-strip ar-learning-room-context">
+            <div className="ar-context-subject" title={`${subjectName} • ${topicName || "Topic"} • ${conceptName}`}>
+              <span>{subjectName}</span><i>•</i><span>{topicName || "Topic"}</span><i>•</i><span>{conceptName}</span>
+            </div>
+            <div className="ar-context-motivation" aria-live="polite">
+              <span className="ar-motivation-dot" />
+              <span key={motivationIndex} className="ar-motivation-text">{aiWorking ? "UPRAD is thinking about your next step…" : motivationLines[motivationIndex]}</span>
+            </div>
+            <div className="ar-context-plan">
+              <div className="ar-plan-dropdown" ref={planMenuRef}>
+                <button type="button" className={`ar-plan-trigger ${planOpen ? "open" : ""}`} onClick={() => setPlanOpen(v => !v)} aria-expanded={planOpen} aria-haspopup="true">
+                  <span>Learning plan</span><b>{completedCount}/{learningPlan.length || 0}</b><span className="ar-plan-chevron">⌄</span>
+                </button>
+                {planOpen && (
+                  <div className="ar-plan-menu" role="menu">
+                    <div className="ar-plan-menu-head">
+                      <div><span className="ar-eyebrow">LEARNING PLAN</span><strong>{completedCount} of {learningPlan.length || 0} complete</strong></div>
+                      <span className="ar-plan-menu-progress">{planProgress}%</span>
+                    </div>
+                    <div className="ar-plan-menu-track"><i style={{ width: `${planProgress}%` }} /></div>
+                    <div className="ar-plan-menu-list">
+                      {learningPlan.length ? learningPlan.map((task, i) => (
+                        <div key={i} className={`ar-plan-menu-item ${completedTaskIndexes.includes(i) ? "done" : currentTaskIndex === i ? "current" : "future"}`}>
+                          <span className="ar-plan-menu-number">{completedTaskIndexes.includes(i) ? "✓" : i + 1}</span>
+                          <span className="ar-plan-menu-copy"><b>{taskTitle(task)}</b><small>{taskDescription(task)}</small><em>{completedTaskIndexes.includes(i) ? "Completed" : currentTaskIndex === i ? "Current focus" : "Upcoming"}</em></span>
+                        </div>
+                      )) : <div className="ar-empty-plan"><span>✦</span><p>Your tutor is building the learning plan.</p></div>}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

@@ -216,7 +216,7 @@ export default function DashboardLayout() {
     <div className={`dash ${isMobile ? "dash--mobile" : "dash--desktop"} ${isLearn ? "dash--learn" : ""}`}>
 
       {/* ── Mobile ── */}
-      {isMobile && (
+      {isMobile && !isAISessionRoom && (
         <>
           <MobileTopBar drawerOpen={drawerOpen} onHamburger={toggleDrawer} />
 
@@ -230,7 +230,7 @@ export default function DashboardLayout() {
       )}
 
       {/* ── Desktop ── */}
-      {!isMobile && (
+      {!isMobile && !isAISessionRoom && (
         <header className="desktop-topbar">
           <div className="desktop-topbar-brand">
             <LogoMark size={26} />
@@ -291,8 +291,8 @@ export default function DashboardLayout() {
 
       {/* ── Main Content ── */}
       <main
-        className={`dash-main ${isMobile ? "dash-main--mobile" : "dash-main--desktop"} ${isLearn ? "dash-main--learn" : ""} ${isChat ? "dash-main--chat" : ""}`}
-        style={isLearn && !isMobile ? { marginTop: 58, padding: 0 } : undefined}
+        className={`dash-main ${isMobile ? "dash-main--mobile" : "dash-main--desktop"} ${isLearn ? "dash-main--learn" : ""} ${isChat ? "dash-main--chat" : ""} ${isAISessionRoom ? "dash-main--ai-room" : ""}`}
+        style={isLearn && !isMobile && !isAISessionRoom ? { marginTop: 58, padding: 0 } : isAISessionRoom ? { marginTop: 0, padding: 0 } : undefined}
       >
         <Outlet />
       </main>
