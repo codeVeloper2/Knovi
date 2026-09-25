@@ -1098,6 +1098,7 @@ export default function AILearningRoom() {
 /* ─── MessageCard: plain AI, carded student ──────────────────────────── */
 function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave, isTypingNow }) {
   const ai = msg.role === "ai";
+  const [studentCopyRevealed, setStudentCopyRevealed] = useState(false);
   const locked = ai && msg.extra?.locked;
   const action = msg.extra?.action;
   const msgKey = String(msg.id || "");
@@ -1162,11 +1163,33 @@ function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave, is
   };
 
   if (!ai) {
+    const studentMsgKey = String(msg.id || msg.localId || "");
     return (
-      <div className="ar-msg-student" data-msg-id={msg.id || msg.localId || ""}>
+      <div
+        className={`ar-msg-student ${studentCopyRevealed ? "is-copy-revealed" : ""}`}
+        data-msg-id={msg.id || msg.localId || ""}
+        onClick={() => {
+          if (msg.content) setStudentCopyRevealed(v => !v);
+        }}
+      >
         <div className={`ar-msg-student-bubble ${msg._landing ? "is-landing" : ""}`}>
           <RichText content={msg.content} onCopy={onCopy} copiedId={copiedId} />
         </div>
+        {msg.content && (
+          <button
+            type="button"
+            className={`ar-student-copy-reveal ${copiedId === studentMsgKey ? "is-copied" : ""}`}
+            aria-label={copiedId === studentMsgKey ? "Copied" : "Copy message"}
+            title={copiedId === studentMsgKey ? "Copied" : "Copy message"}
+            onClick={(e) => {
+              e.stopPropagation();
+              copyText(msg.content || "", studentMsgKey, onCopy);
+              setStudentCopyRevealed(false);
+            }}
+          >
+            <CopySvg active={copiedId === studentMsgKey} />
+          </button>
+        )}
         <time className="ar-msg-time ar-msg-time-right">{formatClock(msg.createdAt)}</time>
       </div>
     );

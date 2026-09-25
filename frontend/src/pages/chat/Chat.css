@@ -140,57 +140,25 @@
   box-shadow: -5px 0 0 0 var(--pu-bubble-out);
   pointer-events: none;
 }
-.pu-message-row.outgoing .pu-bubble.is-landing,
-.pu-message-row.outgoing .pu-bubble.is-landing::after {
-  visibility: hidden;
+/* Sent-message animation — matches the supplied HTML demo:
+   slide in from the right, hit the thread, then rebound/shake into place. */
+.pu-message-row.outgoing .pu-bubble.is-new-sent,
+.pu-message-row.outgoing .pu-bubble.is-new-sent::after {
+  animation: puSlideInAndShakeSent .45s ease-out both;
+}
+@keyframes puSlideInAndShakeSent {
+  0% { opacity: 0; transform: translateX(100%); }
+  50% { opacity: 1; transform: translateX(0); }
+  65% { transform: translateX(-8px) rotate(-1.5deg); }
+  80% { transform: translateX(4px) rotate(1deg); }
+  90% { transform: translateX(-2px) rotate(0deg); }
+  100% { opacity: 1; transform: translateX(0) rotate(0deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pu-message-row.outgoing .pu-bubble.is-new-sent,
+  .pu-message-row.outgoing .pu-bubble.is-new-sent::after { animation: none; }
 }
 
-/* Flying send bubble */
-.pu-flight-layer {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 80;
-  overflow: hidden;
-}
-.pu-flight-bubble {
-  position: fixed;
-  max-width: min(280px, 72vw);
-  padding: 10px 14px;
-  border-radius: 16px 16px 0 16px;
-  background: var(--pu-bubble-out);
-  color: #fff;
-  font-size: 15px;
-  line-height: 1.45;
-  box-shadow: 0 12px 32px rgba(91, 110, 245, .35);
-  transform-origin: 90% 100%;
-  white-space: pre-wrap;
-  word-break: break-word;
-  will-change: transform, width, min-height, opacity;
-}
-.pu-flight-bubble::after {
-  content: "";
-  position: absolute;
-  right: -7px;
-  bottom: 0;
-  width: 8px;
-  height: 14px;
-  background: transparent;
-  border-bottom-left-radius: 12px;
-  box-shadow: -5px 0 0 0 var(--pu-bubble-out);
-}
-.pu-flight-bubble .pu-flight-text {
-  display: block;
-  opacity: 0;
-  transform: translateY(6px);
-}
-.pu-flight-bubble.is-flying .pu-flight-text {
-  animation: puTextLand .42s cubic-bezier(.22, 1, .36, 1) .16s forwards;
-}
-@keyframes puTextLand {
-  from { opacity: 0; transform: translateY(8px) scale(.98); filter: blur(2px); }
-  to { opacity: 1; transform: none; filter: none; }
-}
 .pu-message-row.dragging .pu-bubble { z-index:2; box-shadow:0 8px 24px rgba(0,0,0,.4); }
 .pu-bubble.deleted { opacity:.75; font-style:italic; color:var(--pu-soft)!important; }
 .pu-bubble.media { padding:3px; overflow:hidden; max-width:220px; background:transparent!important; box-shadow:none!important; }
@@ -221,6 +189,44 @@
 }
 .pu-msg-wrapper.sent  { align-items: flex-end; }
 .pu-msg-wrapper.received { align-items: flex-start; }
+
+/* Mobile-first tap-to-copy action: the bubble visually sits over the SVG button.
+   Tapping a sent text message lets the button slide out from underneath it. */
+.pu-msg-wrapper { position: relative; }
+.pu-copy-reveal {
+  align-self: flex-end;
+  width: 36px;
+  height: 30px;
+  margin-top: -22px;
+  margin-right: 2px;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 12px;
+  background: rgba(14,27,52,.96);
+  color: var(--pu-soft);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-8px) scale(.92);
+  z-index: 0;
+  box-shadow: 0 4px 12px rgba(0,0,0,.28);
+  transition: opacity .22s ease, transform .28s cubic-bezier(.22,1,.36,1), visibility .22s ease, margin-top .28s cubic-bezier(.22,1,.36,1);
+}
+.pu-copy-reveal svg { display: block; }
+.pu-copy-reveal:hover { background: rgba(255,255,255,.12); color: #fff; }
+.pu-copy-reveal:active { transform: translateY(0) scale(.9); }
+.pu-message-row.copy-revealed .pu-copy-reveal {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+  margin-top: 5px;
+}
+.pu-message-row.copy-revealed .pu-msg-stack { z-index: 2; }
+.pu-message-row.copy-revealed .pu-bubble { z-index: 3; }
 
 /* ── Hover Action Bar ──────────────────────────────────────────────── */
 .pu-hover-bar {

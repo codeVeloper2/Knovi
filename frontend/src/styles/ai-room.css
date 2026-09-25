@@ -1842,10 +1842,46 @@
   pointer-events: none;
 }
 
-.ar-msg-student-bubble.is-landing,
-.ar-msg-student-bubble.is-landing::after {
-  visibility: hidden;
+/* Student message tap-to-copy action. The bubble sits above the SVG button;
+   tapping the message lets the button slide out from underneath it. */
+.ar-msg-student {
+  position: relative;
 }
+.ar-student-copy-reveal {
+  align-self: flex-end;
+  width: 36px;
+  height: 30px;
+  margin-top: -23px;
+  margin-right: 2px;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 11px;
+  background: rgba(14,27,52,.96);
+  color: #9db8d8;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-8px) scale(.92);
+  z-index: 0;
+  box-shadow: 0 4px 14px rgba(0,0,0,.28);
+  cursor: pointer;
+  transition: opacity .2s ease, transform .28s cubic-bezier(.22,1,.36,1),
+    visibility .2s ease, margin-top .28s cubic-bezier(.22,1,.36,1);
+}
+.ar-student-copy-reveal svg { display: block; }
+.ar-student-copy-reveal:hover { color: #fff; background: rgba(255,255,255,.12); }
+.ar-student-copy-reveal:active { transform: translateY(0) scale(.9); }
+.ar-msg-student.is-copy-revealed .ar-student-copy-reveal {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+  margin-top: 5px;
+}
+.ar-msg-student.is-copy-revealed .ar-msg-student-bubble { z-index: 2; }
+.ar-student-copy-reveal.is-copied { color: #71e0bd; }
 
 .ar-flight-layer {
   position: fixed;

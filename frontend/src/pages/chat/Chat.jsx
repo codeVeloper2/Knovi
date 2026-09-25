@@ -150,17 +150,27 @@ function MessageBubble({ msg, first, last, onLongPress, onReplyDrag, onImage, on
   const [draggingUi, setDraggingUi] = useState(false);
   // Hover emoji picker state (desktop)
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [copyRevealed, setCopyRevealed] = useState(false);
   const emojiRef = useRef(null);
 
   // Close emoji picker on outside click
   useEffect(() => {
-    if (!emojiOpen) return;
+    if (!emojiOpen && !copyRevealed) return;
     const handler = (e) => {
-      if (emojiRef.current && !emojiRef.current.contains(e.target)) setEmojiOpen(false);
+      if (emojiRef.current && emojiRef.current.contains(e.target)) return;
+      const row = e.target.closest?.(".pu-message-row");
+      if (!row || String(row.dataset.msgId) !== String(msg.id)) {
+        setEmojiOpen(false);
+        setCopyRevealed(false);
+      }
     };
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [emojiOpen]);
+    document.addEventListener("touchstart", handler, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("touchstart", handler);
+    };
+  }, [emojiOpen, copyRevealed, msg.id]);
 
   // ── Touch handlers (mobile only) ──────────────────────────────────────────
   const begin = (e) => {
@@ -202,8 +212,8 @@ function MessageBubble({ msg, first, last, onLongPress, onReplyDrag, onImage, on
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
-  const bubbleClass = ["pu-bubble", msg.type === "image" || msg.type === "document" ? "media" : "", msg.deleted ? "deleted" : "", last ? "last-in-group" : "", msg._landing ? "is-landing" : ""].filter(Boolean).join(" ");
-  const rowClass = ["pu-message-row", msg.outgoing ? "outgoing" : "incoming", last ? "last-in-group" : "", draggingUi ? "dragging" : "", emojiOpen ? "active-picker" : ""].filter(Boolean).join(" ");
+  const bubbleClass = ["pu-bubble", msg.type === "image" || msg.type === "document" ? "media" : "", msg.deleted ? "deleted" : "", last ? "last-in-group" : "", msg._newSent ? "is-new-sent" : ""].filter(Boolean).join(" ");
+  const rowClass = ["pu-message-row", msg.outgoing ? "outgoing" : "incoming", last ? "last-in-group" : "", draggingUi ? "dragging" : "", emojiOpen ? "active-picker" : "", copyRevealed ? "copy-revealed" : ""].filter(Boolean).join(" ");
 
   return (
     <div className={rowClass} data-msg-id={msg.id}>
@@ -217,7 +227,15 @@ function MessageBubble({ msg, first, last, onLongPress, onReplyDrag, onImage, on
             style={{ transform: `translateY(${dragY}px)` }}
             onTouchStart={begin} onTouchMove={move} onTouchEnd={end} onTouchCancel={end}
             onContextMenu={(e) => e.preventDefault()}
-            onClick={(e) => { if (msg.type === "image" && msg.imageUrl && e.detail === 1) onImage(msg); }}
+            onClick={(e) => {
+              if (msg.type === "image" && msg.imageUrl && e.detail === 1) {
+                onImage(msg);
+                return;
+              }
+              if (msg.outgoing && !msg.deleted && msg.text) {
+                setCopyRevealed(v => !v);
+              }
+            }}
           >
             {msg.replyTo && <div className="pu-bubble-reply" onClick={(e) => { e.stopPropagation(); onScrollToMsg && onScrollToMsg(msg.replyToId); }} style={{ cursor: "pointer" }}><span>{msg.replyTo.name}</span><small>{msg.replyTo.text}</small></div>}
             {msg.deleted ? <span>This message was deleted</span> : msg.type === "image" ? (
@@ -235,6 +253,22 @@ function MessageBubble({ msg, first, last, onLongPress, onReplyDrag, onImage, on
           {msg.reaction && <span className="pu-reaction">{msg.reaction}</span>}
           <div className="pu-msg-meta"><span>{msg.time}</span>{msg.outgoing && <span className={`pu-ticks ${msg.status === "read" ? "read" : ""}`}><CheckCheck size={13} /></span>}</div>
         </div>
+
+        {msg.outgoing && !msg.deleted && msg.text && (
+          <button
+            type="button"
+            className="pu-copy-reveal"
+            aria-label={copyRevealed ? "Copy message" : "Show copy button"}
+            title="Copy message"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCopy(msg);
+              setCopyRevealed(false);
+            }}
+          >
+            <Copy size={16} strokeWidth={2} aria-hidden="true" />
+          </button>
+        )}
 
         {/* ── Hover Action Bar (desktop only via CSS) ── */}
         {!msg.deleted && (
@@ -432,57 +466,6 @@ export default function Chat() {
     setReplyTo(null); setPending(null); setModal(null);
   };
 
-  const playSendFlight = (text) => new Promise((resolve) => {
-    const composer = document.querySelector(".pu-composer");
-    const endEl = document.querySelector(`.pu-message-row.outgoing[data-msg-id^="temp-"] .pu-bubble`);
-    if (!composer || !endEl) {
-      resolve();
-      return;
-    }
-    const composerRect = composer.getBoundingClientRect();
-    const endRect = endEl.getBoundingClientRect();
-    const startW = Math.min(72, endRect.width || 72);
-    const startH = 34;
-    const startX = composerRect.right - startW - 18;
-    const startY = composerRect.top + 6;
-    const layer = document.createElement("div");
-    layer.className = "pu-flight-layer";
-    const bubble = document.createElement("div");
-    bubble.className = "pu-flight-bubble";
-    bubble.innerHTML = `<span class="pu-flight-text"></span>`;
-    bubble.querySelector(".pu-flight-text").textContent = text;
-    layer.appendChild(bubble);
-    document.body.appendChild(layer);
-    Object.assign(bubble.style, {
-      left: "0px",
-      top: "0px",
-      width: startW + "px",
-      minHeight: startH + "px",
-      opacity: "0.9",
-      transform: `translate(${startX}px, ${startY}px) scale(0.9)`,
-    });
-    bubble.getBoundingClientRect();
-    const duration = 500;
-    const ease = "cubic-bezier(0.22, 0.9, 0.28, 1)";
-    bubble.classList.add("is-flying");
-    bubble.style.transition = [
-      `transform ${duration}ms ${ease}`,
-      `width ${duration}ms ${ease}`,
-      `min-height ${duration}ms ${ease}`,
-      `opacity ${duration * 0.7}ms ease`,
-    ].join(", ");
-    requestAnimationFrame(() => {
-      bubble.style.transform = `translate(${endRect.left}px, ${endRect.top}px) scale(1)`;
-      bubble.style.width = endRect.width + "px";
-      bubble.style.minHeight = endRect.height + "px";
-      bubble.style.opacity = "1";
-    });
-    setTimeout(() => {
-      layer.remove();
-      resolve();
-    }, duration + 40);
-  });
-
   const send = async () => {
     if (!screen) return;
     // Empty send → thumbs-up (same as reference UI)
@@ -519,21 +502,15 @@ export default function Chat() {
     const savedInput = text;
     const savedPending = pending;
     const savedReply = replyTo;
-    const useFlight = !savedPending && !!savedInput;
-    if (useFlight) optimistic._landing = true;
+    const useSendAnimation = !savedPending && !!savedInput;
+    if (useSendAnimation) optimistic._newSent = true;
     setMessages((prev) => [...prev, optimistic]);
     setInput("");
     setPending(null);
     setReplyTo(null);
 
-    if (useFlight) {
-      // Wait a frame so the placeholder is laid out, then fly the bubble up.
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      await playSendFlight(savedInput);
-      setMessages((prev) =>
-        prev.map((m) => (String(m.id) === tempId ? { ...m, _landing: false } : m))
-      );
-    }
+    // The optimistic outgoing bubble now uses the same slide-in + impact-shake
+    // animation as the supplied HTML demo. The bubble itself is the animated element.
 
     // Update chat list preview immediately
     setChats((prev) =>
@@ -586,6 +563,7 @@ export default function Chat() {
         mapped.type = "image";
         mapped.imageUrl = attachmentUrl;
       }
+      if (useSendAnimation) mapped._newSent = true;
       setMessages((prev) =>
         prev.map((m) => (String(m.id) === tempId ? { ...mapped, id: mapped.id || created?.id || tempId } : m))
       );
