@@ -1,5 +1,5 @@
 const API_BASE = import.meta.env.VITE_API_URL || "";
-const TOKEN_KEY = "peerup_token";
+const TOKEN_KEY = "knovi_token";
 
 // ── Token storage ────────────────────────────────────────────
 export function getToken() {

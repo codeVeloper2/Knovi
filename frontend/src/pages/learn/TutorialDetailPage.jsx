@@ -60,7 +60,7 @@ function MobileHeader({ onBack }) {
             <path d="M19 12H5M12 5l-7 7 7 7"/>
           </svg>
         </button>
-        <span className="ln-mob-logo">Peer<span className="ln-mob-accent">Up</span></span>
+        <span className="ln-mob-logo">Kno<span className="ln-mob-accent">vi</span></span>
       </div>
       <div className="ln-mob-header-right">
         <NotificationsBell className="notif-bell-btn" />

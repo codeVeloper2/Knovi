@@ -211,17 +211,17 @@ export default function AILearningRoom() {
   const [hintUsed, setHintUsed] = useState(false);
   const [msgInput, setMsgInput] = useState("");
   const [ttsEnabled, setTtsEnabled] = useState(() => {
-    try { return localStorage.getItem("peerup.learningRoom.ttsEnabled") === "true"; } catch { return false; }
+    try { return localStorage.getItem("knovi.learningRoom.ttsEnabled") === "true"; } catch { return false; }
   });
   const [isTyping, setIsTyping] = useState(false);
   const [mobilePanel, setMobilePanel] = useState(null);
   const [planOpen, setPlanOpen] = useState(false);
   const [motivationIndex, setMotivationIndex] = useState(0);
   const [leftOpen, setLeftOpen] = useState(() => {
-    try { return localStorage.getItem("peerup.learningRoom.leftOpen") !== "false"; } catch { return true; }
+    try { return localStorage.getItem("knovi.learningRoom.leftOpen") !== "false"; } catch { return true; }
   });
   const [rightOpen, setRightOpen] = useState(() => {
-    try { return localStorage.getItem("peerup.learningRoom.rightOpen") !== "false"; } catch { return true; }
+    try { return localStorage.getItem("knovi.learningRoom.rightOpen") !== "false"; } catch { return true; }
   });
   const [copiedId, setCopiedId] = useState(null);
   const [savedMessageIds, setSavedMessageIds] = useState(() => new Set());
@@ -250,10 +250,10 @@ export default function AILearningRoom() {
   useEffect(() => { phaseRef.current = phase; }, [phase]);
 
   function toggleLeftSidebar() {
-    setLeftOpen(prev => { const n = !prev; try { localStorage.setItem("peerup.learningRoom.leftOpen", String(n)); } catch {} return n; });
+    setLeftOpen(prev => { const n = !prev; try { localStorage.setItem("knovi.learningRoom.leftOpen", String(n)); } catch {} return n; });
   }
   function toggleRightSidebar() {
-    setRightOpen(prev => { const n = !prev; try { localStorage.setItem("peerup.learningRoom.rightOpen", String(n)); } catch {} return n; });
+    setRightOpen(prev => { const n = !prev; try { localStorage.setItem("knovi.learningRoom.rightOpen", String(n)); } catch {} return n; });
   }
 
   const conceptName = session?.conceptName || "Learning session";
@@ -311,7 +311,7 @@ export default function AILearningRoom() {
 
   useEffect(() => {
     ttsRef.current = ttsEnabled;
-    try { localStorage.setItem("peerup.learningRoom.ttsEnabled", String(ttsEnabled)); } catch {}
+    try { localStorage.setItem("knovi.learningRoom.ttsEnabled", String(ttsEnabled)); } catch {}
   }, [ttsEnabled]);
 
   /* ── Challenge matchmaking from the completed Learning Room ─────────── */
@@ -578,7 +578,7 @@ export default function AILearningRoom() {
     const next = !ttsEnabled;
     ttsRef.current = next;
     setTtsEnabled(next);
-    try { localStorage.setItem("peerup.learningRoom.ttsEnabled", String(next)); } catch {}
+    try { localStorage.setItem("knovi.learningRoom.ttsEnabled", String(next)); } catch {}
     if (!next) window.speechSynthesis?.cancel();
   }
 

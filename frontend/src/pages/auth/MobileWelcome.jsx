@@ -184,7 +184,7 @@ export default function MobileWelcome() {
         <div className="mob-splash-inner">
           <div className="mob-splash-logo">
             <LogoMark size={72} />
-            <span className="mob-splash-wordmark">Peer<span className="mob-accent">Up</span></span>
+            <span className="mob-splash-wordmark">Kno<span className="mob-accent">vi</span></span>
           </div>
           <div className="mob-splash-tags">Learn · Teach · Grow</div>
           <div className="mob-splash-illus">
@@ -208,7 +208,7 @@ export default function MobileWelcome() {
         {/* Logo */}
         <div className="mob-auth-logo">
           <LogoMark size={36} />
-          <span className="mob-auth-wordmark">Peer<span className="mob-accent">Up</span></span>
+          <span className="mob-auth-wordmark">Kno<span className="mob-accent">vi</span></span>
         </div>
 
         {/* Hero text */}

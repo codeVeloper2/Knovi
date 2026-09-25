@@ -49,7 +49,7 @@ export default function MobileTopBar({ drawerOpen, onHamburger }) {
 
         <div className="mobile-topbar-brand">
           <span className="mobile-topbar-mark"><LogoMark size={22} /></span>
-          <span className="mobile-topbar-name">Peer<span className="logo-accent">Up</span></span>
+          <span className="mobile-topbar-name">Kno<span className="logo-accent">vi</span></span>
         </div>
       </div>
 

@@ -116,7 +116,7 @@ export default function Home() {
           />
         </div>
         <div className="home2-hero-copy">
-          <span className="home2-eyebrow">PEERUP LEARNING SPACE</span>
+          <span className="home2-eyebrow">KNOVI LEARNING SPACE</span>
           <h1>{greeting()}, <b>{firstName}</b> 👋</h1>
           <p>Keep learning, keep growing. Pick up where you left off or explore your next concept.</p>
         </div>

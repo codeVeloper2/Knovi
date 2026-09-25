@@ -28,14 +28,14 @@ function MobileHeader() {
     <div className="ln-mob-header">
       <div className="ln-mob-header-left">
         <button className="ln-mob-menu-btn" aria-label="Open menu"
-          onClick={() => window.dispatchEvent(new CustomEvent("peerup:open-nav"))}>
+          onClick={() => window.dispatchEvent(new CustomEvent("knovi:open-nav"))}>
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <line x1="3" y1="6" x2="21" y2="6"/>
             <line x1="3" y1="12" x2="21" y2="12"/>
             <line x1="3" y1="18" x2="21" y2="18"/>
           </svg>
         </button>
-        <span className="ln-mob-logo">Peer<span className="ln-mob-accent">Up</span></span>
+        <span className="ln-mob-logo">Kno<span className="ln-mob-accent">vi</span></span>
       </div>
       <div className="ln-mob-header-right">
         <NotificationsBell className="notif-bell-btn" />

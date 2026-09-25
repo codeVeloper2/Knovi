@@ -40,7 +40,7 @@ const SETTINGS_NAV = [
   { to: "/app/settings/notifications",    label: "Notifications",    Icon: BellIcon },
 ];
 
-const STORAGE_KEY = "peerup_sidebar_collapsed";
+const STORAGE_KEY = "knovi_sidebar_collapsed";
 
 function ChevronDown({ open }) {
   return (
@@ -127,8 +127,8 @@ export default function DashboardLayout() {
 
   useEffect(() => {
     const handler = () => setDrawerOpen(true);
-    window.addEventListener("peerup:open-nav", handler);
-    return () => window.removeEventListener("peerup:open-nav", handler);
+    window.addEventListener("knovi:open-nav", handler);
+    return () => window.removeEventListener("knovi:open-nav", handler);
   }, []);
 
   function toggle() {

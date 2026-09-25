@@ -8,7 +8,7 @@ const OPTIONS = [
   { key: "emails", label: "Email updates", desc: "Occasional product news and tips." },
 ];
 
-const STORAGE_KEY = "peerup_notifications";
+const STORAGE_KEY = "knovi_notifications";
 
 function loadPrefs() {
   try {

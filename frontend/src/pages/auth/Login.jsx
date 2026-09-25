@@ -20,7 +20,7 @@ export function AuthShell({ topRight, mobileBack, children }) {
         <div className="brand-top">
           <div className="logo">
             <span className="logo-mark logo-mark--img"><LogoMark size={30} /></span>
-            <span className="logo-text">Peer<span className="logo-accent">Up</span></span>
+            <span className="logo-text">Kno<span className="logo-accent">vi</span></span>
           </div>
           <div className="brand-tags"><span>Learn</span><span className="dot">•</span><span>Teach</span><span className="dot">•</span><span>Grow</span></div>
         </div>
@@ -55,7 +55,7 @@ export function AuthShell({ topRight, mobileBack, children }) {
           {/* Mobile: logo */}
           <div className="logo logo-mobile">
             <span className="logo-mark logo-mark--img"><LogoMark size={26} /></span>
-            <span className="logo-text">Peer<span className="logo-accent">Up</span></span>
+            <span className="logo-text">Kno<span className="logo-accent">vi</span></span>
           </div>
           {children}
         </div>

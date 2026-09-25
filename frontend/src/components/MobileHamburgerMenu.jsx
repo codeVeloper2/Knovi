@@ -116,7 +116,7 @@ export default function MobileHamburgerMenu({ open, onClose, onLogout, onNavigat
               <LogoMark size={17} />
             </div>
             <span className="hmenu-brand-name">
-              Peer<span className="logo-accent">Up</span>
+              Kno<span className="logo-accent">vi</span>
             </span>
           </div>
           <button
