@@ -13209,47 +13209,52 @@ kbd {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 10px 10px 0;
-  gap: 2px;
+  padding: 8px 12px 0;
+  gap: 1px;
   overflow-y: auto;
   scrollbar-width: none;
 }
 .hmenu-nav::-webkit-scrollbar { display: none; }
 
-/* Section label */
+/* Section label — consistent left alignment with items */
 .hmenu-section-label {
-  font-size: 0.6rem;
+  display: block;
+  font-size: 0.62rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-dim);
-  padding: 8px 8px 4px;
+  padding: 12px 12px 6px;
+  line-height: 1;
 }
 
-/* Nav item — pill row with coloured icon box */
+/* Nav item — fixed-height row, icon + label aligned on one axis */
 .hmenu-item {
   position: relative;
   width: 100%;
+  height: 48px;
   min-height: 48px;
-  padding: 0 10px;
+  max-height: 48px;
+  padding: 0 12px 0 10px;
   display: flex;
-  align-items: center;
-  gap: 11px;
-  border: 1px solid transparent;
-  border-radius: 10px;
+  align-items: center;          /* vertical center: icon + label share one baseline */
+  gap: 12px;
+  border: none;
+  border-radius: 12px;
   background: transparent;
   color: var(--text-soft);
   text-decoration: none;
   text-align: left;
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
   font-family: inherit;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  transition: color 0.15s, background 0.15s;
+  overflow: hidden;
 }
 .hmenu-item:hover {
-  color: var(--text);
-  background: rgba(148, 163, 184, 0.06);
+  color: #f1f5f9;
+  background: rgba(148, 163, 184, 0.07);
   text-decoration: none;
 }
 .hmenu-item:focus-visible {
@@ -13257,20 +13262,22 @@ kbd {
   outline-offset: -2px;
 }
 
-/* Coloured icon box */
+/* Coloured icon box — fixed square so every row lines up */
 .hmenu-item-icon {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
   border-radius: 9px;
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  transition: transform 0.15s;
+  transition: transform 0.15s, box-shadow 0.15s;
 }
-.hmenu-item:hover .hmenu-item-icon { transform: scale(1.06); }
+.hmenu-item:hover .hmenu-item-icon { transform: scale(1.05); }
 .hmenu-item-icon svg {
   width: 18px;
   height: 18px;
+  display: block;
 }
 
 /* Per-route icon colours */
@@ -13285,7 +13292,27 @@ kbd {
 
 .hmenu-item-label {
   flex: 1;
+  min-width: 0;
   letter-spacing: -0.01em;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Left accent bar — only visible when active */
+.hmenu-item-indicator {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%) scaleY(0);
+  width: 3px;
+  height: 22px;
+  border-radius: 0 3px 3px 0;
+  background: #818cf8;
+  opacity: 0;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+  pointer-events: none;
 }
 
 /* Badge (unread count) */
@@ -13297,37 +13324,48 @@ kbd {
   background: rgba(99, 102, 241, 0.2);
   border: 1px solid rgba(99, 102, 241, 0.3);
   color: #818cf8;
+  flex-shrink: 0;
 }
 
-/* Active state */
+/* ── Active tab ──
+   Solid indigo pill + left bar + brighter icon ring
+   Matches the Settings highlight in the product screenshot. */
 .hmenu-item--active {
   color: #fff !important;
-  background: rgba(91, 110, 245, 0.13);
-  border-color: rgba(91, 110, 245, 0.18);
+  background: linear-gradient(135deg, rgba(91, 110, 245, 0.32), rgba(67, 56, 202, 0.22));
+  box-shadow: inset 0 0 0 1px rgba(129, 140, 248, 0.25);
 }
 .hmenu-item--active .hmenu-item-icon {
-  box-shadow: 0 0 0 1.5px rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 0 1.5px rgba(129, 140, 248, 0.55);
+  transform: none;
+}
+.hmenu-item--active .hmenu-item-indicator {
+  opacity: 1;
+  transform: translateY(-50%) scaleY(1);
+}
+.hmenu-item--active:hover {
+  background: linear-gradient(135deg, rgba(91, 110, 245, 0.38), rgba(67, 56, 202, 0.28));
 }
 
-/* Logout */
+/* Logout — kept separate from active styling */
 .hmenu-item--logout { color: var(--danger); }
 .hmenu-item--logout:hover {
   color: #fca5a5;
-  background: rgba(248, 113, 113, 0.07);
+  background: rgba(248, 113, 113, 0.08);
 }
 
-/* Divider */
+/* Divider between sections */
 .hmenu-divider {
   height: 1px;
   background: rgba(148, 163, 184, 0.08);
-  margin: 6px 0;
+  margin: 8px 4px;
   flex-shrink: 0;
 }
 
 /* Swipe hint */
 .hmenu-swipe-hint {
   margin: 0;
-  padding: 6px 14px calc(12px + env(safe-area-inset-bottom, 0px));
+  padding: 8px 16px calc(14px + env(safe-area-inset-bottom, 0px));
   color: #64748b;
   font-size: 0.68rem;
   text-align: right;
@@ -13371,19 +13409,31 @@ kbd {
   .hmenu-user-info span {
     font-size: 0.78rem;
   }
+  .hmenu-nav {
+    padding: 8px 10px 0;
+  }
+  .hmenu-section-label {
+    padding: 12px 10px 6px;
+  }
   .hmenu-item {
-    min-height: 58px;
-    padding: 0 20px;
-    gap: 15px;
-    font-size: 1rem;
+    height: 52px;
+    min-height: 52px;
+    max-height: 52px;
+    padding: 0 10px 0 8px;
+    gap: 12px;
+    font-size: 0.95rem;
   }
   .hmenu-item-icon {
-    width: 26px;
-    flex-basis: 26px;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
   }
   .hmenu-item-icon svg {
-    width: 23px;
-    height: 23px;
+    width: 18px;
+    height: 18px;
+  }
+  .hmenu-item-indicator {
+    height: 24px;
   }
 }
 

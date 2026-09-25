@@ -7,14 +7,47 @@ import {
 } from "./DashIcons";
 import { LogoMark } from "./Logo";
 
-const NAV_ITEMS = [
-  { to: "/app",           label: "Home",      Icon: HomeIcon,      iconMod: "home",      end: true },
-  { to: "/app/discover",  label: "Discover",  Icon: DiscoverIcon,  iconMod: "discover" },
+/* ── Sectioned nav config ─────────────────────────────────────────────────────
+   MENU     → core app surfaces
+   LEARN    → study / compete / track
+   ACCOUNT  → settings + sign out
+─────────────────────────────────────────────────────────────────────────────── */
+const MENU_ITEMS = [
+  { to: "/app",          label: "Home",     Icon: HomeIcon,     iconMod: "home",     end: true },
+  { to: "/app/discover", label: "Discover", Icon: DiscoverIcon, iconMod: "discover" },
+  { to: "/app/chat",     label: "Chat",     Icon: ChatIcon,     iconMod: "chat" },
+];
+
+const LEARN_ITEMS = [
   { to: "/app/learn",     label: "Learn",     Icon: LearnIcon,     iconMod: "learn" },
-  { to: "/app/chat",      label: "Chat",      Icon: ChatIcon,      iconMod: "chat",      badge: null },
   { to: "/app/challenge", label: "Challenge", Icon: ChallengeIcon, iconMod: "challenge" },
   { to: "/app/progress",  label: "Progress",  Icon: ProgressIcon,  iconMod: "progress" },
 ];
+
+function NavItem({ to, label, Icon, iconMod, end, onNavigate, badge }) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      onClick={(e) => {
+        if (onNavigate && onNavigate(to) === false) e.preventDefault();
+      }}
+      className={({ isActive }) =>
+        `hmenu-item${isActive ? " hmenu-item--active" : ""}`
+      }
+    >
+      <span className={`hmenu-item-icon hmenu-item-icon--${iconMod}`} aria-hidden="true">
+        <Icon width={18} height={18} />
+      </span>
+      <span className="hmenu-item-label">{label}</span>
+      {badge != null && (
+        <span className="hmenu-item-badge">{badge}</span>
+      )}
+      {/* Active indicator bar — left accent */}
+      <span className="hmenu-item-indicator" aria-hidden="true" />
+    </NavLink>
+  );
+}
 
 export default function MobileHamburgerMenu({ open, onClose, onLogout, onNavigate }) {
   const { user, profile } = useAuth();
@@ -110,36 +143,27 @@ export default function MobileHamburgerMenu({ open, onClose, onLogout, onNavigat
             <strong>{name}</strong>
             <span>{email}</span>
           </div>
-
         </div>
 
         {/* Nav */}
         <nav className="hmenu-nav">
+          {/* ── MENU ── */}
           <span className="hmenu-section-label">Menu</span>
-
-          {NAV_ITEMS.map(({ to, label, Icon, iconMod, badge, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              onClick={(e) => {
-                if (onNavigate && onNavigate(to) === false) e.preventDefault();
-              }}
-              className={({ isActive }) =>
-                `hmenu-item${isActive ? " hmenu-item--active" : ""}`
-              }
-            >
-              <span className={`hmenu-item-icon hmenu-item-icon--${iconMod}`}>
-                <Icon width={18} height={18} />
-              </span>
-              <span className="hmenu-item-label">{label}</span>
-              {badge != null && (
-                <span className="hmenu-item-badge">{badge}</span>
-              )}
-            </NavLink>
+          {MENU_ITEMS.map((item) => (
+            <NavItem key={item.to} {...item} onNavigate={onNavigate} />
           ))}
 
           <div className="hmenu-divider" />
+
+          {/* ── LEARN ── */}
+          <span className="hmenu-section-label">Learn</span>
+          {LEARN_ITEMS.map((item) => (
+            <NavItem key={item.to} {...item} onNavigate={onNavigate} />
+          ))}
+
+          <div className="hmenu-divider" />
+
+          {/* ── ACCOUNT ── */}
           <span className="hmenu-section-label">Account</span>
 
           <NavLink
@@ -151,20 +175,19 @@ export default function MobileHamburgerMenu({ open, onClose, onLogout, onNavigat
               `hmenu-item${isActive ? " hmenu-item--active" : ""}`
             }
           >
-            <span className="hmenu-item-icon hmenu-item-icon--settings">
+            <span className="hmenu-item-icon hmenu-item-icon--settings" aria-hidden="true">
               <SettingsIcon width={18} height={18} />
             </span>
             <span className="hmenu-item-label">Settings</span>
+            <span className="hmenu-item-indicator" aria-hidden="true" />
           </NavLink>
-
-          <div className="hmenu-divider" />
 
           <button
             type="button"
             className="hmenu-item hmenu-item--logout"
             onClick={() => { onClose(); onLogout?.(); }}
           >
-            <span className="hmenu-item-icon hmenu-item-icon--logout">
+            <span className="hmenu-item-icon hmenu-item-icon--logout" aria-hidden="true">
               <LogoutIcon width={18} height={18} />
             </span>
             <span className="hmenu-item-label">Sign out</span>
