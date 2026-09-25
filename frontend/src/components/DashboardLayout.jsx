@@ -234,7 +234,7 @@ export default function DashboardLayout() {
         <header className="desktop-topbar">
           <div className="desktop-topbar-brand">
             <LogoMark size={26} />
-            <span className="desktop-topbar-name">Peer<span className="logo-accent">Up</span></span>
+            <span className="desktop-topbar-name">Kno<span className="logo-accent">vi</span></span>
           </div>
 
           <nav className="desktop-topbar-nav">
