@@ -21,6 +21,7 @@ import VerifyEmail from "./pages/auth/VerifyEmail";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
 import MobileWelcome from "./pages/auth/MobileWelcome";
+import LandingPage from "./pages/LandingPage";
 import Onboarding from "./pages/onboarding/Onboarding";
 
 // ── Legal pages ──
@@ -67,7 +68,7 @@ function AppRoutes() {
   return (
     <Routes>
       {/* ── Public / Auth ── */}
-      <Route path="/"               element={<Navigate to="/welcome" replace />} />
+      <Route path="/"               element={<LandingPage />} />
       <Route path="/welcome"        element={<GuestRoute><MobileWelcome /></GuestRoute>} />
       <Route path="/login"          element={<GuestRoute><Login /></GuestRoute>} />
       <Route path="/signup"         element={<GuestRoute><Signup /></GuestRoute>} />
