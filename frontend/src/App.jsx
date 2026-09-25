@@ -4,6 +4,7 @@ import { ToastProvider } from "./context/ToastContext";
 import GuestRoute from "./components/GuestRoute";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminRoute from "./components/AdminRoute";
+import LandingPage from "./pages/LandingPage";
 
 // ── Admin pages ──
 import AdminLayout from "./pages/admin/AdminLayout";
@@ -21,7 +22,6 @@ import VerifyEmail from "./pages/auth/VerifyEmail";
 import ForgotPassword from "./pages/auth/ForgotPassword";
 import ResetPassword from "./pages/auth/ResetPassword";
 import MobileWelcome from "./pages/auth/MobileWelcome";
-import LandingPage from "./pages/LandingPage";
 import Onboarding from "./pages/onboarding/Onboarding";
 
 // ── Legal pages ──

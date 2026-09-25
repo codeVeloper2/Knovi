@@ -132,6 +132,12 @@ export function googleLogin(idToken) {
   return request("/api/auth/google", { method: "POST", body: { idToken } });
 }
 
+// Public landing-page demo. The backend accepts only a fixed question index;
+// visitors cannot turn the landing page into an unrestricted AI chat.
+export function landingDemo(questionIndex) {
+  return request(`/api/ai/landing-demo/${questionIndex}`, { timeoutMs: AI_TIMEOUT });
+}
+
 // ── Profile (authenticated) ──────────────────────────────────
 export function fetchMe() {
   return request("/api/me", { auth: true });
