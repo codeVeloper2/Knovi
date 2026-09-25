@@ -17,6 +17,19 @@ export function LogoMark({ size = 38, className }) {
   );
 }
 
+export function KnoAILogo({ size = 40, className }) {
+  return (
+    <img
+      src="/knoai-logo.png"
+      width={size}
+      height={size}
+      className={className}
+      alt="KnoAI"
+      draggable="false"
+    />
+  );
+}
+
 export default function Logo({ size = 38, className }) {
   return <LogoMark size={size} className={className} />;
 }

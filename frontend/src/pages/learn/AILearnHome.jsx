@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import * as api from "../../api";
+import { KnoAILogo } from "../../components/Logo";
 
 export default function AILearnHome() {
   const navigate = useNavigate();
@@ -41,22 +42,16 @@ export default function AILearnHome() {
       {/* Hero */}
       <div className="ai-learn-hero">
         <div className="ai-learn-hero-content">
-          <h1 className="ai-learn-title">AI Learning</h1>
-          <p className="ai-learn-subtitle">Learn any concept with a tutor that adapts to you.</p>
+          <div className="ai-brand-lockup">
+            <KnoAILogo size={54} className="ai-brand-logo" />
+            <div>
+              <h1 className="ai-learn-title">KnoAI</h1>
+              <p className="ai-learn-subtitle">Your adaptive AI learning companion.</p>
+            </div>
+          </div>
         </div>
-        <div className="ai-tutor-mascot">
-          <svg width="80" height="80" viewBox="0 0 120 120" fill="none">
-            <circle cx="60" cy="60" r="50" fill="url(#grad1)" />
-            <circle cx="45" cy="50" r="8" fill="#fff" />
-            <circle cx="75" cy="50" r="8" fill="#fff" />
-            <path d="M40 70 Q60 85 80 70" stroke="#fff" strokeWidth="4" strokeLinecap="round" fill="none" />
-            <defs>
-              <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#4f6ef7" />
-                <stop offset="100%" stopColor="#6366f1" />
-              </linearGradient>
-            </defs>
-          </svg>
+        <div className="ai-tutor-mascot" aria-hidden="true">
+          <KnoAILogo size={92} />
         </div>
       </div>
 

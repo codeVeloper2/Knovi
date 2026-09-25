@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import * as api from "../../api";
 
@@ -271,40 +271,16 @@ export default function AISessionSetup() {
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
 
-let _tutorAvatarCounter = 0;
-export function TutorAvatar({ size = 40 }) {
-  const idRef = useRef(`tutorGrad-${++_tutorAvatarCounter}`);
-  const gid = idRef.current;
+export function TutorAvatar({ size = 40, className }) {
   return (
-    <svg
+    <img
+      src="/knoai-logo.png"
       width={size}
       height={size}
-      viewBox="0 0 512 512"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-label="UPRAD"
-      role="img"
-    >
-      <defs>
-        <linearGradient id={gid} x1="150" y1="70" x2="360" y2="440" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#2f9bff" />
-          <stop offset="0.5" stopColor="#1fbaf0" />
-          <stop offset="1" stopColor="#25e7c6" />
-        </linearGradient>
-      </defs>
-      {/* U shape */}
-      <path
-        d="M356 96 V300 A100 100 0 0 1 156 300 V300"
-        stroke={`url(#${gid})`} strokeWidth="64" strokeLinecap="round" fill="none"
-      />
-      {/* Left bar */}
-      <path
-        d="M156 300 V150"
-        stroke={`url(#${gid})`} strokeWidth="64" strokeLinecap="round" fill="none"
-      />
-      {/* Upward arrowhead */}
-      <path d="M156 70 L226 168 H86 Z" fill={`url(#${gid})`} />
-    </svg>
+      className={className}
+      alt="KnoAI"
+      draggable="false"
+    />
   );
 }
 

@@ -721,7 +721,7 @@ export default function AILearningRoom() {
       setAnswerInput("");
       setHintOpen(false);
       setHintUsed(false);
-      // If UPRAD returned an inline correction, give the student a moment to read it
+      // If KnoAI returned an inline correction, give the student a moment to read it
       // (messages stream already contains Quick correction) before the next item.
       if (evaluation?.correctionNote) {
         await new Promise(r => setTimeout(r, 1200));
@@ -808,7 +808,7 @@ export default function AILearningRoom() {
   const planTotal = learningPlan.length || 0;
   const planStep = planTotal ? Math.min((currentTaskIndex ?? 0) + 1, planTotal) : 0;
   const planLabel = planTotal ? `${planStep}/${planTotal}` : "—";
-  const motivationText = aiWorking ? "UPRAD is thinking about your next step…" : motivationLines[motivationIndex];
+  const motivationText = aiWorking ? "KnoAI is thinking about your next step…" : motivationLines[motivationIndex];
 
   return (
     <div className="ar-room">
@@ -1022,7 +1022,7 @@ export default function AILearningRoom() {
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                 disabled={!canType}
                 rows={1}
-                placeholder={phase === "practice" ? "Answer the question above…" : "Talk to UPRAD about what you're learning…"}
+                placeholder={phase === "practice" ? "Answer the question above…" : "Talk to KnoAI about what you're learning…"}
               />
               <button className="ar-send" type="submit" disabled={!msgInput.trim() || !canType}>↑</button>
             </form>
@@ -1147,7 +1147,7 @@ function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave, is
     <div className={`ar-msg-ai ${locked ? "ar-msg-ai-locked" : ""}`}>
       <div className="ar-msg-ai-header">
         <div className="ar-msg-ai-avatar"><TutorAvatar size={26} /></div>
-        <span className="ar-msg-ai-name">UPRAD</span>
+        <span className="ar-msg-ai-name">KnoAI</span>
         <span className="ar-msg-ai-role">{locked ? "Practice lock" : msg.messageType === "reteach" ? "Reteach" : msg.messageType === "idle_nudge" ? "Nudge" : "Tutor"}</span>
         <time className="ar-msg-time">{formatClock(msg.createdAt)}</time>
       </div>
@@ -1211,8 +1211,8 @@ function ChallengeMatchCard({ match, subjectName, topicName, conceptName, busy, 
   if (status === "error") {
     return <div className="ar-challenge-card ar-challenge-card--error">
       <div className="ar-challenge-icon">⚔️</div>
-      <div className="ar-challenge-copy"><span className="ar-eyebrow">CHALLENGE</span><h3>We couldn't start peer matchmaking</h3><p>{match.message || "You can still challenge UPRAD."}</p></div>
-      <div className="ar-challenge-actions"><button type="button" onClick={onChallengeAI} disabled={busy}>{busy ? "Starting…" : "Challenge with UPRAD"}</button><button type="button" className="secondary" onClick={onContinue}>Continue learning</button></div>
+      <div className="ar-challenge-copy"><span className="ar-eyebrow">CHALLENGE</span><h3>We couldn't start peer matchmaking</h3><p>{match.message || "You can still challenge KnoAI."}</p></div>
+      <div className="ar-challenge-actions"><button type="button" onClick={onChallengeAI} disabled={busy}>{busy ? "Starting…" : "Challenge with KnoAI"}</button><button type="button" className="secondary" onClick={onContinue}>Continue learning</button></div>
     </div>;
   }
   if (status === "matched" && match.challengeId) {
@@ -1224,15 +1224,15 @@ function ChallengeMatchCard({ match, subjectName, topicName, conceptName, busy, 
   }
   return <div className="ar-challenge-card">
     <div className="ar-challenge-icon">⚔️</div>
-    <div className="ar-challenge-copy"><span className="ar-eyebrow">CHALLENGE MATCHMAKING</span><h3>{status === "waiting" ? "No peer found yet" : "Looking for a peer…"}</h3><p>{status === "waiting" ? "I couldn't find a peer ready for this topic right now. You can keep learning or challenge UPRAD instead." : "UPRAD is looking for a student who completed the same topic."}</p></div>
-    <div className="ar-challenge-actions"><button type="button" onClick={onChallengeAI} disabled={busy}>{busy ? "Starting…" : "Challenge with UPRAD"}</button><button type="button" className="secondary" onClick={onContinue}>Continue learning</button></div>
+    <div className="ar-challenge-copy"><span className="ar-eyebrow">CHALLENGE MATCHMAKING</span><h3>{status === "waiting" ? "No peer found yet" : "Looking for a peer…"}</h3><p>{status === "waiting" ? "I couldn't find a peer ready for this topic right now. You can keep learning or challenge KnoAI instead." : "KnoAI is looking for a student who completed the same topic."}</p></div>
+    <div className="ar-challenge-actions"><button type="button" onClick={onChallengeAI} disabled={busy}>{busy ? "Starting…" : "Challenge with KnoAI"}</button><button type="button" className="secondary" onClick={onContinue}>Continue learning</button></div>
   </div>;
 }
 
 function SidebarPlan({ plan, current, completed, progress, onClose }) {
   return <div className="ar-panel-inner">
     <div className="ar-panel-head"><div><span className="ar-eyebrow">ROADMAP</span><h2>Learning plan</h2></div><button className="ar-mobile-close" onClick={onClose}>×</button></div>
-    <div className="ar-plan-progress"><div className="ar-plan-ring" style={{ "--p": `${progress * 3.6}deg` }}><span>{progress}%</span></div><div><strong>{completed.length} of {plan.length || 0} complete</strong><small>The roadmap is context. UPRAD drives the conversation.</small></div></div>
+    <div className="ar-plan-progress"><div className="ar-plan-ring" style={{ "--p": `${progress * 3.6}deg` }}><span>{progress}%</span></div><div><strong>{completed.length} of {plan.length || 0} complete</strong><small>The roadmap is context. KnoAI drives the conversation.</small></div></div>
     <div className="ar-task-list">{plan.length ? plan.map((task, i) => <div key={i} className={`ar-task ${completed.includes(i) ? "done" : current === i ? "active" : ""}`}><span className="ar-task-number">{completed.includes(i) ? "✓" : i + 1}</span><span className="ar-task-copy"><b>{taskTitle(task)}</b><small>{taskDescription(task)}</small><em>{completed.includes(i) ? "Completed" : current === i ? "Current focus" : taskMeta(task)}</em></span></div>) : <div className="ar-empty-plan"><span>✦</span><p>Your tutor is building the learning context.</p></div>}</div>
   </div>;
 }
@@ -1240,10 +1240,10 @@ function SidebarPlan({ plan, current, completed, progress, onClose }) {
 function WorkspacePanel({ session, task, phase, progress, familiarity, intent, answeredCount, questionCount, onStudy, onClose }) {
   return <div className="ar-panel-inner">
     <div className="ar-panel-head"><div><span className="ar-eyebrow">WORKSPACE</span><h2>Session tools</h2></div><button className="ar-mobile-close" onClick={onClose}>×</button></div>
-    <div className="ar-current-card"><span className="ar-current-kicker">NOW LEARNING</span><h3>{taskTitle(task) || session?.conceptName || "Building your lesson"}</h3><p>{taskDescription(task) || "Talk with UPRAD. It decides when you're ready."}</p><div className="ar-context-facts">{familiarity && <span>Starting point: {formatFamiliarity(familiarity)}</span>}{intent && <span>Goal: {formatIntent(intent)}</span>}</div><span className={`ar-phase-pill ar-phase-${phase}`}>{phase.replace("_", " ")}</span></div>
+    <div className="ar-current-card"><span className="ar-current-kicker">NOW LEARNING</span><h3>{taskTitle(task) || session?.conceptName || "Building your lesson"}</h3><p>{taskDescription(task) || "Talk with KnoAI. It decides when you're ready."}</p><div className="ar-context-facts">{familiarity && <span>Starting point: {formatFamiliarity(familiarity)}</span>}{intent && <span>Goal: {formatIntent(intent)}</span>}</div><span className={`ar-phase-pill ar-phase-${phase}`}>{phase.replace("_", " ")}</span></div>
     <div className="ar-stats-card"><div><b>{progress}%</b><span>Progress</span></div><div><b>{answeredCount}</b><span>Checks</span></div><div><b>{questionCount}</b><span>This run</span></div></div>
     {(phase === "teaching" || phase === "reteaching") && <button className="ar-study-tool" onClick={onStudy}><span>◷</span><b>Study timer</b><small>5-minute focus before continuing.</small></button>}
-    <div className="ar-tool-tip"><b>Stay in the conversation.</b><span>Ask for examples, simpler explanations, or real-world applications. UPRAD decides when to check you.</span></div>
+    <div className="ar-tool-tip"><b>Stay in the conversation.</b><span>Ask for examples, simpler explanations, or real-world applications. KnoAI decides when to check you.</span></div>
   </div>;
 }
 
@@ -1259,7 +1259,7 @@ function AgentThinking() {
     <div className="ar-thinking">
       <div className="ar-thinking-avatar"><TutorAvatar size={28} /></div>
       <div className="ar-thinking-body">
-        <div className="ar-thinking-label">UPRAD is working</div>
+        <div className="ar-thinking-label">KnoAI is working</div>
         <div className="ar-thinking-row">
           <span className="ar-thinking-step" key={step}>{steps[step]}</span>
           <div className="ar-thinking-dots"><i /><i /><i /></div>
@@ -1272,14 +1272,14 @@ function AgentThinking() {
 function PracticeBanner() {
   return <div className="ar-practice-banner" role="status"><span>🔒</span><div><strong>PRACTICE MODE</strong><span>Teaching content is hidden. Show what you understand.</span></div></div>;
 }
-function PreparingCard() { return <div className="ar-preparing-card"><div className="ar-preparing-orb">✦</div><div><span className="ar-eyebrow">BUILDING YOUR LESSON</span><h3>UPRAD is assembling the right starting point</h3><p>It is combining the concept, your starting level, and the learning goal into a focused conversation.</p><div className="ar-loading-line"><i /><i /><i /></div></div></div>; }
-function StudyCard({ seconds, task }) { return <div className="ar-study-card"><div className="ar-study-orbit"><span>{formatTime(seconds)}</span><small>Focus</small></div><div className="ar-study-copy"><span className="ar-eyebrow">STUDY MODE</span><h3>{taskTitle(task) || "Study the current idea"}</h3><p>Review what UPRAD taught, then come back to the conversation.</p></div></div>; }
+function PreparingCard() { return <div className="ar-preparing-card"><div className="ar-preparing-orb">✦</div><div><span className="ar-eyebrow">BUILDING YOUR LESSON</span><h3>KnoAI is assembling the right starting point</h3><p>It is combining the concept, your starting level, and the learning goal into a focused conversation.</p><div className="ar-loading-line"><i /><i /><i /></div></div></div>; }
+function StudyCard({ seconds, task }) { return <div className="ar-study-card"><div className="ar-study-orbit"><span>{formatTime(seconds)}</span><small>Focus</small></div><div className="ar-study-copy"><span className="ar-eyebrow">STUDY MODE</span><h3>{taskTitle(task) || "Study the current idea"}</h3><p>Review what KnoAI taught, then come back to the conversation.</p></div></div>; }
 
 function QuizArtifact({ question, index, total, answer, setAnswer, onSubmit, submitting, results, hintOpen, setHintOpen }) {
   const options = Array.isArray(question.options) ? question.options : [];
   const mc = question.questionType === "multiple_choice" && options.length;
   const stage = question.stage === "retention" ? "RETENTION CHECK" : question.stage === "guided_practice" ? "GUIDED PRACTICE" : question.stage === "transfer" ? "TRANSFER" : "INDEPENDENT PRACTICE";
-  const hint = question.hint || "Think about the method UPRAD just taught and identify the relationship you need before calculating.";
+  const hint = question.hint || "Think about the method KnoAI just taught and identify the relationship you need before calculating.";
   return <section className="ar-quiz-artifact ar-practice-card">
     <div className="ar-artifact-head">
       <div><span className="ar-eyebrow">{stage} · Q{index + 1}</span><h2>{question.stage === "retention" ? "Recall something you mastered earlier" : index < 2 ? "Practice with support" : index < 4 ? "Show it independently" : "Apply it in a new situation"}</h2></div>
@@ -1289,7 +1289,7 @@ function QuizArtifact({ question, index, total, answer, setAnswer, onSubmit, sub
     <div className="ar-quiz-question"><RichText content={question.question} onCopy={() => {}} copiedId={null} /></div>
     <button type="button" className="ar-hint-toggle" onClick={() => { setHintOpen(v => !v); setHintUsed(true); }} disabled={submitting}>{hintOpen ? "Hide hint" : "Need a hint?"}</button>
     {hintOpen && <div className="ar-practice-hint"><strong>Hint</strong><span>{hint}</span></div>}
-    {mc ? <div className="ar-options">{options.map((opt, i) => { const value = typeof opt === "string" ? opt : (opt.value ?? opt.label ?? opt.text); const text = typeof opt === "string" ? opt : (opt.text ?? opt.label ?? opt.value); return <button key={`${question.id}-${i}`} className={`ar-option ${answer === value ? "selected" : ""}`} onClick={() => setAnswer(value)} disabled={submitting}><span>{String.fromCharCode(65 + i)}</span><b>{text}</b></button>; })}</div> : <textarea className="ar-answer-box" rows={5} value={answer} onChange={e => setAnswer(e.target.value)} placeholder="Work it out, then give UPRAD your answer…" disabled={submitting} />}
+    {mc ? <div className="ar-options">{options.map((opt, i) => { const value = typeof opt === "string" ? opt : (opt.value ?? opt.label ?? opt.text); const text = typeof opt === "string" ? opt : (opt.text ?? opt.label ?? opt.value); return <button key={`${question.id}-${i}`} className={`ar-option ${answer === value ? "selected" : ""}`} onClick={() => setAnswer(value)} disabled={submitting}><span>{String.fromCharCode(65 + i)}</span><b>{text}</b></button>; })}</div> : <textarea className="ar-answer-box" rows={5} value={answer} onChange={e => setAnswer(e.target.value)} placeholder="Work it out, then give KnoAI your answer…" disabled={submitting} />}
     <div className="ar-quiz-foot"><span>{Object.keys(results).length} response{Object.keys(results).length !== 1 ? "s" : ""} recorded.</span><button onClick={onSubmit} disabled={!answer.trim() || submitting}>{submitting ? "Evaluating…" : index + 1 === total ? "Finish mastery check" : "Submit →"}</button></div>
   </section>;
 }

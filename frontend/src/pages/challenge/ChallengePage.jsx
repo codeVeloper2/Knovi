@@ -4,6 +4,7 @@ import * as api from "../../api";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import { ChallengeIcon, CloseIcon, ChevronRight } from "../../components/DashIcons";
+import { KnoAILogo } from "../../components/Logo";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import "../../styles/challenge.css";
@@ -180,7 +181,7 @@ function HomeView({ challenges, onStart, onOpen, onRefresh }) {
           <div className="ch-hero-icon"><ChallengeIcon width={28} height={28} /></div>
           <div>
             <h2>Quiz Battle</h2>
-            <p>Challenge a peer who finished the same concept, or battle UPRAD.</p>
+            <p>Challenge a peer who finished the same concept, or battle KnoAI.</p>
           </div>
           <button type="button" className="ch-btn ch-btn-primary" onClick={onStart}>Start challenge</button>
         </div>
@@ -212,9 +213,9 @@ function HomeView({ challenges, onStart, onOpen, onRefresh }) {
             <div className="ch-list">
               {active.map((ch) => (
                 <button key={ch.id} type="button" className="ch-list-card" onClick={() => onOpen(ch.id)}>
-                  <Avatar url={ch.opponent?.photoURL} name={ch.mode === "ai" ? "UPRAD" : ch.opponent?.displayName} size={44} />
+                  {ch.mode === "ai" ? <KnoAILogo size={44} /> : <Avatar url={ch.opponent?.photoURL} name={ch.opponent?.displayName} size={44} />}
                   <span className="ch-list-copy">
-                    <strong>{ch.mode === "ai" ? "UPRAD" : ch.opponent?.displayName || "Peer"}</strong>
+                    <strong>{ch.mode === "ai" ? "KnoAI" : ch.opponent?.displayName || "Peer"}</strong>
                     <small>{ch.conceptName} · {fmtStatus(ch.status)}</small>
                   </span>
                   <span className="ch-pill ch-pill-live">{fmtStatus(ch.status)}</span>
@@ -232,9 +233,9 @@ function HomeView({ challenges, onStart, onOpen, onRefresh }) {
             <div className="ch-list">
               {history.map((ch) => (
                 <button key={ch.id} type="button" className="ch-list-card" onClick={() => onOpen(ch.id)}>
-                  <Avatar url={ch.opponent?.photoURL} name={ch.mode === "ai" ? "UPRAD" : ch.opponent?.displayName} size={44} />
+                  {ch.mode === "ai" ? <KnoAILogo size={44} /> : <Avatar url={ch.opponent?.photoURL} name={ch.opponent?.displayName} size={44} />}
                   <span className="ch-list-copy">
-                    <strong>{ch.mode === "ai" ? "UPRAD" : ch.opponent?.displayName || "Peer"}</strong>
+                    <strong>{ch.mode === "ai" ? "KnoAI" : ch.opponent?.displayName || "Peer"}</strong>
                     <small>{ch.conceptName} · {fmtDate(ch.completedAt || ch.createdAt)}</small>
                   </span>
                   <span className="ch-pill">{fmtStatus(ch.status)}</span>
@@ -329,7 +330,7 @@ function WaitingRoom({ challenge, busy, onPrepare, onReady, onRefresh, onBack })
 
   return (
     <PageShell>
-      <Header onBack={onBack} title="Challenge room" subtitle={aiMode ? "UPRAD is your partner" : "Both players must be ready"} />
+      <Header onBack={onBack} title="Challenge room" subtitle={aiMode ? "KnoAI is your partner" : "Both players must be ready"} />
       <div className="ch-room card">
         <div className="ch-versus">
           <div className="ch-player">
@@ -341,8 +342,8 @@ function WaitingRoom({ challenge, busy, onPrepare, onReady, onRefresh, onBack })
           <div className="ch-player">
             {aiMode ? (
               <>
-                <Avatar size={64} name="UPRAD" />
-                <strong>UPRAD</strong>
+                <KnoAILogo size={64} />
+                <strong>KnoAI</strong>
                 <span className="is-ready">AI ready</span>
               </>
             ) : (
@@ -371,7 +372,7 @@ function WaitingRoom({ challenge, busy, onPrepare, onReady, onRefresh, onBack })
 
         <p className="ch-room-note">
           {aiMode
-            ? (preparing ? "UPRAD is generating theory + objective questions once — no extra AI work between questions." : challenge.waitingReason)
+            ? (preparing ? "KnoAI is generating theory + objective questions once — no extra AI work between questions." : challenge.waitingReason)
             : challenge.waitingReason}
         </p>
 
@@ -624,7 +625,7 @@ function ResultsView({ challenge, results, review, loading, onReview, onBack, on
     win: { title: "You won!", sub: "Strong run. Rematch to keep the edge.", emoji: "🏆", cls: "is-win" },
     loss: { title: "Opponent won", sub: "Review misses, then challenge again.", emoji: "⚔️", cls: "is-loss" },
     draw: { title: "It's a draw", sub: "Same score. Rematch to break the tie.", emoji: "🤝", cls: "is-draw" },
-    review: { title: "Challenge complete", sub: "Review theory, then try UPRAD again.", emoji: "📘", cls: "is-review" },
+    review: { title: "Challenge complete", sub: "Review theory, then try KnoAI again.", emoji: "📘", cls: "is-review" },
   }[outcome];
 
   return (
@@ -648,7 +649,7 @@ function ResultsView({ challenge, results, review, loading, onReview, onBack, on
           {challenge.mode === "ai" ? (
             <div>
               <small>Partner</small>
-              <strong>UPRAD</strong>
+              <strong>KnoAI</strong>
               <span>AI challenge</span>
             </div>
           ) : (
@@ -690,7 +691,7 @@ function ResultsView({ challenge, results, review, loading, onReview, onBack, on
 
       <div className="ch-results-actions">
         <button type="button" className="ch-btn ch-btn-primary" onClick={onRematch} disabled={rematchBusy}>
-          {rematchBusy ? "Starting…" : challenge.mode === "ai" ? "Challenge UPRAD again" : "Rematch"}
+          {rematchBusy ? "Starting…" : challenge.mode === "ai" ? "Challenge KnoAI again" : "Rematch"}
         </button>
         <button type="button" className="ch-btn ch-btn-ghost" onClick={onReview}>Question review</button>
         <button type="button" className="ch-btn ch-btn-ghost" onClick={onBack}>Back</button>

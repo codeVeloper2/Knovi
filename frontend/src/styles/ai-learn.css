@@ -55,6 +55,22 @@
   flex: 1;
 }
 
+.ai-brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ai-brand-logo {
+  flex: 0 0 auto;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 22px rgba(75, 91, 255, .24));
+}
+
+.ai-brand-lockup .ai-learn-title {
+  margin-bottom: 6px;
+}
+
 .ai-learn-title {
   font-size: 2.5rem;
   font-weight: 800;

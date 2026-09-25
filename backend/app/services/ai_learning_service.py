@@ -1708,7 +1708,7 @@ async def create_idle_nudge(session_id: int, user_id: int, db: AsyncSession, nud
     except Exception:
         concept_name = ""
     nudge_prompt = (
-        f"You are UPRAD, a warm and encouraging AI tutor.\n"
+        f"You are KnoAI, a warm and encouraging AI tutor.\n"
         f"The student has gone quiet after your last message. Write a short friendly nudge (1-2 sentences max).\n\n"
         f"Recent conversation:\n{context_snippet}\n\n"
         f"Concept being taught: {concept_name}\n"
