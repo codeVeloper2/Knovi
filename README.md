@@ -5,7 +5,7 @@
 Knovi is a peer-learning platform for students. It combines an adaptive AI tutor (curriculum-aware teaching, retrieval practice, and reteaching) with peer discovery, real-time chat, and 1-v-1 AI quiz battles — so you can learn a concept deeply *and* find someone else who is working on the same thing.
 
 **Live app:** https://peerup.pages.dev  
-**GitHub:** https://github.com/codeVeloper2/peerUP
+**GitHub:** https://github.com/codeVeloper2/Knovi
 
 ---
 
