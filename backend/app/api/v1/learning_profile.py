@@ -1,4 +1,4 @@
-"""Learning Profile API routes — PeerUP.
+"""Learning Profile API routes — Knovi.
 
 GET  /api/learning/profile   — return the current user's learning profile
 PUT  /api/learning/profile   — create or update student-reported fields

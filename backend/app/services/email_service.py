@@ -1,4 +1,4 @@
-"""Email delivery for PeerUP.
+"""Email delivery for Knovi.
 
 Sends transactional emails (password reset, email verification) via SMTP
 when SMTP settings are configured. If SMTP is not configured, the caller
@@ -19,7 +19,7 @@ def smtp_configured() -> bool:
 
 def _build_message(to_email: str, subject: str, html_body: str, text_body: str) -> EmailMessage:
     msg = EmailMessage()
-    from_name = os.getenv("SMTP_FROM_NAME", "PeerUP")
+    from_name = os.getenv("SMTP_FROM_NAME", "Knovi")
     from_addr = os.getenv("SMTP_FROM", "")
     msg["From"] = f"{from_name} <{from_addr}>"
     msg["To"] = to_email
@@ -57,7 +57,7 @@ def send_email(to_email: str, subject: str, html_body: str, text_body: str) -> N
 
 # A small educational strip shown at the bottom of every email.
 EDU_TIP = (
-    "PeerUp is a student-first learning community. Learn from classmates who "
+    "Knovi is a student-first learning community. Learn from classmates who "
     "excel where you struggle, and teach what you know best — because the best "
     "way to master something is to explain it to someone else."
 )
@@ -67,7 +67,7 @@ EDU_TIP = (
 # images fine, unlike data: URIs (Gmail strips those) or SVG (not supported).
 LOGO_URL = (
     "https://iqmwntlyqvyugbilqefb.supabase.co"
-    "/storage/v1/object/public/avatars/assets/peerup-logo.png"
+    "https://peerup.pages.dev/knovi-logo.png"
 )
 
 
@@ -76,7 +76,7 @@ def _header() -> str:
             <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:22px;">
               <tr>
                 <td style="vertical-align:middle;padding-right:10px;">
-                  <img src="{LOGO_URL}" width="36" height="36" alt="PeerUp"
+                  <img src="{LOGO_URL}" width="36" height="36" alt="Knovi"
                        style="display:block;border:0;border-radius:9px;" />
                 </td>
                 <td style="vertical-align:middle;font-size:22px;font-weight:800;color:#ffffff;">
@@ -91,7 +91,7 @@ def _footer() -> str:
             <hr style="border:0;border-top:1px solid #24324f;margin:26px 0 16px;" />
             <p style="font-size:12px;line-height:1.6;color:#64748b;margin:0 0 12px;">{EDU_TIP}</p>
             <p style="font-size:11px;color:#475569;margin:0;">
-              © PeerUp — Learn. Teach. Grow.<br />
+              © Knovi — Learn. Teach. Grow.<br />
               You're receiving this because an account action was requested with this email address.
             </p>"""
 
@@ -121,7 +121,7 @@ def _shell(title: str, intro: str, button_label: str, link: str, footer: str) ->
             {_footer()}
           </td></tr>
         </table>
-        <p style="font-size:11px;color:#475569;margin:16px 0 0;">© PeerUp — Learn. Teach. Grow.</p>
+        <p style="font-size:11px;color:#475569;margin:16px 0 0;">© Knovi — Learn. Teach. Grow.</p>
       </td></tr>
     </table>
   </body>
@@ -129,28 +129,28 @@ def _shell(title: str, intro: str, button_label: str, link: str, footer: str) ->
 
 
 def password_reset_email(link: str) -> tuple[str, str, str]:
-    subject = "Reset your PeerUP password"
+    subject = "Reset your Knovi password"
     html = _shell(
         title="Reset your password",
-        intro="We received a request to reset your PeerUP password. Click the button below to choose a new one. This link expires soon.",
+        intro="We received a request to reset your Knovi password. Click the button below to choose a new one. This link expires soon.",
         button_label="Reset password",
         link=link,
         footer="If you didn't request this, you can safely ignore this email — your password won't change.",
     )
-    text = f"Reset your PeerUP password using this link:\n{link}\n\nIf you didn't request this, ignore this email."
+    text = f"Reset your Knovi password using this link:\n{link}\n\nIf you didn't request this, ignore this email."
     return subject, html, text
 
 
 def verification_email(link: str) -> tuple[str, str, str]:
-    subject = "Verify your PeerUP email"
+    subject = "Verify your Knovi email"
     html = _shell(
         title="Verify your email",
-        intro="Welcome to PeerUP! Confirm your email address to activate your account and start learning with your peers.",
+        intro="Welcome to Knovi! Confirm your email address to activate your account and start learning with your peers.",
         button_label="Verify email",
         link=link,
-        footer="If you didn't create a PeerUP account, you can ignore this email.",
+        footer="If you didn't create a Knovi account, you can ignore this email.",
     )
-    text = f"Verify your PeerUP email using this link:\n{link}"
+    text = f"Verify your Knovi email using this link:\n{link}"
     return subject, html, text
 
 
@@ -178,12 +178,12 @@ def _code_shell(code: str, title: str, intro: str) -> str:
             </p>
             <div style="margin:8px 0 20px;">{boxes}</div>
             <p style="font-size:13px;color:#64748b;margin:0 0 4px;text-align:left;">
-              This code expires in 15 minutes. Never share it with anyone — the PeerUp team will never ask for it.
+              This code expires in 15 minutes. Never share it with anyone — the Knovi team will never ask for it.
             </p>
             <div style="text-align:left;">{_footer()}</div>
           </td></tr>
         </table>
-        <p style="font-size:11px;color:#475569;margin:16px 0 0;">© PeerUp — Learn. Teach. Grow.</p>
+        <p style="font-size:11px;color:#475569;margin:16px 0 0;">© Knovi — Learn. Teach. Grow.</p>
       </td></tr>
     </table>
   </body>
@@ -191,33 +191,33 @@ def _code_shell(code: str, title: str, intro: str) -> str:
 
 
 def verification_code_email(code: str) -> tuple[str, str, str]:
-    subject = f"Your PeerUp verification code: {code}"
+    subject = f"Your Knovi verification code: {code}"
     html = _code_shell(
         code,
-        title="Welcome to PeerUp — verify your email",
+        title="Welcome to Knovi — verify your email",
         intro=(
             "You're one step away from joining a community of students who learn together. "
-            "Enter this 6-digit code in PeerUp to verify your email and activate your account."
+            "Enter this 6-digit code in Knovi to verify your email and activate your account."
         ),
     )
     text = (
-        f"Welcome to PeerUp!\n\nYour verification code is: {code}\n"
-        "It expires in 15 minutes. Enter it in PeerUp to activate your account.\n\n"
-        "PeerUp — Learn. Teach. Grow."
+        f"Welcome to Knovi!\n\nYour verification code is: {code}\n"
+        "It expires in 15 minutes. Enter it in Knovi to activate your account.\n\n"
+        "Knovi — Learn. Teach. Grow."
     )
     return subject, html, text
 
 
 def activity_email(title: str, what: str) -> tuple[str, str, str]:
     """A security/activity notice: 'your X changed — if this wasn't you, …'."""
-    subject = f"PeerUp security alert: {title}"
+    subject = f"Knovi security alert: {title}"
     intro = (
-        f"This is a confirmation that {what} on your PeerUp account. "
+        f"This is a confirmation that {what} on your Knovi account. "
         "If you made this change, no action is needed."
     )
     footer = (
         "If this <b>wasn't you</b>, your account may be at risk. Reset your password "
-        "immediately from the sign-in page and contact PeerUp support."
+        "immediately from the sign-in page and contact Knovi support."
     )
     html = f"""\
 <!doctype html>
@@ -238,31 +238,31 @@ def activity_email(title: str, what: str) -> tuple[str, str, str]:
             {_footer()}
           </td></tr>
         </table>
-        <p style="font-size:11px;color:#475569;margin:16px 0 0;">© PeerUp — Learn. Teach. Grow.</p>
+        <p style="font-size:11px;color:#475569;margin:16px 0 0;">© Knovi — Learn. Teach. Grow.</p>
       </td></tr>
     </table>
   </body>
 </html>"""
     text = (
         f"{title}\n\n{intro}\n\n"
-        "If this wasn't you, reset your password immediately and contact PeerUp support.\n\n"
-        "PeerUp — Learn. Teach. Grow."
+        "If this wasn't you, reset your password immediately and contact Knovi support.\n\n"
+        "Knovi — Learn. Teach. Grow."
     )
     return subject, html, text
 
 
 def account_deleted_email(name: str = "") -> tuple[str, str, str]:
     """Confirmation that the account and all its data were permanently deleted."""
-    subject = "Your PeerUp account has been deleted"
+    subject = "Your Knovi account has been deleted"
     hello = f"Hi {name}," if name else "Hi,"
     intro = (
-        "This confirms that your PeerUp account and all of its data — your profile, "
+        "This confirms that your Knovi account and all of its data — your profile, "
         "messages, and progress — have been permanently deleted at your request. "
         "This can't be undone."
     )
     footer = (
         "If you <b>didn't</b> request this deletion, someone may have had access to your "
-        "account. Please contact PeerUp support right away."
+        "account. Please contact Knovi support right away."
     )
     html = f"""\
 <!doctype html>
@@ -287,33 +287,33 @@ def account_deleted_email(name: str = "") -> tuple[str, str, str]:
             {_footer()}
           </td></tr>
         </table>
-        <p style="font-size:11px;color:#475569;margin:16px 0 0;">© PeerUp — Learn. Teach. Grow.</p>
+        <p style="font-size:11px;color:#475569;margin:16px 0 0;">© Knovi — Learn. Teach. Grow.</p>
       </td></tr>
     </table>
   </body>
 </html>"""
     text = (
         f"{hello}\n\n{intro}\n\n"
-        "If you didn't request this, contact PeerUp support right away.\n\n"
+        "If you didn't request this, contact Knovi support right away.\n\n"
         "We're sorry to see you go — you're welcome back anytime.\n\n"
-        "PeerUp — Learn. Teach. Grow."
+        "Knovi — Learn. Teach. Grow."
     )
     return subject, html, text
 
 
 def reset_code_email(code: str) -> tuple[str, str, str]:
-    subject = f"Your PeerUp password reset code: {code}"
+    subject = f"Your Knovi password reset code: {code}"
     html = _code_shell(
         code,
-        title="Reset your PeerUp password",
+        title="Reset your Knovi password",
         intro=(
-            "We received a request to reset your password. Enter this 6-digit code in PeerUp "
+            "We received a request to reset your password. Enter this 6-digit code in Knovi "
             "to set a new one. If you didn't request this, you can safely ignore this email."
         ),
     )
     text = (
-        f"Your PeerUp password reset code is: {code}\n"
+        f"Your Knovi password reset code is: {code}\n"
         "It expires in 15 minutes. If you didn't request this, ignore this email.\n\n"
-        "PeerUp — Learn. Teach. Grow."
+        "Knovi — Learn. Teach. Grow."
     )
     return subject, html, text

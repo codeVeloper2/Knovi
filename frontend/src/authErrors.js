@@ -1,6 +1,6 @@
 const MESSAGES = {
   "auth/invalid-email": "Please enter a valid email address.",
-  "auth/user-disabled": "This account has been disabled. Contact PeerUP support if that seems wrong.",
+  "auth/user-disabled": "This account has been disabled. Contact Knovi support if that seems wrong.",
   "auth/user-not-found": "No account found with that email. Try signing up instead.",
   "auth/wrong-password": "That password doesn’t match. Try again or reset it.",
   "auth/invalid-credential": "Email or password is incorrect.",

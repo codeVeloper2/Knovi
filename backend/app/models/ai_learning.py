@@ -1,4 +1,4 @@
-"""AI Learning Session ORM models for PeerUP.
+"""AI Learning Session ORM models for Knovi.
 
 Tables (in creation / dependency order):
   ai_learning_sessions          — one session per student per concept visit

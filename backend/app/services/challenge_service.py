@@ -239,7 +239,7 @@ async def create_challenge(
         # eligibility is intentionally bound to an existing conversation.
         raise HTTPException(
             403,
-            "AI Quiz Battle is available only between students who are already connected in PeerUP.",
+            "AI Quiz Battle is available only between students who are already connected in Knovi.",
         )
 
     users = await _load_users({challenger_id, opponent_id}, db)
@@ -248,7 +248,7 @@ async def create_challenge(
     if not challenger or not opponent:
         raise HTTPException(404, "One of the selected students no longer exists.")
     if not opponent.profile_complete:
-        raise HTTPException(409, "The selected opponent has not completed their PeerUP profile.")
+        raise HTTPException(409, "The selected opponent has not completed their Knovi profile.")
 
     subject = (
         await db.execute(
@@ -2215,7 +2215,7 @@ async def get_challenge_state(
         ),
         "opponent": ({
             "id": opponent.id,
-            "displayName": opponent.full_name or "PeerUP student",
+            "displayName": opponent.full_name or "Knovi student",
             "photoURL": opponent.photo_url or "",
             "isOnline": bool(opponent.is_online),
         } if opponent is not None else None),
@@ -2324,7 +2324,7 @@ async def list_challenges(
                 "subjectName": subject.name,
                 "opponent": ({
                     "id": opponent.id,
-                    "displayName": opponent.full_name or "PeerUP student",
+                    "displayName": opponent.full_name or "Knovi student",
                     "photoURL": opponent.photo_url or "",
                     "isOnline": bool(opponent.is_online),
                 } if opponent is not None else None),

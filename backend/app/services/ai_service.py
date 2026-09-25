@@ -1,4 +1,4 @@
-"""Centralized AI service for PeerUP.
+"""Centralized AI service for Knovi.
 
 Primary provider:  Google Gemini
 Fallback provider: Groq
@@ -140,7 +140,7 @@ async def call_groq(
     """Async Groq call. Returns raw response text.
 
     GPT-OSS models spend part of their completion budget on reasoning. The old
-    SDK default is too small for PeerUP's JSON tutor payloads, which can cause
+    SDK default is too small for Knovi's JSON tutor payloads, which can cause
     Groq to stop before a complete JSON document is emitted. Use low reasoning
     effort and an explicit completion budget, with one larger retry if Groq
     still reports an incomplete/invalid JSON completion.

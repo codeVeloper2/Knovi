@@ -1,4 +1,4 @@
-"""Curriculum ORM models for PeerUP.
+"""Curriculum ORM models for Knovi.
 
 Tables (in creation / dependency order):
   subjects               — top-level academic subjects
@@ -310,7 +310,7 @@ class Resource(Base):
     file_url:        Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     thumbnail_url:   Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     duration:        Mapped[Optional[str]] = mapped_column(String(40), nullable=True)  # e.g. "12:34" or "45 min"
-    # Only true when PeerUP legally owns distribution rights
+    # Only true when Knovi legally owns distribution rights
     is_downloadable: Mapped[bool]          = mapped_column(Boolean, default=False, nullable=False)
     source:          Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     is_verified:     Mapped[bool]          = mapped_column(Boolean, default=False, nullable=False)

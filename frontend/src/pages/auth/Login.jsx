@@ -27,7 +27,7 @@ export function AuthShell({ topRight, mobileBack, children }) {
 
         <div className="brand-hero">
           <h1>Learn Smarter.<br /><span className="gradient-text">Grow Faster.</span></h1>
-          <p>PeerUP puts an AI tutor in your corner — pick a concept, set your goal, and learn at your own pace.</p>
+          <p>Knovi puts an AI tutor in your corner — pick a concept, set your goal, and learn at your own pace.</p>
           <ul className="feature-list">
             {FEATURES.map((f) => (
               <li key={f.title}>

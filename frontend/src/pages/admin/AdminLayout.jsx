@@ -52,7 +52,7 @@ export default function AdminLayout() {
         {/* Logo */}
         <Link to="/admin" className="adm2-logo">
           <span className="adm2-logo-mark">P</span>
-          <span className="adm2-logo-text">PeerUP</span>
+          <span className="adm2-logo-text">Knovi</span>
           <span className="adm2-logo-badge">Admin</span>
         </Link>
 

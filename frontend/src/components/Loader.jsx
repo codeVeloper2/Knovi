@@ -1,7 +1,7 @@
 import { LogoMark } from "./Logo";
 
 /**
- * Full-screen branded loader — the PeerUp mark with a spinning ring around it.
+ * Full-screen branded loader — the Knovi mark with a spinning ring around it.
  * Use for route/session loading states.
  */
 export default function Loader({ label = "Loading…" }) {

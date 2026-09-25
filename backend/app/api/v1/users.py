@@ -14,7 +14,7 @@ Provides two discovery modes through GET /api/users/discover:
 
 Architecture note
 ─────────────────
-"Connected" in PeerUP is defined as having a Conversation row — this is what
+"Connected" in Knovi is defined as having a Conversation row — this is what
 the challenge backend checks in _is_connected(). We follow the same definition
 here. The [Connect] action in the frontend calls POST /api/chat/conversations,
 which is already the existing mechanism for starting a peer chat.

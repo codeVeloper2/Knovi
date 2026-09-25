@@ -1,8 +1,8 @@
-# PeerUP
+# Knovi
 
-**Learn. Teach. Grow.**
+**Learn. Connect. Grow.**
 
-PeerUP is a peer-learning platform where students can learn any concept with an adaptive AI tutor, and connect with other students who are learning the same things. It combines AI-powered personalised instruction with a social peer-discovery system — because sometimes you also just need someone else who gets it.
+Knovi is a peer-learning platform where students can learn any concept with an adaptive AI tutor, and connect with other students who are learning the same things. It combines AI-powered personalised instruction with a social peer-discovery system — because sometimes you also just need someone else who gets it.
 
 **Live app:** https://peerup.pages.dev
 **GitHub:** https://github.com/codeVeloper2/peerUP
@@ -13,14 +13,14 @@ PeerUP is a peer-learning platform where students can learn any concept with an 
 
 Learning is rarely a straight line. A student might understand three quarters of a concept and completely miss one key part. Standard resources either start from scratch or assume you already know the part you're missing. And when you're stuck at 11pm, finding someone who can help right now is hard.
 
-PeerUP addresses this by letting students:
+Knovi addresses this by letting students:
 
 1. Work through concepts with an AI tutor that adapts to how much they already know and responds to where they actually get stuck
 2. Find other students to learn with — people who know what you're trying to learn, or need help with what you can teach
 
 ---
 
-## What PeerUP Does
+## What Knovi Does
 
 ### AI Learning
 
@@ -38,7 +38,7 @@ If the student struggles, the AI doesn't repeat the same explanation. It picks a
 
 ### Peer Learning
 
-Students build profiles listing what subjects they can teach and what they need help with. PeerUP surfaces relevant people on the Discover page. You send a match request for a specific subject, they accept, and a chat opens between you. From there you can study together.
+Students build profiles listing what subjects they can teach and what they need help with. Knovi surfaces relevant people on the Discover page. You send a match request for a specific subject, they accept, and a chat opens between you. From there you can study together.
 
 ---
 
@@ -156,7 +156,7 @@ The backend is the authority for everything that matters:
 ## Project Structure
 
 ```
-PeerUP/
+Knovi/
 ├── backend/
 │   ├── app/
 │   │   ├── api/v1/               # Route handlers (15 AI learning endpoints)
@@ -312,6 +312,6 @@ AI tools accelerated development — they did not replace understanding or decis
 
 ### AI Quiz Battle
 
-PeerUP also includes a backend-only 1-v-1 **AI Quiz Battle** capability. Two already-connected students challenge each other on a shared curriculum concept. The backend intersects the curriculum objectives actually covered in each student's AI-learning teaching snapshots, builds a deterministic challenge blueprint, asks Gemini to generate the approved question set, validates it with Pydantic/deterministic checks plus independent AI validation, then freezes the resulting questions in PostgreSQL.
+Knovi also includes a backend-only 1-v-1 **AI Quiz Battle** capability. Two already-connected students challenge each other on a shared curriculum concept. The backend intersects the curriculum objectives actually covered in each student's AI-learning teaching snapshots, builds a deterministic challenge blueprint, asks Gemini to generate the approved question set, validates it with Pydantic/deterministic checks plus independent AI validation, then freezes the resulting questions in PostgreSQL.
 
 Battle state, timing, correctness, scores, answer privacy, reconnect behavior, and completion are server-authoritative. Gemini is never used to reconstruct historical questions. The implementation and migration are documented in `docs/AI_QUIZ_BATTLE.md` and `backend/migrations/002_ai_quiz_battle.sql`.

@@ -1,5 +1,5 @@
 /**
- * PeerUp custom HTML5 video player.
+ * Knovi custom HTML5 video player.
  * Features: play/pause, scrub bar, volume, playback speed, fullscreen, time display.
  * Progress is saved to the backend every 10 seconds during playback.
  */

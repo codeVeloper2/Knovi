@@ -1,4 +1,4 @@
-"""Pydantic contracts for the PeerUP AI Quiz Battle API."""
+"""Pydantic contracts for the Knovi AI Quiz Battle API."""
 from __future__ import annotations
 
 from enum import Enum

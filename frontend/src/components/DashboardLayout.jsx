@@ -309,7 +309,7 @@ export default function DashboardLayout() {
       />
       <ConfirmDialog
         open={logoutOpen}
-        title="Sign out of PeerUP?"
+        title="Sign out of Knovi?"
         message="You'll need to sign in again to get back to your dashboard."
         confirmText="Sign out"
         cancelText="Stay signed in"

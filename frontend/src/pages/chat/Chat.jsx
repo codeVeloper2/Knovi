@@ -748,7 +748,7 @@ export default function Chat() {
             <button className="pu-lightbox-cancel" onClick={() => setLightbox(null)} aria-label="Cancel photo preview">Cancel</button>
             <b>Photo</b>
             <button onClick={async () => {
-              try { await api.downloadAttachment(lightbox.id, lightbox.fileName || "PeerUP-photo"); }
+              try { await api.downloadAttachment(lightbox.id, lightbox.fileName || "Knovi-photo"); }
               catch (err) { setLoadError(err.message || "Couldn't download photo."); }
             }} aria-label="Download photo"><Download size={18} /></button>
           </div>
@@ -757,7 +757,7 @@ export default function Chat() {
           </div>
           <div className="pu-lightbox-foot" onClick={e => e.stopPropagation()}>
             <button className="pu-lightbox-download" onClick={async () => {
-              try { await api.downloadAttachment(lightbox.id, lightbox.fileName || "PeerUP-photo"); }
+              try { await api.downloadAttachment(lightbox.id, lightbox.fileName || "Knovi-photo"); }
               catch (err) { setLoadError(err.message || "Couldn't download photo."); }
             }}><Download size={16} />Save photo</button>
             <button className="pu-lightbox-close-bottom" onClick={() => setLightbox(null)}>Cancel</button>

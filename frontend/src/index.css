@@ -4,7 +4,7 @@
 @import "./styles/curriculum-pages.css";
 
 /* ═══════════════════════════════════════
-   PEERUP — Dark Navy Tech Theme
+   KNOVI — Dark Navy Tech Theme
    ═══════════════════════════════════════ */
 
 :root {
@@ -18267,7 +18267,7 @@ kbd {
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   PEERUP DASHBOARD REFRESH
+   KNOVI DASHBOARD REFRESH
    - Proper structural skeleton while dashboard data loads
    - Smooth shimmer shared with the Learn experience
    - More spacious desktop hierarchy and tactile cards
@@ -18624,7 +18624,7 @@ kbd {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   PEERUP CHAT — SOCIAL MESSENGER POLISH
+   KNOVI CHAT — SOCIAL MESSENGER POLISH
    Inspired by familiar messaging patterns without copying a single app.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -19113,9 +19113,9 @@ kbd {
 
 
 /* ========================================================================
-   PEERUP MESSENGER — COMPLETE CHAT REDESIGN v3
+   KNOVI MESSENGER — COMPLETE CHAT REDESIGN v3
    A purpose-built social messenger surface: WhatsApp clarity + Telegram density
-   + PeerUP study context. The old chat styles remain for legacy routes; every
+   + Knovi study context. The old chat styles remain for legacy routes; every
    active chat screen below is isolated under .chatx-*.
    ======================================================================== */
 
@@ -19439,10 +19439,10 @@ kbd {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   WHATSAPP-STYLE VISUAL PASS — PeerUp Colours
+   WHATSAPP-STYLE VISUAL PASS — Knovi Colours
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* ─── PeerUp chat tokens ─── */
+/* ─── Knovi chat tokens ─── */
 .chatx-shell {
   --c-bg:         #07101e;
   --c-sidebar:    #0a1428;
@@ -20107,7 +20107,7 @@ kbd {
 @media (max-width: 1200px) { .chatx-shell { grid-template-columns: 340px minmax(0,1fr); } }
 @media (max-width: 900px) { .chatx-shell { grid-template-columns: 300px minmax(0,1fr); } }
 
-/* ─── Tablet / Mobile: WhatsApp layout + PeerUp colours ─── */
+/* ─── Tablet / Mobile: WhatsApp layout + Knovi colours ─── */
 @media (max-width: 768px) {
   .chatx-shell {
     grid-template-columns: 1fr;
@@ -20338,7 +20338,7 @@ kbd {
 
 
 /* =====================================================================
-   PEERUP UI REBUILD — DISCOVER + AUTH + ONBOARDING
+   KNOVI UI REBUILD — DISCOVER + AUTH + ONBOARDING
    Final overrides: keep existing functionality, replace broken presentation.
    ===================================================================== */
 
@@ -21664,8 +21664,8 @@ kbd {
 .sv2-read-aloud:hover { background: rgba(255,255,255,.08); }
 
 /* ═══════════════════════════════════════════════════════════════════
-   PEERUP CHAT — prototype implementation, mobile-first
-   Uses the existing PeerUP navy/blue/teal palette; no prototype-only
+   KNOVI CHAT — prototype implementation, mobile-first
+   Uses the existing Knovi navy/blue/teal palette; no prototype-only
    purple theme or remote demo media.
    ═══════════════════════════════════════════════════════════════════ */
 .chatx-shell {

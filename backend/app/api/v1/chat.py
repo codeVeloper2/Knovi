@@ -291,7 +291,7 @@ async def download_attachment(
         raise HTTPException(status_code=502, detail="Attachment download failed.")
 
     media_type = upstream.headers.get("content-type", "application/octet-stream").split(";")[0]
-    filename = (msg.attachment_name or "PeerUP-file").replace('"', "_").replace("\\", "_").replace("/", "_")
+    filename = (msg.attachment_name or "Knovi-file").replace('"', "_").replace("\\", "_").replace("/", "_")
     headers = {
         "Content-Disposition": f'attachment; filename="{filename}"',
         "Cache-Control": "private, no-store",

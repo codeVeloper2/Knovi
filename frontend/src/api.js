@@ -246,7 +246,7 @@ export function getMessages(convId, beforeId = null, limit = 50) {
   if (beforeId) params.set("before_id", beforeId);
   return request(`/api/chat/conversations/${convId}/messages?${params}`, { auth: true });
 }
-export async function downloadAttachment(messageId, filename = "PeerUP-file") {
+export async function downloadAttachment(messageId, filename = "Knovi-file") {
   const res = await fetch(`${API_BASE}/api/chat/messages/${messageId}/attachment`, {
     method: "GET",
     headers: { Authorization: `Bearer ${getToken()}` },
@@ -262,7 +262,7 @@ export async function downloadAttachment(messageId, filename = "PeerUP-file") {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = safeName || "PeerUP-file";
+  link.download = safeName || "Knovi-file";
   document.body.appendChild(link);
   link.click();
   link.remove();

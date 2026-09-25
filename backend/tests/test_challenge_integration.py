@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 # These are genuine PostgreSQL integration tests. They are skipped unless the
-# caller supplies an isolated TEST_DATABASE_URL that already has the PeerUP
+# caller supplies an isolated TEST_DATABASE_URL that already has the Knovi
 # schema plus migration 002 applied.
 os.environ.setdefault("JWT_SECRET", "integration-test-secret")
 os.environ.setdefault("DATABASE_URL", "")

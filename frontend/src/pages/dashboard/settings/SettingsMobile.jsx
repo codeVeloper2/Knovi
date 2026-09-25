@@ -143,7 +143,7 @@ export default function SettingsMobile() {
               <h2>{name}</h2>
               <span className="settings-level">{levelLabel(xp)}</span>
             </div>
-            <p className="settings-account-email">{email || "PeerUP student"}</p>
+            <p className="settings-account-email">{email || "Knovi student"}</p>
             <p className="settings-account-meta">
               {grade || "Student"} <span aria-hidden="true">·</span> Member account
             </p>
@@ -178,7 +178,7 @@ export default function SettingsMobile() {
         <div className="settings-section-heading">
           <div>
             <h2>Account settings</h2>
-            <p>Choose an area to update your PeerUP experience.</p>
+            <p>Choose an area to update your Knovi experience.</p>
           </div>
         </div>
 
@@ -220,7 +220,7 @@ export default function SettingsMobile() {
         <span>Log out</span>
       </button>
 
-      <p className="settings-hub-footer">PeerUP · Learn. Teach. Grow.</p>
+      <p className="settings-hub-footer">Knovi · Learn. Teach. Grow.</p>
 
       {showAvatar && (
         <div

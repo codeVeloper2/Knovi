@@ -1,4 +1,4 @@
-"""AI Learning Session API — PeerUP.
+"""AI Learning Session API — Knovi.
 
 All endpoints require authentication. user_id is always sourced from the
 auth dependency, never from the request body.

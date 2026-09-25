@@ -292,7 +292,7 @@ function ResourceForm({ topicId, onAdded }) {
       <label style={S.checkLabel}>
         <input type="checkbox" checked={f.is_downloadable}
           onChange={e => set("is_downloadable", e.target.checked)} />
-        {" "}Downloadable (only if PeerUP holds distribution rights)
+        {" "}Downloadable (only if Knovi holds distribution rights)
       </label>
       <button style={S.btn} disabled={busy}>Add{busy && <Spinner />}</button>
       <Msg {...msg} />

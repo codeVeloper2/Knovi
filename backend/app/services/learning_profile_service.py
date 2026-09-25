@@ -1,4 +1,4 @@
-"""Learning Profile service — PeerUP.
+"""Learning Profile service — Knovi.
 
 Handles CRUD for ai_learning_profiles and the append-only AI observation
 accumulation that builds up over real learning sessions.

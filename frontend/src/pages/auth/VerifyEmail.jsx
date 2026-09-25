@@ -107,7 +107,7 @@ export default function VerifyEmail() {
           <div className="mob-auth-illus"><SuccessIllustration /></div>
           <h2 className="mob-success-title">You're verified!</h2>
           <p className="mob-success-sub">Your account is ready. Let's set up your learning profile.</p>
-          <div className="alert alert-ok" style={{ display: "none" }}>Email verified! Taking you into PeerUp…</div>
+          <div className="alert alert-ok" style={{ display: "none" }}>Email verified! Taking you into Knovi…</div>
         </div>
       ) : (
         <form onSubmit={submit} noValidate>

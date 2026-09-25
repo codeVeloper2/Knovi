@@ -974,7 +974,7 @@ function ResourcesTab({ topicId }) {
             <label className="adm-checkbox-label">
               <input type="checkbox" checked={f.is_downloadable}
                 onChange={(e) => set("is_downloadable", e.target.checked)} />
-              Downloadable (only if PeerUP holds distribution rights)
+              Downloadable (only if Knovi holds distribution rights)
             </label>
             <label className="adm-checkbox-label">
               <input type="checkbox" checked={f.is_verified}

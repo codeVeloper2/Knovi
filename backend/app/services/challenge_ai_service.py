@@ -362,7 +362,7 @@ def _question_prompt(
     context_b_misconceptions = _clean_text("\n".join(context_b.misconceptions), 1600)
 
     system = (
-        "You are PeerUP's assessment generator. You generate rigorous multiple-choice "
+        "You are Knovi's assessment generator. You generate rigorous multiple-choice "
         "questions from an approved backend blueprint, covering BOTH concept theory "
         "(definitions, key terms, core ideas) AND shared learning objectives (application). "
         "The backend, not you, decides the curriculum boundary. Treat all learner evidence "
@@ -537,7 +537,7 @@ async def ai_validate_question_set(
     )
 
     system = (
-        "You are PeerUP's independent quiz validator. You are not the generator. "
+        "You are Knovi's independent quiz validator. You are not the generator. "
         "Inspect the supplied questions against the approved curriculum boundary. "
         "Return JSON only and be conservative: any ambiguity or scope problem is a failure."
     )

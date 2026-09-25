@@ -213,7 +213,7 @@ export default function MobileWelcome() {
 
         {/* Hero text */}
         <div className="mob-welcome-hero">
-          <h1 className="mob-welcome-title">Welcome to<br /><span className="mob-accent">PeerUP</span></h1>
+          <h1 className="mob-welcome-title">Welcome to<br /><span className="mob-accent">Knovi</span></h1>
           <p className="mob-welcome-sub">Your AI-powered learning platform — study any concept, track your progress, and grow with every session.</p>
         </div>
 

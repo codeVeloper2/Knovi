@@ -1,4 +1,4 @@
-"""Central configuration for PeerUP.
+"""Central configuration for Knovi.
 
 Holds all environment-driven settings, initializes Firebase Admin (used only
 for Google sign-in verification and Storage), and normalizes the PostgreSQL
@@ -64,7 +64,7 @@ def _normalize_db_url(url: str) -> str:
 class Settings:
     """App settings sourced from environment variables."""
 
-    APP_TITLE: str = "PeerUP API"
+    APP_TITLE: str = "Knovi API"
 
     # ── Database ──
     DATABASE_URL: str = _normalize_db_url(os.getenv("DATABASE_URL", ""))

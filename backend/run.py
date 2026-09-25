@@ -1,4 +1,4 @@
-"""Dev entry point for the PeerUP backend.
+"""Dev entry point for the Knovi backend.
 
 Run with:  python run.py
 

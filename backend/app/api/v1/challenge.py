@@ -58,7 +58,7 @@ async def _load_ws_user(token: str) -> User:
         if user is None:
             raise HTTPException(401, "Account not found.")
         if not user.email_verified:
-            raise HTTPException(403, "Please verify your email before using PeerUP.")
+            raise HTTPException(403, "Please verify your email before using Knovi.")
         return user
 
 

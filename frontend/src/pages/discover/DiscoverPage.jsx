@@ -419,7 +419,7 @@ export default function DiscoverPage() {
 
   // ── Action handlers ────────────────────────────────────────────────────
 
-  /** Connect = create a conversation (Conversation IS the connection in PeerUP). */
+  /** Connect = create a conversation (Conversation IS the connection in Knovi). */
   async function handleConnect(peer) {
     const student = peer.user || peer;
     if (!student.allowDirectMessage) {
@@ -562,7 +562,7 @@ export default function DiscoverPage() {
             <UsersIcon />
             <div>
               <h2 className="disc-section-title">All students</h2>
-              <p className="disc-section-subtitle">Browse everyone on PeerUP.</p>
+              <p className="disc-section-subtitle">Browse everyone on Knovi.</p>
             </div>
           </div>
 
@@ -682,7 +682,7 @@ export default function DiscoverPage() {
             <UsersIcon />
             <div>
               <h2 className="disc-section-title">All students</h2>
-              <p className="disc-section-subtitle">Browse everyone on PeerUP.</p>
+              <p className="disc-section-subtitle">Browse everyone on Knovi.</p>
             </div>
           </div>
 

@@ -1,7 +1,7 @@
 """Learn section ORM models.
 
 Tables:
-  courses          — structured collections of lessons (PeerUp-curated or creator-made)
+  courses          — structured collections of lessons (Knovi-curated or creator-made)
   lessons          — individual video lessons inside a course
   tutorials        — standalone student-uploaded educational videos
   video_progress   — per-user playback position for lessons & tutorials
@@ -35,7 +35,7 @@ class Course(Base):
     subject:      Mapped[str]      = mapped_column(String(80), nullable=False, index=True)
     thumbnail_url:Mapped[str]      = mapped_column(String(500), default="")
     creator_id:   Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
-    creator_name: Mapped[str]      = mapped_column(String(120), default="PeerUp")
+    creator_name: Mapped[str]      = mapped_column(String(120), default="Knovi")
     is_official:  Mapped[bool]     = mapped_column(Boolean, default=True)   # False = student-created course
     rating:       Mapped[float]    = mapped_column(Float, default=0.0)
     rating_count: Mapped[int]      = mapped_column(Integer, default=0)

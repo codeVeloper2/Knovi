@@ -1,4 +1,4 @@
-"""Learning-overlap peer discovery service for PeerUP.
+"""Learning-overlap peer discovery service for Knovi.
 
 This module answers: "Which other students are learning similar things to the
 current user, and how strong is that overlap?"

@@ -1,4 +1,4 @@
-"""PeerUP API — application entry point.
+"""Knovi API — application entry point.
 
 Creates the FastAPI app, configures CORS, and mounts the versioned routers.
 Tables are managed externally in Supabase — no auto-creation at startup.

@@ -39,7 +39,7 @@ const STEPS = [
 const TERMS = [
   { title: "Learn with integrity", body: "Use AI assistance to understand and grow — not to complete graded work dishonestly or bypass real learning." },
   { title: "Respect your peers", body: "Treat other students as partners. No harassment, mockery, or pressure — everyone is here to learn." },
-  { title: "Keep it private", body: "Don't share others' photos, messages, or personal details outside PeerUP." },
+  { title: "Keep it private", body: "Don't share others' photos, messages, or personal details outside Knovi." },
   { title: "Show up as yourself", body: "Use a real name and a photo you're comfortable with so other students can recognise you." },
 ];
 
@@ -170,7 +170,7 @@ export default function Onboarding() {
           {step === "personal" && (
             <>
               <h2>Set up your profile</h2>
-              <p className="card-subtitle">Tell us a bit about yourself so PeerUP can personalise your learning experience.</p>
+              <p className="card-subtitle">Tell us a bit about yourself so Knovi can personalise your learning experience.</p>
 
               <div className="photo-row">
                 {preview ? (
@@ -215,7 +215,7 @@ export default function Onboarding() {
           {step === "learning" && (
             <>
               <h2>Your Learning Profile</h2>
-              <p className="card-subtitle">Help PeerUP understand how you learn so your AI tutor can teach you better.</p>
+              <p className="card-subtitle">Help Knovi understand how you learn so your AI tutor can teach you better.</p>
 
               <div className="field">
                 <label>What are you good at?</label>
@@ -327,7 +327,7 @@ export default function Onboarding() {
           {step === "agreement" && (
             <>
               <h2>Learning Agreement</h2>
-              <p className="card-subtitle">One quick agreement to keep PeerUP a safe, focused place to learn.</p>
+              <p className="card-subtitle">One quick agreement to keep Knovi a safe, focused place to learn.</p>
 
               <div className="agreement">
                 {TERMS.map((t) => (
@@ -340,7 +340,7 @@ export default function Onboarding() {
 
               <label className="check">
                 <input type="checkbox" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />
-                <span>By checking this box, you agree to use PeerUP respectfully and for educational purposes only.</span>
+                <span>By checking this box, you agree to use Knovi respectfully and for educational purposes only.</span>
               </label>
 
               <div className="wizard-actions">

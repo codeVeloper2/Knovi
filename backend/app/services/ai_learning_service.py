@@ -1,4 +1,4 @@
-"""AI Learning Session service for PeerUP.
+"""AI Learning Session service for Knovi.
 
 Architecture: curriculum (WHAT) + Gemini (HOW) + persisted teaching content.
 user_id always from auth dependency. subject->topic->concept chain validated.
@@ -1083,7 +1083,7 @@ Do not teach the whole concept again. Connect briefly to prerequisite ideas when
 """
 
     system_prompt = _MATH_FORMATTING_SYSTEM + "\n" + (
-        "You are an expert AI tutor for PeerUP. Teach concepts clearly and adaptively. "
+        "You are an expert AI tutor for Knovi. Teach concepts clearly and adaptively. "
         "Teach like a real secondary-school teacher: check understanding, use questions, "
         "correct misconceptions quickly, and never rush to a test on empty confidence. "
         "Return structured JSON only — no markdown outside JSON strings."
@@ -1354,7 +1354,7 @@ POST-SESSION FOLLOW-UP RULES:
     )
 
     system_prompt = _MATH_FORMATTING_SYSTEM + "\n" + (
-        "You are an AI tutor on PeerUP, a peer learning platform for students. "
+        "You are an AI tutor on Knovi, a peer learning platform for students. "
         "You always answer educational questions helpfully and warmly. "
         "Return JSON only — no markdown outside the response field."
     )
@@ -3386,7 +3386,7 @@ Return JSON:
     # Persist this completed AI-learning evidence into the existing progress
     # architecture. The operation is idempotent and never touches challenge
     # practice_score. Streak/activity is recorded through the same service used
-    # by the rest of PeerUP.
+    # by the rest of Knovi.
     try:
         await progress_service.record_ai_learning_progress(
             db,

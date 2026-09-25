@@ -104,7 +104,7 @@ async def get_notifications(
                 "id": f"challenge_{challenge.id}",
                 "type": "challenge",
                 "title": "AI Quiz Battle challenge",
-                "body": f"{challenger.full_name or 'A PeerUP student'} challenged you on a shared learning concept.",
+                "body": f"{challenger.full_name or 'A Knovi student'} challenged you on a shared learning concept.",
                 "photoURL": challenger.photo_url or "",
                 "linkTo": f"/app/learn/challenge/{challenge.id}",
                 "createdAt": challenge.created_at.isoformat(),
