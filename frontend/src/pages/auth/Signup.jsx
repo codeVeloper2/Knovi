@@ -160,7 +160,7 @@ export default function Signup() {
 
       <p className="terms-note">
         By creating an account, you agree to our{" "}
-        <Link to="/agreement">Terms of Service</Link> and <Link to="/agreement">Privacy Policy</Link>.
+        <Link to="/terms">Terms of Service</Link> and <Link to="/privacy">Privacy Policy</Link>.
       </p>
       <p className="auth-footer">Already have an account? <Link to="/login">Log in <Arrow small /></Link></p>
     </AuthShell>

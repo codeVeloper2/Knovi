@@ -23,6 +23,10 @@ import ResetPassword from "./pages/auth/ResetPassword";
 import MobileWelcome from "./pages/auth/MobileWelcome";
 import Onboarding from "./pages/onboarding/Onboarding";
 
+// ── Legal pages ──
+import Privacy from "./pages/legal/Privacy";
+import Terms from "./pages/legal/Terms";
+
 // ── Student app pages ──
 import DashboardLayout from "./components/DashboardLayout";
 import Home from "./pages/dashboard/Home";
@@ -71,7 +75,9 @@ function AppRoutes() {
       <Route path="/verify-email"   element={<VerifyEmail />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/onboarding"     element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
-      <Route path="/agreement"      element={<Navigate to="/onboarding" replace />} />
+      <Route path="/privacy"        element={<Privacy />} />
+      <Route path="/terms"          element={<Terms />} />
+      <Route path="/agreement"      element={<Navigate to="/terms" replace />} />
       <Route path="/profile-setup"  element={<Navigate to="/onboarding" replace />} />
 
       {/* ── Student app ── */}
