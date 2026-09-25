@@ -29,3 +29,17 @@ Thumbs.db
 .idea/
 .vscode/
 *.log
+
+# Migration SQL (already run on Supabase)
+docs/migrations/
+
+# Test files (not needed in deployment)
+docs/tests/
+
+# Railway
+.railway/
+
+# Misc
+*.log
+.DS_Store
+Thumbs.db

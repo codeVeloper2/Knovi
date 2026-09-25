@@ -1883,55 +1883,36 @@
 .ar-msg-student.is-copy-revealed .ar-msg-student-bubble { z-index: 2; }
 .ar-student-copy-reveal.is-copied { color: #71e0bd; }
 
-.ar-flight-layer {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 90;
-  overflow: hidden;
+/* Exact sent-message animation from the supplied HTML demo.
+   0% starts off-screen, 50% reaches the thread, then the 65/80/90%
+   rebound points create the same impact shake before settling at 100%. */
+.ar-msg-student-bubble.is-send-animating {
+  animation: arSlideInAndShakeSent 0.45s ease-out forwards;
+  will-change: transform, opacity;
 }
 
-.ar-flight-bubble {
-  position: fixed;
-  max-width: min(280px, 72vw);
-  padding: 12px 15px;
-  border-radius: 16px 16px 0 16px;
-  background: #3d6bff;
-  color: #fff;
-  font-size: 14px;
-  line-height: 1.55;
-  box-shadow: 0 12px 32px rgba(61, 107, 255, .35);
-  transform-origin: 90% 100%;
-  white-space: pre-wrap;
-  word-break: break-word;
-  will-change: transform, width, min-height, opacity;
-}
-
-.ar-flight-bubble::after {
-  content: "";
-  position: absolute;
-  right: -7px;
-  bottom: 0;
-  width: 8px;
-  height: 14px;
-  background: transparent;
-  border-bottom-left-radius: 12px;
-  box-shadow: -5px 0 0 0 #3d6bff;
-}
-
-.ar-flight-bubble .ar-flight-text {
-  display: block;
-  opacity: 0;
-  transform: translateY(6px);
-}
-
-.ar-flight-bubble.is-flying .ar-flight-text {
-  animation: arFlightTextLand .42s cubic-bezier(.22, 1, .36, 1) .16s forwards;
-}
-
-@keyframes arFlightTextLand {
-  from { opacity: 0; transform: translateY(8px) scale(.98); filter: blur(2px); }
-  to { opacity: 1; transform: none; filter: none; }
+@keyframes arSlideInAndShakeSent {
+  0% {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  65% {
+    transform: translateX(-8px) rotate(-1.5deg);
+  }
+  80% {
+    transform: translateX(4px) rotate(1deg);
+  }
+  90% {
+    transform: translateX(-2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) rotate(0deg);
+  }
 }
 
 .ar-msg-student-bubble .ar-rich {
