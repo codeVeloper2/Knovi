@@ -240,6 +240,10 @@ export default function AILearningRoom() {
   const [challengeDismissed, setChallengeDismissed] = useState(false);
 
   const bottomRef = useRef(null);
+  const conversationRef = useRef(null);
+  const composerRef = useRef(null);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const stickToBottomRef = useRef(true);
   const planMenuRef = useRef(null);
   const timerRef = useRef(null);
   const ttsRef = useRef(false);
@@ -477,9 +481,46 @@ export default function AILearningRoom() {
     };
   }, [sessionId]);
 
+  function scrollConversationToBottom(behavior = "smooth") {
+    const el = conversationRef.current;
+    if (el) {
+      el.scrollTo({ top: el.scrollHeight, behavior });
+    } else {
+      bottomRef.current?.scrollIntoView({ behavior, block: "end" });
+    }
+    stickToBottomRef.current = true;
+    setShowScrollBottom(false);
+  }
+
+  function handleConversationScroll() {
+    const el = conversationRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const nearBottom = distanceFromBottom < 80;
+    stickToBottomRef.current = nearBottom;
+    setShowScrollBottom(!nearBottom && el.scrollHeight > el.clientHeight + 40);
+  }
+
+  function resizeComposer() {
+    const ta = composerRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    const next = Math.min(Math.max(ta.scrollHeight, 24), 140);
+    ta.style.height = `${next}px`;
+  }
+
+  // Enter room / new messages / AI replies → stay pinned to latest when user is near bottom
   useEffect(() => {
-    if (!aiWorking) bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages.length, phase, currentQuestion?.id]);
+    if (!messages.length && !currentQuestion) return;
+    if (!stickToBottomRef.current && aiWorking) return;
+    // Instant on first paint, smooth for follow-ups
+    const behavior = messages.length <= 2 ? "auto" : "smooth";
+    requestAnimationFrame(() => scrollConversationToBottom(behavior));
+  }, [messages.length, phase, currentQuestion?.id, typingMessageId, aiWorking]);
+
+  useEffect(() => {
+    resizeComposer();
+  }, [msgInput]);
 
   async function handleSaveExplanation(msg) {
     const messageId = Number(msg?.id);
@@ -632,7 +673,17 @@ export default function AILearningRoom() {
   async function sendMessage(raw) {
     const content = (raw || msgInput).trim();
     if (!content || aiWorking || !canType) return;
-    setMsgInput(""); setError(null); setAiWorking(true); setTypingMessageId(null);
+    setMsgInput("");
+    setError(null);
+    setAiWorking(true);
+    setTypingMessageId(null);
+    stickToBottomRef.current = true;
+    requestAnimationFrame(() => {
+      scrollConversationToBottom("smooth");
+      if (composerRef.current) {
+        composerRef.current.style.height = "auto";
+      }
+    });
     // The student bubble uses the exact sent-message animation from the chat demo:
     // slide in from the right, hit the thread, rebound/shake, then settle.
     const localId = addLocalMessage("student", content, { _sendAnimate: true }, "question");
@@ -1058,7 +1109,12 @@ export default function AILearningRoom() {
           {teachingLocked && <PracticeBanner />}
           {error && <div className="ar-error"><span>!</span>{error}<button onClick={() => setError(null)}>×</button></div>}
 
-          <section className="ar-conversation" aria-live="polite">
+          <section
+            className="ar-conversation"
+            ref={conversationRef}
+            onScroll={handleConversationScroll}
+            aria-live="polite"
+          >
             {messages
               .filter(m => !["welcome", "system", "timer_start", "timer_end", "summary"].includes(m.messageType))
               .map((msg, index) => (
@@ -1094,6 +1150,19 @@ export default function AILearningRoom() {
               <QuizArtifact question={currentQuestion} index={qIndex} total={questions.length} answer={answerInput} setAnswer={setAnswerInput} onSubmit={submitAnswer} submitting={submitting} results={checkResults} hintOpen={hintOpen} setHintOpen={setHintOpen} />
             )}
             <div ref={bottomRef} />
+            {showScrollBottom && (
+              <button
+                type="button"
+                className="ar-scroll-bottom"
+                onClick={() => scrollConversationToBottom("smooth")}
+                aria-label="Scroll to latest message"
+                title="Scroll to bottom"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 5v12M6 13l6 6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            )}
           </section>
 
           <div className="ar-composer-wrap">
@@ -1106,6 +1175,7 @@ export default function AILearningRoom() {
             )}
             <form className="ar-composer" onSubmit={e => { e.preventDefault(); sendMessage(); }}>
               <textarea
+                ref={composerRef}
                 value={msgInput}
                 onChange={e => {
                   setMsgInput(e.target.value);
@@ -1114,6 +1184,7 @@ export default function AILearningRoom() {
                   clearTimeout(typingDebounceRef.current);
                   if (e.target.value.trim()) typingDebounceRef.current = setTimeout(() => setIsTyping(false), 3000);
                 }}
+                onInput={resizeComposer}
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                 disabled={!canType}
                 rows={1}

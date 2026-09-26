@@ -732,7 +732,7 @@
   max-width:900px;margin:0 auto;display:flex;align-items:flex-end;gap:8px;padding:8px 9px;border:1px solid rgba(123,168,224,.22);border-radius:13px;background:#091b32;box-shadow:0 12px 35px rgba(0,0,0,.15);
 }
 .ar-composer-icon { width:30px;height:30px;flex:0 0 30px;overflow:hidden;border-radius:9px; }
-.ar-composer textarea { flex:1;min-width:0;max-height:120px;resize:none;border:0;outline:0;background:transparent;color:#e8f1ff;padding:7px 2px;font-size:12px;line-height:1.4; }
+.ar-composer textarea { flex:1;min-width:0;min-height:24px;max-height:140px;height:auto;resize:none;overflow-y:auto;border:0;outline:0;background:transparent;color:#e8f1ff;padding:7px 2px;font-size:12px;line-height:1.45;field-sizing:content; }
 .ar-composer textarea::placeholder { color:#607b9d; }
 .ar-send { width:31px;height:31px;border:0;border-radius:9px;background:linear-gradient(135deg,#5e70f4,#2d9cf5);color:#fff;font-size:18px;cursor:pointer; }
 .ar-send:disabled { opacity:.3;cursor:not-allowed; }
@@ -2957,3 +2957,32 @@
   color: #fecdd3;
 }
 .ar-flag-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+
+/* Scroll-to-latest control (floats over conversation) */
+.ar-main {
+  position: relative;
+}
+.ar-scroll-bottom {
+  position: sticky;
+  bottom: 14px;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin: -48px auto 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(123, 168, 224, 0.35);
+  background: rgba(12, 28, 52, 0.94);
+  color: #c7d7ef;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.ar-scroll-bottom:hover {
+  color: #fff;
+  background: rgba(37, 58, 110, 0.95);
+  transform: translateY(-1px);
+}
