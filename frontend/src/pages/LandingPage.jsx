@@ -151,22 +151,116 @@ export default function LandingPage() {
       </section>
 
       <section id="demo" className="landing-section demo-section">
-        <div className="section-heading reveal"><span className="section-label">LIVE KNOAI DEMO</span><h2>Not a video.<br /><span>A real AI response.</span></h2><p>The questions below are fixed for the public demo. KnoAI still generates the replies through the live AI service — visitors cannot use this demo as an open chatbot.</p></div>
-        <div className="demo-shell reveal delay-one">
-          <div className="demo-head"><div className="demo-agent"><KnoAILogo size={46} /><div><strong>KnoAI</strong><span><i /> Live AI demonstration</span></div></div><span className="demo-badge">AUTO DEMO</span></div>
-          <div className="demo-thread">
-            <div className="demo-context"><span>KNOVI · AI LEARNING</span><small>Watch a real learning exchange happen</small></div>
-            <div className="demo-message-row outgoing">
-              <div key={`${demo.questionIndex}-q`} className="demo-bubble demo-bubble-user is-new-sent">{demo.question}</div>
+        <div className="section-heading reveal">
+          <span className="section-label">LIVE KNOAI DEMO</span>
+          <h2>Not a video.<br /><span>A real learning room.</span></h2>
+          <p>
+            This is a read-only clone of the AI Learning Room. Preset questions rotate automatically
+            and KnoAI answers through the live service — you cannot type or ask your own questions here.
+          </p>
+        </div>
+
+        <div className="demo-room reveal delay-one" aria-label="AI Learning Room demo (read-only)">
+          {/* Room header — mirrors the real AI Learning Room */}
+          <header className="demo-room-header">
+            <div className="demo-room-header-left">
+              <span className="demo-room-back" aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </span>
+              <div className="demo-room-titles">
+                <strong>AI Learning Room</strong>
+                <span>Teaching · Biology · Photosynthesis</span>
+              </div>
             </div>
-            <div className="demo-message-row incoming">
-              <KnoAILogo size={28} className="demo-ai-avatar" />
-              <div className="demo-bubble demo-bubble-ai">
-                {demo.loading ? <span className="demo-thinking"><i /><i /><i /></span> : demoError ? <span>{demoError}</span> : demo.answer}
+            <div className="demo-room-header-right">
+              <span className="demo-room-phase">TEACHING</span>
+              <span className="demo-room-badge">READ-ONLY DEMO</span>
+            </div>
+          </header>
+
+          <div className="demo-room-body">
+            {/* Simplified learning plan sidebar */}
+            <aside className="demo-room-sidebar" aria-hidden="true">
+              <div className="demo-sidebar-head">
+                <span className="demo-eyebrow">LEARNING PLAN</span>
+                <strong>1 of 3 complete</strong>
+              </div>
+              <div className="demo-plan-progress">
+                <div className="demo-plan-ring"><span>33%</span></div>
+                <div>
+                  <b>Understand the core idea</b>
+                  <small>CURRENT FOCUS</small>
+                </div>
+              </div>
+              <ul className="demo-task-list">
+                <li className="done"><span>✓</span> Set the goal</li>
+                <li className="active"><span>2</span> Core explanation</li>
+                <li><span>3</span> Quick check</li>
+              </ul>
+            </aside>
+
+            {/* Message thread */}
+            <div className="demo-room-main">
+              <div className="demo-room-thread">
+                <div className="demo-room-context">
+                  <KnoAILogo size={22} />
+                  <div>
+                    <strong>KnoAI tutor</strong>
+                    <small>Guided demo · fixed questions only</small>
+                  </div>
+                </div>
+
+                <div className="demo-msg demo-msg-user" key={`q-${demo.questionIndex}`}>
+                  <div className="demo-msg-meta">You</div>
+                  <div className="demo-msg-bubble demo-msg-bubble-user">{demo.question}</div>
+                </div>
+
+                <div className="demo-msg demo-msg-ai" key={`a-${demo.questionIndex}-${demo.loading ? "load" : "ready"}`}>
+                  <div className="demo-msg-meta">
+                    <KnoAILogo size={18} />
+                    <span>KnoAI</span>
+                  </div>
+                  <div className="demo-msg-bubble demo-msg-bubble-ai">
+                    {demo.loading ? (
+                      <span className="demo-thinking" aria-label="KnoAI is thinking">
+                        <i /><i /><i />
+                      </span>
+                    ) : demoError ? (
+                      <span className="demo-error">{demoError}</span>
+                    ) : (
+                      demo.answer
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Locked composer — looks like the real input, cannot type */}
+              <div className="demo-room-composer" aria-disabled="true">
+                <div className="demo-composer-lock">
+                  <span className="demo-lock-icon" aria-hidden="true">🔒</span>
+                  <div className="demo-composer-field">
+                    <span className="demo-composer-placeholder">
+                      Ask anything about this concept…
+                    </span>
+                    <span className="demo-composer-hint">
+                      Input is disabled on the landing page. Sign up to use the full AI Learning Room.
+                    </span>
+                  </div>
+                  <button type="button" className="demo-composer-send" disabled tabIndex={-1} aria-hidden="true">
+                    Send
+                  </button>
+                </div>
+                <div className="demo-composer-cta">
+                  <Link to="/signup">
+                    Create a free account to ask your own questions
+                    <ArrowRight size={15} />
+                  </Link>
+                </div>
               </div>
             </div>
           </div>
-          <div className="demo-footer"><span><span className="lock-dot">●</span> Demo questions are preset</span><Link to="/signup">Create an account to use KnoAI yourself <ArrowRight size={15} /></Link></div>
         </div>
       </section>
 
