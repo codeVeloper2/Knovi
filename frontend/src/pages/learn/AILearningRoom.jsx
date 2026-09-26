@@ -220,6 +220,10 @@ export default function AILearningRoom() {
   const [leaveConfirm, setLeaveConfirm] = useState(false);
   const [endConfirm, setEndConfirm] = useState(false);
   const [sessionActionLoading, setSessionActionLoading] = useState(false);
+  const [flagModal, setFlagModal] = useState({ open: false, msg: null, studentMsg: "", reason: "" });
+  const [flagSending, setFlagSending] = useState(false);
+  const [flagDone, setFlagDone] = useState(false);
+  const [flagError, setFlagError] = useState("");
   const [planOpen, setPlanOpen] = useState(false);
   const [motivationIndex, setMotivationIndex] = useState(0);
   const [leftOpen, setLeftOpen] = useState(() => {
@@ -826,10 +830,9 @@ export default function AILearningRoom() {
   ];
 
 
-  async function handleFlagAiMessage(msg) {
+  function handleFlagAiMessage(msg) {
     const content = (msg?.content || "").trim();
     if (!content) return;
-    // Nearest prior student message for context
     const ordered = [...messages].sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
     const idx = ordered.findIndex(m => m.id === msg.id);
     let studentMsg = "";
@@ -839,15 +842,33 @@ export default function AILearningRoom() {
         break;
       }
     }
-    const reason = window.prompt(
-      "What is wrong with this AI response? (optional details help us improve)",
-      "This response looks incorrect or unhelpful."
-    );
-    if (reason === null) return; // cancelled
+    setFlagError("");
+    setFlagDone(false);
+    setFlagModal({
+      open: true,
+      msg,
+      studentMsg,
+      reason: "This response looks incorrect or unhelpful.",
+    });
+  }
+
+  function closeFlagModal() {
+    if (flagSending) return;
+    setFlagModal({ open: false, msg: null, studentMsg: "", reason: "" });
+    setFlagError("");
+    setFlagDone(false);
+  }
+
+  async function submitFlagReport() {
+    const target = flagModal.msg;
+    if (!target || flagSending) return;
+    const content = (target.content || "").trim();
+    setFlagSending(true);
+    setFlagError("");
     try {
       await api.submitFeedback({
         kind: "ai_flag",
-        message: (reason || "").trim() || "Flagged AI response",
+        message: (flagModal.reason || "").trim() || "Flagged AI response",
         page: window.location.pathname,
         session_id: Number(sessionId) || null,
         subject_name: subjectName || null,
@@ -855,15 +876,21 @@ export default function AILearningRoom() {
         concept_name: conceptName || null,
         task_index: Number.isInteger(currentTaskIndex) ? currentTaskIndex : null,
         task_title: currentTask ? taskTitle(currentTask) : null,
-        student_message: studentMsg || null,
+        student_message: flagModal.studentMsg || null,
         ai_message: content.slice(0, 8000),
-        ai_message_id: msg.id ? Number(msg.id) : null,
+        ai_message_id: target.id ? Number(target.id) : null,
       });
       setError(null);
-      // brief toast via existing error banner style inverted - use alert for reliability
-      window.alert("Thanks — we received your report.");
+      setFlagDone(true);
+      setTimeout(() => {
+        setFlagSending(false);
+        setFlagModal({ open: false, msg: null, studentMsg: "", reason: "" });
+        setFlagError("");
+        setFlagDone(false);
+      }, 1400);
     } catch (err) {
-      setError(err.message || "Could not send the report.");
+      setFlagError(err.message || "Could not send the report.");
+      setFlagSending(false);
     }
   }
 
@@ -1121,6 +1148,50 @@ export default function AILearningRoom() {
         onConfirm={confirmEndSession}
         onCancel={() => !sessionActionLoading && setEndConfirm(false)}
       />
+
+      {flagModal.open && (
+        <div className="ar-flag-overlay" onClick={closeFlagModal}>
+          <div
+            className="ar-flag-modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Flag AI response"
+          >
+            <div className="ar-flag-head">
+              <h2>Flag this response</h2>
+              <button type="button" className="ar-flag-close" onClick={closeFlagModal} aria-label="Close" disabled={flagSending}>×</button>
+            </div>
+            {flagDone ? (
+              <p className="ar-flag-success">Thanks — we received your report.</p>
+            ) : (
+              <>
+                <p className="ar-flag-hint">
+                  Tell us what looks wrong. We include the session context (subject, topic, concept, task) and the related messages.
+                </p>
+                <label className="ar-flag-label" htmlFor="ar-flag-reason">What is wrong with this response?</label>
+                <textarea
+                  id="ar-flag-reason"
+                  className="ar-flag-textarea"
+                  rows={4}
+                  maxLength={2000}
+                  value={flagModal.reason}
+                  onChange={(e) => setFlagModal((prev) => ({ ...prev, reason: e.target.value }))}
+                  disabled={flagSending}
+                  placeholder="e.g. Incorrect explanation, confusing, unsafe, off-topic…"
+                />
+                {flagError && <p className="ar-flag-error">{flagError}</p>}
+                <div className="ar-flag-actions">
+                  <button type="button" className="ar-flag-btn ghost" onClick={closeFlagModal} disabled={flagSending}>Cancel</button>
+                  <button type="button" className="ar-flag-btn danger" onClick={submitFlagReport} disabled={flagSending}>
+                    {flagSending ? "Sending…" : "Submit report"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
