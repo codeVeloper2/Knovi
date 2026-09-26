@@ -817,7 +817,70 @@
   .ar-header-right .ar-voice { display:grid; }
   .ar-end { display:none; }
   .ar-header-rebuilt .ar-end { display: inline-flex !important; align-items: center; justify-content: center; }
-  .ar-header.ar-header-rebuilt {
+  .ar-header
+/* Header center: motivation quote + breadcrumb between title and actions */
+.ar-hdr-top {
+  display: grid;
+  grid-template-columns: minmax(160px, auto) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+}
+
+.ar-hdr-center {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-align: center;
+  padding: 0 8px;
+}
+
+.ar-hdr-center .ar-hdr-motivation {
+  margin-top: 0;
+  justify-content: center;
+  max-width: 100%;
+}
+
+.ar-hdr-center .ar-breadcrumb {
+  justify-content: center;
+  flex: 0 1 auto;
+  max-width: 100%;
+}
+
+.ar-header-rebuilt .ar-tools-trigger { display: none !important; }
+
+/* Right workspace panel removed — always single main column with optional left plan */
+.ar-layout.ar-right-collapsed,
+.ar-layout.ar-left-open.ar-right-collapsed {
+  grid-template-columns: 285px minmax(0, 1fr);
+}
+.ar-layout.ar-left-collapsed.ar-right-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+.ar-work-sidebar,
+.ar-right-restore,
+.ar-right-edge-toggle { display: none !important; }
+
+@media (max-width: 960px) {
+  .ar-hdr-top {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+  }
+  .ar-hdr-left { grid-column: 1; grid-row: 1; }
+  .ar-header-actions { grid-column: 2; grid-row: 1; }
+  .ar-hdr-center {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    align-items: flex-start;
+    text-align: left;
+  }
+  .ar-hdr-center .ar-hdr-motivation,
+  .ar-hdr-center .ar-breadcrumb { justify-content: flex-start; }
+}
+
+.ar-header-rebuilt {
     height: auto !important;
     flex-basis: auto !important;
     padding: 10px 12px 12px !important;

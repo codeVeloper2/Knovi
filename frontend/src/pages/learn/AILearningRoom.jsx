@@ -14,6 +14,7 @@ import katex from "katex";
 import "katex/dist/katex.min.css";
 import "../../styles/ai-room.css";
 import GraphPlotPlayer from "../../components/GraphPlotPlayer";
+import ConfirmDialog from "../../components/ConfirmDialog";
 
 function statusToPhase(status, hasMessages) {
   switch (status) {
@@ -216,6 +217,9 @@ export default function AILearningRoom() {
   });
   const [isTyping, setIsTyping] = useState(false);
   const [mobilePanel, setMobilePanel] = useState(null);
+  const [leaveConfirm, setLeaveConfirm] = useState(false);
+  const [endConfirm, setEndConfirm] = useState(false);
+  const [sessionActionLoading, setSessionActionLoading] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [motivationIndex, setMotivationIndex] = useState(0);
   const [leftOpen, setLeftOpen] = useState(() => {
@@ -789,10 +793,29 @@ export default function AILearningRoom() {
     }, 1000);
   }
 
-  async function endSession() {
-    if (!window.confirm("End this session? Your progress will be saved.")) return;
-    try { await api.abandonAISession(sessionId); navigate("/app/learn/ai"); }
-    catch (err) { setError(err.message || "Could not end the session."); }
+  async function confirmEndSession() {
+    setSessionActionLoading(true);
+    try {
+      await api.abandonAISession(sessionId);
+      setEndConfirm(false);
+      navigate("/app/learn/ai");
+    } catch (err) {
+      setError(err.message || "Could not end the session.");
+      setSessionActionLoading(false);
+    }
+  }
+
+  function requestLeaveSession() {
+    setLeaveConfirm(true);
+  }
+
+  function requestEndSession() {
+    setEndConfirm(true);
+  }
+
+  function confirmLeaveSession() {
+    setLeaveConfirm(false);
+    navigate("/app/learn/ai");
   }
 
   const quickActions = [
@@ -816,7 +839,7 @@ export default function AILearningRoom() {
       <header className="ar-header ar-header-rebuilt">
         <div className="ar-hdr-top">
           <div className="ar-hdr-left">
-            <button type="button" className="ar-icon-btn ar-back-btn" onClick={() => navigate("/app/learn/ai")} aria-label="Back">
+            <button type="button" className="ar-icon-btn ar-back-btn" onClick={requestLeaveSession} aria-label="Back">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
@@ -826,6 +849,25 @@ export default function AILearningRoom() {
               <span className="ar-header-sub">{phaseLabel}</span>
             </div>
           </div>
+
+          <div className="ar-hdr-center">
+            <div className="ar-hdr-motivation" aria-live="polite">
+              <span className="ar-motivation-dot" />
+              <span key={motivationIndex} className="ar-motivation-text">{motivationText}</span>
+            </div>
+            <nav className="ar-breadcrumb" title={`${subjectName} › ${topicName || "Topic"} › ${conceptName}`} aria-label="Learning path">
+              <span className="ar-bc-seg">{subjectName}</span>
+              <svg className="ar-bc-sep" width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              <span className="ar-bc-seg">{topicName || "Topic"}</span>
+              <svg className="ar-bc-sep" width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              <span className="ar-bc-seg ar-bc-current">{conceptName}</span>
+            </nav>
+          </div>
+
           <div className="ar-header-actions">
             <button
               type="button"
@@ -846,31 +888,13 @@ export default function AILearningRoom() {
                 </svg>
               )}
             </button>
-            <button type="button" className="ar-header-action ar-tools-trigger" onClick={() => setMobilePanel("tools")}>Tools</button>
-            <button type="button" className="ar-end" onClick={endSession}>
+            <button type="button" className="ar-end" onClick={requestEndSession}>
               <span className="ar-end-label">End</span>
             </button>
           </div>
         </div>
 
-        <div className="ar-hdr-motivation" aria-live="polite">
-          <span className="ar-motivation-dot" />
-          <span key={motivationIndex} className="ar-motivation-text">{motivationText}</span>
-        </div>
-
         <div className="ar-hdr-meta">
-          <nav className="ar-breadcrumb" title={`${subjectName} › ${topicName || "Topic"} › ${conceptName}`} aria-label="Learning path">
-            <span className="ar-bc-seg">{subjectName}</span>
-            <svg className="ar-bc-sep" width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            <span className="ar-bc-seg">{topicName || "Topic"}</span>
-            <svg className="ar-bc-sep" width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            <span className="ar-bc-seg ar-bc-current">{conceptName}</span>
-          </nav>
-
           <div className="ar-plan-dropdown" ref={planMenuRef}>
             <button
               type="button"
@@ -924,7 +948,7 @@ export default function AILearningRoom() {
         </div>
       </header>
 
-      <div className={`ar-layout ${leftOpen ? "ar-left-open" : "ar-left-collapsed"} ${rightOpen ? "ar-right-open" : "ar-right-collapsed"}`}>
+      <div className={`ar-layout ${leftOpen ? "ar-left-open" : "ar-left-collapsed"} ar-right-collapsed`}>
         {leftOpen && (
           <aside className="ar-sidebar ar-plan-sidebar">
             <div className="ar-panel-inner">
@@ -1030,16 +1054,30 @@ export default function AILearningRoom() {
           </div>
         </main>
 
-        {rightOpen && (
-          <aside className={`ar-sidebar ar-work-sidebar ${mobilePanel === "tools" ? "ar-mobile-open" : ""}`}>
-            <WorkspacePanel session={session} task={currentTask} phase={phase} progress={planProgress} familiarity={session?.studentFamiliarity} intent={session?.intent} answeredCount={answeredCount} questionCount={questions.length} onStudy={startStudyMode} onClose={() => setMobilePanel(null)} />
-            <button type="button" className="ar-sidebar-edge-toggle ar-right-edge-toggle" onClick={toggleRightSidebar}>›</button>
-          </aside>
-        )}
-        {!rightOpen && <button type="button" className="ar-sidebar-restore ar-right-restore" onClick={toggleRightSidebar}>‹</button>}
       </div>
 
-      {mobilePanel && <button className="ar-mobile-backdrop" onClick={() => setMobilePanel(null)} aria-label="Close panel" />}
+      <ConfirmDialog
+        open={leaveConfirm}
+        title="Leave this session?"
+        message="Are you sure you want to leave this session? Your progress so far is saved — you can continue later from Learn."
+        confirmText="Leave session"
+        cancelText="Stay"
+        danger={false}
+        loading={false}
+        onConfirm={confirmLeaveSession}
+        onCancel={() => setLeaveConfirm(false)}
+      />
+      <ConfirmDialog
+        open={endConfirm}
+        title="End this session?"
+        message="This will end the session and save your current progress. You can start a new session anytime from Learn."
+        confirmText="End session"
+        cancelText="Keep learning"
+        danger={true}
+        loading={sessionActionLoading}
+        onConfirm={confirmEndSession}
+        onCancel={() => !sessionActionLoading && setEndConfirm(false)}
+      />
     </div>
   );
 }
@@ -1541,6 +1579,15 @@ function normalizeMathSource(text) {
   // Do this only after fenced code is protected so real source code is untouched.
   s = s.replace(/\\\\(?=[A-Za-z])/g, "\\");
   s = s.replace(/\\(?=\s|[.!?,;:]|$)/g, "");
+  // Currency-style escaped dollars from JSON: \$a\$ → $a$
+  s = s.replace(/\\\$/g, "$");
+  // Collapse accidental backslash before math delimiters
+  s = s.replace(/\\\$/g, "$");
+  // Common prose vars the model wraps poorly: ensure $a$, $b$, $c$ stay as math tokens
+  s = s.replace(/(?<![\w$])\$([a-zA-Z])\$(?![\w$])/g, "$$$1$");
+  // Bare ax^2 + bx + c patterns often written without delimiters in middle of sentences
+  s = s.replace(/(?<![\$\\])\b([a-zA-Z])x\^2\s*([+-])\s*([a-zA-Z])x\s*([+-])\s*([a-zA-Z])\b(?![\$])/g, "$$$1x^2 $2 $3x $4 $5$");
+
   // Remove TeX spacing commands that sometimes leak outside math delimiters.
   s = s.replace(/\\[!,;:]/g, "");
 
@@ -1667,7 +1714,7 @@ function CopySvg({ active = false }) {
 function inlineMarkdown(text) {
   const source = String(text);
   // Parse LaTeX delimiters before Markdown emphasis so math is not broken by * _
-  const tokens = source.split(/(\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$|\\\([\s\S]*?\\\)|\$(?=[^$\n]{1,32}\$)(?=[^$\n]*(?:\\[A-Za-z]+|[0-9]|[=<>^_{}]))[^$\n]+\$|==[^=\n]+==|\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\n]+\*|_[^_\n]+_|~~[^~]+~~)/g);
+  const tokens = source.split(/(\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$|\\\([\s\S]*?\\\)|\$(?=[^$\n]{1,48}\$)(?=[^$\n]*(?:\\[A-Za-z]+|[0-9]|[=<>^_{}]|[A-Za-z]))[^$\n]{1,48}\$|==[^=\n]+==|\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\n]+\*|_[^_\n]+_|~~[^~]+~~)/g);
   return tokens.map((p, i) => {
     if (!p) return null;
     if (p.startsWith("\\[") && p.endsWith("\\]")) return <span key={i}>{renderMath(p.slice(2, -2), true)}</span>;
