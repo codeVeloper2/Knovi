@@ -851,6 +851,7 @@
 
 .ar-header-rebuilt .ar-tools-trigger { display: none !important; }
 
+
 /* Right workspace panel removed — always single main column with optional left plan */
 .ar-layout.ar-right-collapsed,
 .ar-layout.ar-left-open.ar-right-collapsed {
@@ -2361,12 +2362,19 @@
 }
 
 .ar-hdr-meta {
-  display: flex;
+  /* Hidden on large screens — left sidebar already shows the learning plan */
+  display: none;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin-top: 12px;
   min-width: 0;
+}
+
+@media (max-width: 960px) {
+  .ar-hdr-meta {
+    display: flex;
+  }
 }
 
 .ar-breadcrumb {
