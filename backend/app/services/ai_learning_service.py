@@ -1192,8 +1192,7 @@ Return JSON (all fields required; arrays may be empty []):
 }}
 """
     if graph_plotting.subject_allows_plots(subject.name or ""):
-        prompt = prompt + "
-" + graph_plotting.PLOT_PROMPT_INSTRUCTIONS
+        prompt = prompt + "\n" + graph_plotting.PLOT_PROMPT_INSTRUCTIONS
 
     try:
         raw, provider = await call_with_fallback(
