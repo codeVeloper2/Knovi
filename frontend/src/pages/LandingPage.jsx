@@ -5,6 +5,7 @@ import { landingDemo } from "../api";
 import { KnoAILogo, LogoMark } from "../components/Logo";
 import "../styles/learn-interface.css";
 import "./landing.css";
+import HowKnoviWorks from "./HowKnoviWorks";
 
 const DEMO_QUESTIONS = [
   "Can you explain photosynthesis simply?",
@@ -82,6 +83,7 @@ export default function LandingPage() {
           <nav className={`landing-nav-links ${mobileOpen ? "is-open" : ""}`}>
             <button onClick={() => { scrollToId("problem"); closeMenu(); }}>Why Knovi</button>
             <button onClick={() => { scrollToId("how-it-works"); closeMenu(); }}>How it works</button>
+            <button onClick={() => { scrollToId("how-knovi-works"); closeMenu(); }}>Tour</button>
             <button onClick={() => { scrollToId("demo"); closeMenu(); }}>KnoAI</button>
             <button onClick={() => { scrollToId("about"); closeMenu(); }}>The builder</button>
             <button onClick={() => { scrollToId("contact"); closeMenu(); }}>Contact</button>
@@ -256,6 +258,8 @@ export default function LandingPage() {
           <div className="step reveal delay-two"><span className="step-number">03</span><div className="step-icon"><Zap size={22} /></div><h3>Keep going</h3><p>Study together, practise, challenge yourself and build progress around what you actually need.</p></div>
         </div>
       </section>
+
+      <HowKnoviWorks />
 
       <section id="demo" className="landing-section demo-section">
         <div className="section-heading reveal">
