@@ -825,6 +825,48 @@ export default function AILearningRoom() {
     ["apply", "Apply it", "Give me a real-world application of this idea."],
   ];
 
+
+  async function handleFlagAiMessage(msg) {
+    const content = (msg?.content || "").trim();
+    if (!content) return;
+    // Nearest prior student message for context
+    const ordered = [...messages].sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
+    const idx = ordered.findIndex(m => m.id === msg.id);
+    let studentMsg = "";
+    for (let i = idx - 1; i >= 0; i--) {
+      if (ordered[i].role === "student") {
+        studentMsg = ordered[i].content || "";
+        break;
+      }
+    }
+    const reason = window.prompt(
+      "What is wrong with this AI response? (optional details help us improve)",
+      "This response looks incorrect or unhelpful."
+    );
+    if (reason === null) return; // cancelled
+    try {
+      await api.submitFeedback({
+        kind: "ai_flag",
+        message: (reason || "").trim() || "Flagged AI response",
+        page: window.location.pathname,
+        session_id: Number(sessionId) || null,
+        subject_name: subjectName || null,
+        topic_name: topicName || null,
+        concept_name: conceptName || null,
+        task_index: Number.isInteger(currentTaskIndex) ? currentTaskIndex : null,
+        task_title: currentTask ? taskTitle(currentTask) : null,
+        student_message: studentMsg || null,
+        ai_message: content.slice(0, 8000),
+        ai_message_id: msg.id ? Number(msg.id) : null,
+      });
+      setError(null);
+      // brief toast via existing error banner style inverted - use alert for reliability
+      window.alert("Thanks — we received your report.");
+    } catch (err) {
+      setError(err.message || "Could not send the report.");
+    }
+  }
+
   if (loading) return <RoomSkeleton />;
   if (error && !session) return <ErrorRoom message={error} onBack={() => navigate("/app/learn/ai")} />;
   if (phase === "abandoned") return <ErrorRoom message="This learning session was ended early." onBack={() => navigate("/app/learn/ai")} />;
@@ -1001,6 +1043,7 @@ export default function AILearningRoom() {
                   onTutorAction={sendMessage}
                   isSaved={savedMessageIds.has(Number(msg.id))}
                   onSave={handleSaveExplanation}
+                  onFlag={handleFlagAiMessage}
                   isTypingNow={typingMessageId === msg.id}
                 />
               ))}
@@ -1083,7 +1126,7 @@ export default function AILearningRoom() {
 }
 
 /* ─── MessageCard: plain AI, carded student ──────────────────────────── */
-function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave, isTypingNow }) {
+function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave, onFlag, isTypingNow }) {
   const ai = msg.role === "ai";
   const [studentCopyRevealed, setStudentCopyRevealed] = useState(false);
   const locked = ai && msg.extra?.locked;
@@ -1233,6 +1276,17 @@ function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave, is
               ? <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
               : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
             }
+          </button>
+          <button
+            className="ar-msg-icon-btn"
+            onClick={() => onFlag?.(msg)}
+            title="Flag this response"
+            aria-label="Flag this AI response"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+              <line x1="4" y1="22" x2="4" y2="15"/>
+            </svg>
           </button>
         </div>
       )}

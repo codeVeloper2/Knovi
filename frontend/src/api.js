@@ -791,3 +791,9 @@ export function openChallengeSocket(challengeId, handlers = {}) {
   ws.onclose = event => handlers.onClose?.(event);
   return ws;
 }
+
+
+/** Submit product feedback or flag an AI learning response. Emails the team. */
+export function submitFeedback(payload) {
+  return post("/api/feedback", payload);
+}
