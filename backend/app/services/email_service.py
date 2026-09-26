@@ -67,7 +67,7 @@ EDU_TIP = (
 # images fine, unlike data: URIs (Gmail strips those) or SVG (not supported).
 LOGO_URL = (
     "https://iqmwntlyqvyugbilqefb.supabase.co"
-    "https://peerup.pages.dev/knovi-logo.png"
+    "https://knovi.pages.dev/knovi-logo.svg"
 )
 
 

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 100" role="img" aria-label="Knovi">
+  <defs>
+    <linearGradient id="fvBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7dd3fc"/>
+      <stop offset="40%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <linearGradient id="fvK" x1="10%" y1="0%" x2="90%" y2="100%">
+      <stop offset="0%" stop-color="#e0f2fe"/>
+      <stop offset="50%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#1e3a8a"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#fvBlue)" d="M18 28 L34 22 L34 72 L18 78 Z" opacity="0.9"/>
+  <path fill="url(#fvBlue)" d="M28 24 L42 18 L42 70 L28 76 Z"/>
+  <path fill="url(#fvBlue)" d="M102 28 L86 22 L86 72 L102 78 Z" opacity="0.9"/>
+  <path fill="url(#fvBlue)" d="M92 24 L78 18 L78 70 L92 76 Z"/>
+  <path fill="none" stroke="url(#fvBlue)" stroke-width="5" stroke-linecap="round" d="M22 78 Q60 92 98 78"/>
+  <path fill="url(#fvK)" d="M48 16 L60 16 L60 42 L78 16 L92 16 L68 48 L94 84 L80 84 L60 54 L60 84 L48 84 Z"/>
+</svg>

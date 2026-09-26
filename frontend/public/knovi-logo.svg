@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 100" role="img" aria-label="Knovi">
+  <defs>
+    <linearGradient id="klBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#7dd3fc"/>
+      <stop offset="35%" stop-color="#38bdf8"/>
+      <stop offset="70%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <linearGradient id="klBlueDeep" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1e40af"/>
+      <stop offset="50%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#60a5fa"/>
+    </linearGradient>
+    <linearGradient id="klK" x1="15%" y1="0%" x2="90%" y2="100%">
+      <stop offset="0%" stop-color="#e0f2fe"/>
+      <stop offset="25%" stop-color="#7dd3fc"/>
+      <stop offset="55%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#1e3a8a"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#klBlue)" d="M18 28 L34 22 L34 72 L18 78 Z" opacity="0.85"/>
+  <path fill="url(#klBlueDeep)" d="M28 24 L42 18 L42 70 L28 76 Z"/>
+  <path fill="url(#klBlue)" d="M102 28 L86 22 L86 72 L102 78 Z" opacity="0.85"/>
+  <path fill="url(#klBlueDeep)" d="M92 24 L78 18 L78 70 L92 76 Z"/>
+  <path fill="none" stroke="url(#klBlue)" stroke-width="5" stroke-linecap="round"
+        d="M22 78 Q60 92 98 78"/>
+  <path fill="none" stroke="#60a5fa" stroke-width="2.5" stroke-linecap="round" opacity="0.7"
+        d="M30 76 Q60 86 90 76"/>
+  <path fill="url(#klK)" d="
+    M48 16 L60 16 L60 42 L78 16 L92 16 L68 48 L94 84 L80 84 L60 54 L60 84 L48 84 Z"/>
+</svg>

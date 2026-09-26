@@ -274,7 +274,7 @@ export default function AISessionSetup() {
 export function TutorAvatar({ size = 40, className }) {
   return (
     <img
-      src="/knoai-logo.png"
+      src="/knoai-logo.svg"
       width={size}
       height={size}
       className={className}

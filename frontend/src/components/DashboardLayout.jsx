@@ -9,7 +9,6 @@ import ConfirmDialog from "./ConfirmDialog";
 import NotificationsBell from "./NotificationsPanel";
 import MobileTopBar from "./MobileTopBar";
 import MobileHamburgerMenu from "./MobileHamburgerMenu";
-import MobileFabMenu from "./MobileFabMenu";
 import FeedbackWidget from "./FeedbackWidget";
 import {
   HomeIcon, DiscoverIcon, ChatIcon, ChallengeIcon, LearnIcon,

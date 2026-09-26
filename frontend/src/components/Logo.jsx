@@ -1,5 +1,5 @@
 /**
- * Knovi logo mark.
+ * Knovi logo mark (SVG).
  *
  * The brand name "Knovi" is intentionally NOT part of the logo artwork.
  * Use this component wherever the Knovi logo is needed.
@@ -7,7 +7,7 @@
 export function LogoMark({ size = 38, className }) {
   return (
     <img
-      src="/knovi-mark.png"
+      src="/knovi-mark.svg"
       width={size}
       height={size}
       className={className}
@@ -20,7 +20,7 @@ export function LogoMark({ size = 38, className }) {
 export function KnoAILogo({ size = 40, className }) {
   return (
     <img
-      src="/knoai-logo.png"
+      src="/knoai-logo.svg"
       width={size}
       height={size}
       className={className}
