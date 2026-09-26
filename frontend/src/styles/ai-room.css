@@ -2688,3 +2688,94 @@
 }
 .ar-quiz-question .ar-rich p { margin: 0; font-size: inherit; }
 .ar-quiz-question .katex { font-size: 1.1em; }
+
+/* ── Live graph plot player ─────────────────────────────────────── */
+.gp-player {
+  margin: 12px 0 4px;
+  border: 1px solid rgba(123, 168, 224, 0.22);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(9, 26, 49, 0.95), rgba(6, 18, 37, 0.98));
+  overflow: hidden;
+}
+.gp-player-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid rgba(123, 168, 224, 0.12);
+}
+.gp-player-head strong {
+  display: block;
+  font-size: 0.92rem;
+  color: #edf4ff;
+}
+.gp-player-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  color: #8fa7c5;
+  text-transform: capitalize;
+}
+.gp-player-status {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(123, 168, 224, 0.2);
+  color: #8fa7c5;
+}
+.gp-status-drawing { color: #a5b4fc; border-color: rgba(91, 111, 246, 0.35); background: rgba(91, 111, 246, 0.12); }
+.gp-status-verifying { color: #fcd34d; border-color: rgba(245, 185, 76, 0.35); background: rgba(245, 185, 76, 0.1); }
+.gp-status-correcting { color: #fca5a5; border-color: rgba(255, 107, 124, 0.35); background: rgba(255, 107, 124, 0.1); }
+.gp-status-final { color: #86efac; border-color: rgba(39, 214, 163, 0.35); background: rgba(39, 214, 163, 0.1); }
+.gp-status-warning { color: #fdba74; border-color: rgba(251, 146, 60, 0.35); background: rgba(251, 146, 60, 0.1); }
+
+.gp-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.gp-grid {
+  stroke: rgba(143, 167, 197, 0.12);
+  stroke-width: 1;
+}
+.gp-axis {
+  stroke: rgba(237, 244, 255, 0.45);
+  stroke-width: 1.4;
+}
+.gp-label {
+  fill: #8fa7c5;
+  font-size: 11px;
+}
+.gp-curve {
+  stroke: #6b8cff;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.gp-guide {
+  stroke: rgba(165, 180, 252, 0.55);
+  stroke-width: 1.4;
+}
+.gp-guide.dashed {
+  stroke-dasharray: 5 4;
+}
+.gp-point {
+  fill: #f5b94c;
+  stroke: #0b1d35;
+  stroke-width: 1.5;
+}
+.gp-point-label {
+  fill: #c7d2fe;
+  font-size: 10px;
+}
+.gp-say {
+  padding: 10px 14px 12px;
+  border-top: 1px solid rgba(123, 168, 224, 0.12);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: #c5d4ea;
+}

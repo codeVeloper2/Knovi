@@ -13,6 +13,7 @@ import { TutorAvatar } from "./AISessionSetup";
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import "../../styles/ai-room.css";
+import GraphPlotPlayer from "../../components/GraphPlotPlayer";
 
 function statusToPhase(status, hasMessages) {
   switch (status) {
@@ -1157,6 +1158,9 @@ function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave, is
         {action && <div className="ar-agent-badge"><span>✦</span>{activityLabel(action)}</div>}
         <RichText content={shownContent} onCopy={onCopy} copiedId={copiedId} />
         {isTypingNow && !done && <span className="ar-cursor-blink">▍</span>}
+        {!locked && msg.extra?.plot && !(isTypingNow && !done) && (
+          <GraphPlotPlayer plot={msg.extra.plot} key={`plot-${msg.id || msg.localId}`} />
+        )}
       </div>
 
       {/* Icon row: copy · play/pause · save */}

@@ -39,6 +39,7 @@ from app.models.curriculum import Concept, LearningObjective, Misconception, Sub
 from app.models.learning_profile import AILearningProfile
 from app.services.ai_service import call_with_fallback, parse_json
 from app.services import learning_profile_service as lp_svc
+from app.services import graph_plotting as graph_plotting
 from app.services import progress_service
 
 logger = logging.getLogger(__name__)
@@ -242,7 +243,9 @@ def _filter_protected_messages(messages: list) -> list:
         if message.message_type in ("teaching", "reteach"):
             data = message.serialize()
             data["content"] = "🔒 Currently in practice mode.\nTeaching content will reopen after practice mode."
-            data["extra"] = {**(data.get("extra") or {}), "locked": True, "originalMessageId": message.id}
+            locked_extra = {**(data.get("extra") or {}), "locked": True, "originalMessageId": message.id}
+            locked_extra.pop("plot", None)  # hide live graphs during practice/retrieval
+            data["extra"] = locked_extra
             result.append(data)
         else:
             result.append(message.serialize())
@@ -1184,9 +1187,14 @@ Return JSON (all fields required; arrays may be empty []):
   "summary": "One-paragraph summary.",
   "study_prompt": "Short instruction telling the student what to focus on while studying.",
   "covered_objective_ids": [101],
-  "learning_tasks": [{{"title":"...","description":"...","focus":"...","recommended_minutes":5,"objective_ids":[101]}}]
+  "learning_tasks": [{{"title":"...","description":"...","focus":"...","recommended_minutes":5,"objective_ids":[101]}}],
+  "plot": null
 }}
 """
+    if graph_plotting.subject_allows_plots(subject.name or ""):
+        prompt = prompt + "
+" + graph_plotting.PLOT_PROMPT_INSTRUCTIONS
+
     try:
         raw, provider = await call_with_fallback(
             prompt, system=system_prompt, temperature=0.7, json_mode=True
@@ -1286,17 +1294,29 @@ Return JSON (all fields required; arrays may be empty []):
     db.add(attempt)
 
     message_content = f"{explanation}\n\n---\n*{study_prompt}*"
+    teach_extra = {
+        "strategy": strategy,
+        "teachingId": teaching.id,
+        "provider": provider,
+        "learningPlan": learning_tasks,
+        "taskIndex": task_index,
+        "currentTaskIndex": task_index if task_index is not None else _current_task_index_from_messages(session.messages),
+        "taskTitle": selected_task.get("title") if selected_task else None,
+    }
+    try:
+        plot_payload = graph_plotting.process_ai_plot(
+            parsed.get("plot"),
+            subject_name=subject.name or "",
+            concept_name=concept.name or "",
+        )
+        if plot_payload:
+            teach_extra["plot"] = plot_payload
+    except Exception as plot_exc:
+        logger.warning("Plot processing failed (non-fatal): %s", plot_exc)
+
     await _add_ai_response(
         session_id, "teaching", message_content, db,
-        extra={
-            "strategy": strategy,
-            "teachingId": teaching.id,
-            "provider": provider,
-            "learningPlan": learning_tasks,
-            "taskIndex": task_index,
-            "currentTaskIndex": task_index if task_index is not None else _current_task_index_from_messages(session.messages),
-            "taskTitle": selected_task.get("title") if selected_task else None,
-        },
+        extra=teach_extra,
     )
 
     if session.status == "created":
