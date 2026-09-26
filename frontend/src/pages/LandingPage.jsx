@@ -3,6 +3,7 @@ import { ArrowRight, CheckCircle2, Github, Mail, Menu, Sparkles, Users, X, Zap }
 import { Link } from "react-router-dom";
 import { landingDemo } from "../api";
 import { KnoAILogo, LogoMark } from "../components/Logo";
+import "../styles/learn-interface.css";
 import "./landing.css";
 
 const DEMO_QUESTIONS = [
@@ -109,22 +110,128 @@ export default function LandingPage() {
             <div className="hero-note"><CheckCircle2 size={15} /> Built for students · No subscription required to explore Knovi</div>
           </div>
 
-          <div className="hero-visual reveal delay-one" aria-label="Knovi learning preview">
+          <div className="hero-visual reveal delay-one" aria-label="Knovi Learn tab preview">
             <div className="hero-glow" />
             <div className="hero-window">
-              <div className="window-top"><span /><span /><span /><small>Knovi · Learning room</small></div>
-              <div className="hero-window-body">
-                <div className="preview-side">
-                  <div className="preview-brand"><LogoMark size={26} /><b>Knovi</b></div>
-                  <div className="preview-nav active">Learn</div>
-                  <div className="preview-nav">Discover</div>
-                  <div className="preview-nav">Chat</div>
-                </div>
-                <div className="preview-main">
-                  <span className="mini-kicker">TODAY'S FOCUS</span>
-                  <h3>Quadratic equations</h3>
-                  <div className="preview-card"><KnoAILogo size={42} /><div><b>KnoAI is ready</b><small>Let's work through this together.</small></div></div>
-                  <div className="preview-lines"><i /><i /><i /></div>
+              <div className="window-top"><span /><span /><span /><small>Knovi · Learn</small></div>
+              <div className="hero-window-body hero-learn-clone" aria-hidden="true">
+                {/* Exact structural clone of /app/learn (LearnLayout + LearnHome) — non-interactive */}
+                <div className="learn-shell preview-learn-shell">
+                  <aside className="learn-sidebar">
+                    <div className="learn-sidebar-brand">
+                      <div className="learn-sidebar-brand-icon">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M4.5 5.5A2.5 2.5 0 0 1 7 3h11v16H7a2.5 2.5 0 0 0-2.5 2.5v-16Z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
+                          <path d="M7 19h11M8 7h7M8 10h6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </div>
+                      <div>
+                        <div className="learn-sidebar-title">Learn</div>
+                        <div className="learn-sidebar-subtitle">Your AI-powered learning space</div>
+                      </div>
+                    </div>
+                    <nav className="learn-sidebar-nav">
+                      <span className="learn-side-link active">
+                        <span className="learn-side-icon">
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h9.5A3.5 3.5 0 0 1 18 8v11.5H8.5A3.5 3.5 0 0 0 5 23V4.5Z" fill="none" stroke="currentColor" strokeWidth="1.7"/><path d="M5 19.5h9.5A3.5 3.5 0 0 1 18 23" fill="none" stroke="currentColor" strokeWidth="1.7"/><path d="M9 8h5M9 11h5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>
+                        </span>
+                        <span>Subjects</span>
+                      </span>
+                      <span className="learn-side-link">
+                        <span className="learn-side-icon">
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" strokeWidth="1.7"/><path d="M8 9h8M8 13h5M8 17h3" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>
+                        </span>
+                        <span>Study Sessions</span>
+                      </span>
+                      <span className="learn-side-link">
+                        <span className="learn-side-icon">
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h10v17l-5-3-5 3v-17Z" fill="none" stroke="currentColor" strokeWidth="1.7"/></svg>
+                        </span>
+                        <span>Saved Resources</span>
+                      </span>
+                      <span className="learn-side-link">
+                        <span className="learn-side-icon">
+                          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="18" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.7"/><circle cx="18" cy="6" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.7"/><circle cx="18" cy="18" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.7"/><path d="M8.5 17.5h5a4.5 4.5 0 0 0 4.5-4.5V8.5" fill="none" stroke="currentColor" strokeWidth="1.7"/></svg>
+                        </span>
+                        <span>Learning Path</span>
+                      </span>
+                    </nav>
+                  </aside>
+
+                  <div className="learn-main">
+                    <div className="learn-home">
+                      <div className="learn-hero">
+                        <div className="learn-hero-copy">
+                          <div className="learn-hero-icon">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H18v16H6.5A2.5 2.5 0 0 0 4 21.5v-16Z" stroke="currentColor" strokeWidth="1.8"/>
+                              <path d="M6.5 19H18M8 7h6M8 10h5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                            </svg>
+                          </div>
+                          <div>
+                            <h1>What would you like to learn today?</h1>
+                            <p>Choose a subject and explore topics. Your AI tutor will guide you from basics to mastery.</p>
+                          </div>
+                        </div>
+                        <form className="learn-hero-search" onSubmit={(e) => e.preventDefault()}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8"/><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+                          <input
+                            readOnly
+                            tabIndex={-1}
+                            value=""
+                            placeholder="Search for a subject, topic or keyword..."
+                            aria-label="Search (demo only)"
+                          />
+                        </form>
+                      </div>
+
+                      <div className="learn-home-highlights">
+                        <section className="learn-panel learn-robot-card">
+                          <div>
+                            <h3>Small steps.<br />Big progress.</h3>
+                            <p>Keep learning, one concept at a time.</p>
+                          </div>
+                          <div className="learn-growth-arrow">↗</div>
+                        </section>
+                        <div className="learn-focus-card">
+                          <span className="learn-focus-icon">◎</span>
+                          <span>
+                            <strong>Today's Focus</strong>
+                            <small>Mathematics · Quadratic equations</small>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="learn-home-grid">
+                        <section className="learn-subject-area">
+                          <div className="learn-section-head">
+                            <h2>All Subjects</h2>
+                          </div>
+                          <div className="learn-subject-grid">
+                            {[
+                              { name: "Mathematics", tone: "purple", symbol: "π", desc: "Algebra, Geometry, Calculus…" },
+                              { name: "Physics", tone: "blue", symbol: "⚛", desc: "Mechanics, Waves, Energy…" },
+                              { name: "Chemistry", tone: "green", symbol: "⚗", desc: "Organic, Inorganic, Physical…" },
+                              { name: "Biology", tone: "green", symbol: "⌁", desc: "Cells, Genetics, Ecology…" },
+                            ].map((s) => (
+                              <div key={s.name} className="learn-subject-card">
+                                <div className="learn-subject-card-top">
+                                  <span className={`learn-subject-icon learn-tone-${s.tone}`}>{s.symbol}</span>
+                                </div>
+                                <div className="learn-subject-card-copy">
+                                  <h3>{s.name}</h3>
+                                  <p>{s.desc}</p>
+                                </div>
+                                <div className="learn-subject-card-foot">
+                                  <span>Choose your class</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </section>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
