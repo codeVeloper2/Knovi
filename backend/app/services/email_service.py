@@ -251,6 +251,47 @@ def activity_email(title: str, what: str) -> tuple[str, str, str]:
     return subject, html, text
 
 
+def notification_email(title: str, body: str, cta_label: str = "Open Knovi", cta_url: str = "") -> tuple[str, str, str]:
+    """Product / activity notification (chat, progress, sessions, tips)."""
+    subject = f"Knovi: {title}"
+    button = ""
+    if cta_url:
+        button = f"""
+            <p style="margin:24px 0 8px;">
+              <a href="{cta_url}" style="display:inline-block;background:linear-gradient(90deg,#4f5ef0,#3b82f6);
+                color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 20px;border-radius:10px;">
+                {cta_label}
+              </a>
+            </p>"""
+    html = f"""\
+<!doctype html>
+<html>
+  <body style="margin:0;background:#0a1428;font-family:Arial,Helvetica,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0a1428;padding:32px 0;">
+      <tr><td align="center">
+        <table role="presentation" width="480" cellpadding="0" cellspacing="0"
+               style="background:#0e1b34;border:1px solid #24324f;border-radius:16px;overflow:hidden;">
+          <tr><td style="height:4px;background:linear-gradient(90deg,#60a5fa,#5b6ef5,#a78bfa);"></td></tr>
+          <tr><td style="padding:32px;">
+            {_header()}
+            <h1 style="font-size:20px;color:#ffffff;margin:0 0 12px;">{title}</h1>
+            <p style="font-size:14px;line-height:1.6;color:#94a3b8;margin:0 0 8px;">{body}</p>
+            {button}
+            {_footer()}
+          </td></tr>
+        </table>
+        <p style="font-size:11px;color:#475569;margin:16px 0 0;">© Knovi — Learn. Teach. Grow.</p>
+      </td></tr>
+    </table>
+  </body>
+</html>"""
+    text = f"{title}\n\n{body}\n"
+    if cta_url:
+        text += f"\n{cta_label}: {cta_url}\n"
+    text += "\nKnovi — Learn. Teach. Grow."
+    return subject, html, text
+
+
 def account_deleted_email(name: str = "") -> tuple[str, str, str]:
     """Confirmation that the account and all its data were permanently deleted."""
     subject = "Your Knovi account has been deleted"

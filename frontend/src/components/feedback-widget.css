@@ -119,3 +119,10 @@
   }
   .fb-fab-label { display: none; }
 }
+
+/* Extra clearance when a bottom composer is present (desktop chat). */
+@media (min-width: 721px) {
+  body:has(.dash-main--chat) .fb-fab {
+    bottom: 96px;
+  }
+}

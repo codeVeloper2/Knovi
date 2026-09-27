@@ -85,10 +85,29 @@ async def award_xp(
     if not user:
         return 0
 
-    user.xp = (user.xp or 0) + int(amount)
+    prev_xp = user.xp or 0
+    user.xp = prev_xp + int(amount)
     await session.flush()
     if commit:
         await session.commit()
+    # Email progress notification (level-up or XP gain)
+    try:
+        from app.services import notify_service
+        new_total = user.xp or 0
+        prev_level = _level_info(prev_xp)["name"]
+        new_level = _level_info(new_total)["name"]
+        if prev_level != new_level:
+            title = f"You reached {new_level}!"
+            body = f"You earned +{amount} XP and leveled up to {new_level} ({new_total} XP total)."
+        else:
+            title = f"+{amount} XP earned"
+            body = f"Your learning paid off — you're at {new_total} XP ({new_level})."
+        await notify_service.email_user(
+            session, user_id, "progress", title, body,
+            cta_label="View progress", cta_url="/app/progress",
+        )
+    except Exception:
+        pass
     return user.xp or 0
 
 
@@ -374,6 +393,20 @@ async def evaluate_badges(session: AsyncSession, user_id: int) -> list[str]:
 
     if newly_awarded:
         await session.commit()
+        try:
+            from app.services import notify_service
+            label_names = []
+            for bid in newly_awarded:
+                meta = BADGE_MAP.get(bid) or {}
+                label_names.append(meta.get("name") or bid)
+            title = "New badge unlocked" if len(label_names) == 1 else f"{len(label_names)} new badges"
+            body = "You earned: " + ", ".join(label_names) + "."
+            await notify_service.email_user(
+                session, user_id, "progress", title, body,
+                cta_label="View badges", cta_url="/app/progress",
+            )
+        except Exception:
+            pass
 
     return newly_awarded
 

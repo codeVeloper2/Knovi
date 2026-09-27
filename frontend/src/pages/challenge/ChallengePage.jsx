@@ -254,51 +254,22 @@ function HomeView({ challenges, onStart, onOpen, onRefresh }) {
 function StartChallengeDialog({ peers, sessions, onClose, onCreated }) {
   const toast = useToast();
   const [peer, setPeer] = useState(null);
-  const [concept, setConcept] = useState(null);
+  const [session, setSession] = useState(null);
   const [questionCount, setQuestionCount] = useState(5);
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState("");
-  const [sharedConcepts, setSharedConcepts] = useState([]);
-  const [loadingConcepts, setLoadingConcepts] = useState(false);
-
+  const eligibleSessions = sessions.filter((s) => !["abandoned", "created"].includes(s.status) && s.conceptId);
   const filteredPeers = peers.filter((p) => (p.displayName || "").toLowerCase().includes(query.trim().toLowerCase()));
 
-  // When a peer is selected, load concepts BOTH students have meaningfully learned.
-  useEffect(() => {
-    let alive = true;
-    setConcept(null);
-    setSharedConcepts([]);
-    if (!peer) return undefined;
-
-    const opponentId = peer.uid ?? peer.id;
-    setLoadingConcepts(true);
-    api.getSharedChallengeConcepts(opponentId)
-      .then((data) => {
-        if (!alive) return;
-        const list = Array.isArray(data?.concepts) ? data.concepts : (Array.isArray(data) ? data : []);
-        setSharedConcepts(list);
-      })
-      .catch((err) => {
-        if (!alive) return;
-        setSharedConcepts([]);
-        toast.error(err.message || "Could not load shared concepts.");
-      })
-      .finally(() => {
-        if (alive) setLoadingConcepts(false);
-      });
-
-    return () => { alive = false; };
-  }, [peer]);
-
   async function submit() {
-    if (!peer || !concept) return;
+    if (!peer || !session) return;
     setSaving(true);
     try {
       const result = await api.createChallenge({
         opponentId: peer.uid ?? peer.id,
-        subjectId: concept.subjectId,
-        topicId: concept.topicId,
-        conceptId: concept.conceptId,
+        subjectId: session.subjectId,
+        topicId: session.topicId,
+        conceptId: session.conceptId,
         questionCount,
       });
       onCreated(result.challenge || result);
@@ -323,36 +294,18 @@ function StartChallengeDialog({ peers, sessions, onClose, onCreated }) {
             <button key={p.uid ?? p.id} type="button" className={`ch-pick-row ${peer && (peer.uid ?? peer.id) === (p.uid ?? p.id) ? "selected" : ""}`} onClick={() => setPeer(p)}>
               <Avatar url={p.photoURL} name={p.displayName} size={40} online={p.isOnline} />
               <span><strong>{p.displayName}</strong><small>{p.isOnline ? "Online" : "Offline"}</small></span>
-              {peer && (peer.uid ?? peer.id) === (p.uid ?? p.id) ? <span className="ch-check">✓</span> : null}
+              <span className="ch-check">{peer && (peer.uid ?? peer.id) === (p.uid ?? p.id) ? "✓" : ""}</span>
             </button>
-          )) : <div className="ch-empty-inline">No connected peers found.</div>}
+          )) : <div className="ch-empty-inline">No connected peers available.</div>}
         </div>
         <label className="ch-field-label">Learned concept</label>
         <div className="ch-scroll-list">
-          {!peer ? (
-            <div className="ch-empty-inline">Select a peer first to see shared concepts.</div>
-          ) : loadingConcepts ? (
-            <div className="ch-empty-inline">Finding concepts you both learned…</div>
-          ) : sharedConcepts.length ? (
-            sharedConcepts.map((c) => (
-              <button
-                key={c.conceptId}
-                type="button"
-                className={`ch-pick-row ${concept?.conceptId === c.conceptId ? "selected" : ""}`}
-                onClick={() => setConcept(c)}
-              >
-                <span className="ch-check">{concept?.conceptId === c.conceptId ? "✓" : ""}</span>
-                <span>
-                  <strong>{c.conceptName || "Concept"}</strong>
-                  <small>{[c.subjectName, c.topicName].filter(Boolean).join(" · ")}</small>
-                </span>
-              </button>
-            ))
-          ) : (
-            <div className="ch-empty-inline">
-              No shared concepts yet. Both of you need a meaningful AI learning session on the same concept.
-            </div>
-          )}
+          {eligibleSessions.length ? eligibleSessions.map((s) => (
+            <button key={s.id} type="button" className={`ch-pick-row ${session?.id === s.id ? "selected" : ""}`} onClick={() => setSession(s)}>
+              <span className="ch-check">{session?.id === s.id ? "✓" : ""}</span>
+              <span><strong>{s.conceptName || "Concept"}</strong><small>{[s.subjectName, s.topicName].filter(Boolean).join(" · ")}</small></span>
+            </button>
+          )) : <div className="ch-empty-inline">Complete an AI learning session first.</div>}
         </div>
         <label className="ch-field-label">Questions</label>
         <div className="ch-count-row">
@@ -360,7 +313,7 @@ function StartChallengeDialog({ peers, sessions, onClose, onCreated }) {
             <button key={n} type="button" className={questionCount === n ? "selected" : ""} onClick={() => setQuestionCount(n)}>{n}</button>
           ))}
         </div>
-        <button type="button" className="ch-btn ch-btn-primary ch-btn-block" disabled={!peer || !concept || saving} onClick={submit}>
+        <button type="button" className="ch-btn ch-btn-primary ch-btn-block" disabled={!peer || !session || saving} onClick={submit}>
           {saving ? "Creating…" : "Send challenge"}
         </button>
       </div>

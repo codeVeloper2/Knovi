@@ -215,83 +215,6 @@ async def _get_source_sessions(
     return session_a, session_b
 
 
-async def _meaningful_concept_sessions(
-    user_id: int,
-    db: AsyncSession,
-) -> dict[int, AILearningSession]:
-    """Map concept_id → best meaningful AI session for this user.
-
-    Same eligibility as ``select_relevant_session``: status not abandoned/created
-    and at least one teaching row.
-    """
-    result = await db.execute(
-        select(AILearningSession)
-        .options(selectinload(AILearningSession.teaching))
-        .where(
-            AILearningSession.user_id == user_id,
-            AILearningSession.status.not_in({"abandoned", "created"}),
-        )
-        .order_by(
-            (AILearningSession.status == "completed").desc(),
-            AILearningSession.completed_at.desc().nullslast(),
-            AILearningSession.updated_at.desc(),
-            AILearningSession.id.desc(),
-        )
-    )
-    by_concept: dict[int, AILearningSession] = {}
-    for session in result.scalars().all():
-        if not session.teaching:
-            continue
-        cid = session.concept_id
-        if cid not in by_concept:
-            by_concept[cid] = session
-    return by_concept
-
-
-async def list_shared_concepts(
-    *,
-    user_id: int,
-    opponent_id: int,
-    db: AsyncSession,
-) -> list[dict]:
-    """Concepts both students have a meaningful AI learning session on."""
-    if user_id == opponent_id:
-        raise HTTPException(400, "You cannot challenge yourself.")
-
-    mine = await _meaningful_concept_sessions(user_id, db)
-    theirs = await _meaningful_concept_sessions(opponent_id, db)
-    shared_ids = sorted(set(mine.keys()) & set(theirs.keys()))
-    if not shared_ids:
-        return []
-
-    concept_rows = (
-        await db.execute(
-            select(Concept, Topic, Subject)
-            .join(Topic, Concept.topic_id == Topic.id)
-            .join(Subject, Topic.subject_id == Subject.id)
-            .where(Concept.id.in_(shared_ids))
-        )
-    ).all()
-
-    items = []
-    for concept, topic, subject in concept_rows:
-        my_session = mine.get(concept.id)
-        if not my_session:
-            continue
-        items.append({
-            "conceptId": concept.id,
-            "subjectId": subject.id,
-            "topicId": topic.id,
-            "conceptName": concept.name,
-            "subjectName": subject.name,
-            "topicName": topic.name,
-            "sourceSessionId": my_session.id,
-            "status": my_session.status,
-        })
-    items.sort(key=lambda x: ((x["conceptName"] or "").lower(), x["conceptId"]))
-    return items
-
-
 async def create_challenge(
     *,
     challenger_id: int,
@@ -433,6 +356,20 @@ async def create_challenge(
         "challenge_created challenge_id=%s challenger_id=%s opponent_id=%s concept_id=%s",
         challenge.id, challenger_id, opponent_id, concept_id,
     )
+    try:
+        from app.services import notify_service
+        await notify_service.email_user(
+            db,
+            opponent_id,
+            "messages",
+            f"{challenger.full_name or 'A peer'} challenged you",
+            f"AI Quiz Battle on a shared concept — open Knovi to accept or decline.",
+            cta_label="Open Challenge",
+            cta_url="/app/challenge",
+        )
+    except Exception:
+        pass
+
     return challenge
 
 

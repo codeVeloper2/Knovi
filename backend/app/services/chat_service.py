@@ -204,6 +204,28 @@ async def send_message(
     conv.last_message_at = datetime.now(timezone.utc)
     await session.commit()
     await session.refresh(msg)
+
+    # Email the other participant when their "messages" preference is on.
+    try:
+        partner_id = conv.user_b_id if conv.user_a_id == sender_id else conv.user_a_id
+        sender = (await session.execute(select(User).where(User.id == sender_id))).scalar_one_or_none()
+        sender_name = (sender.full_name if sender and sender.full_name else "A Knovi student")
+        preview = (body or "").strip()
+        if len(preview) > 140:
+            preview = preview[:140] + "…"
+        from app.services import notify_service
+        await notify_service.email_user(
+            session,
+            partner_id,
+            "messages",
+            f"New message from {sender_name}",
+            preview or "You received a new message on Knovi.",
+            cta_label="Open chat",
+            cta_url="/app/chat",
+        )
+    except Exception:
+        pass
+
     return msg
 
 

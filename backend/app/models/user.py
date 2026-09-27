@@ -69,6 +69,12 @@ class User(Base):
     streak_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     last_activity_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # ── Notification preferences (email when true) ──
+    notify_messages: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    notify_sessions: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    notify_progress: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    notify_emails: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
     # ── Privacy ──
     is_public: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     allow_direct_message: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -118,6 +124,12 @@ class User(Base):
             "agreedToLearningAgreement": self.agreed_to_learning_agreement,
             "profileComplete": self.profile_complete,
             "provider": self.provider,
+            "notificationPrefs": {
+                "messages": bool(getattr(self, "notify_messages", True)),
+                "sessions": bool(getattr(self, "notify_sessions", True)),
+                "progress": bool(getattr(self, "notify_progress", True)),
+                "emails": bool(getattr(self, "notify_emails", True)),
+            },
             "hasPassword": bool(self.hashed_password),
             "role": self.role,
         }

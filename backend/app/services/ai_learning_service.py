@@ -3476,6 +3476,18 @@ Return JSON:
             )
             await progress_service.record_activity(db, user_id)
             await progress_service.evaluate_badges(db, user_id)
+            try:
+                from app.services import notify_service
+                concept_label = getattr(concept, "name", None) or "your concept"
+                await notify_service.email_user(
+                    db, user_id, "sessions",
+                    "Learning session complete",
+                    f"You finished a KnoAI session on {concept_label}. Keep the streak going!",
+                    cta_label="Continue learning",
+                    cta_url="/app/learn",
+                )
+            except Exception:
+                pass
         else:
             await progress_service.record_activity(db, user_id)
     except Exception as progress_exc:

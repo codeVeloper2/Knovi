@@ -123,3 +123,40 @@ async def get_notifications(
         "notifications": notifications,
         "total": total_unread,
     }
+
+
+@router.get("/notification-prefs")
+async def get_notification_prefs(
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    from app.services import notify_service
+    await notify_service.ensure_pref_columns(session)
+    # Re-load user so new columns are visible if just added
+    refreshed = (await session.execute(select(User).where(User.id == user.id))).scalar_one()
+    return {"prefs": notify_service.prefs_dict(refreshed)}
+
+
+@router.put("/notification-prefs")
+async def update_notification_prefs(
+    body: dict,
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Update email notification preferences. Body: { messages?, sessions?, progress?, emails? }."""
+    from app.services import notify_service
+    await notify_service.ensure_pref_columns(session)
+    refreshed = (await session.execute(select(User).where(User.id == user.id))).scalar_one()
+    prefs_in = body.get("prefs") if isinstance(body.get("prefs"), dict) else body
+    mapping = {
+        "messages": "notify_messages",
+        "sessions": "notify_sessions",
+        "progress": "notify_progress",
+        "emails": "notify_emails",
+    }
+    for key, col in mapping.items():
+        if key in prefs_in:
+            setattr(refreshed, col, bool(prefs_in[key]))
+    await session.commit()
+    await session.refresh(refreshed)
+    return {"prefs": notify_service.prefs_dict(refreshed), "message": "Preferences saved."}

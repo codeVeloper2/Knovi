@@ -14,8 +14,9 @@ export default function FeedbackWidget() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
 
-  // Hide on full-screen AI learning room (has its own flag actions)
-  if (location.pathname.includes("/app/learn/ai/session/")) {
+  // Hide on full-screen AI learning room and on Chat (composer sits in the same corner).
+  const path = location.pathname || "";
+  if (path.includes("/app/learn/ai/session/") || path.startsWith("/app/chat")) {
     return null;
   }
 
