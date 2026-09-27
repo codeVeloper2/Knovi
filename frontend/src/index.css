@@ -21845,7 +21845,7 @@ body.knovi-leader-active {
   cursor: progress;
 }
 body.knovi-leader-active::after {
-  content: "Shift+K — press a letter (H D E C L P S)";
+  content: "Shift+K active — press H D E C L P S (Esc to cancel)";
   position: fixed;
   left: 50%;
   bottom: 24px;

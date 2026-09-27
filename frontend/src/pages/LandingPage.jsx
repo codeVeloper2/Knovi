@@ -71,6 +71,25 @@ export default function LandingPage() {
 
   const closeMenu = () => setMobileOpen(false);
 
+  // Lock body scroll when mobile nav is open
+  useEffect(() => {
+    if (!mobileOpen) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [mobileOpen]);
+
+  // Close menu on resize to desktop
+  useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth > 850) setMobileOpen(false);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   return (
     <main className="landing-page">
       <header className="landing-nav">
@@ -80,21 +99,40 @@ export default function LandingPage() {
             <span>Knovi</span>
           </Link>
 
-          <nav className={`landing-nav-links ${mobileOpen ? "is-open" : ""}`}>
-            <button onClick={() => { scrollToId("problem"); closeMenu(); }}>Why Knovi</button>
-            <button onClick={() => { scrollToId("how-it-works"); closeMenu(); }}>How it works</button>
-            <button onClick={() => { scrollToId("how-knovi-works"); closeMenu(); }}>Tour</button>
-            <button onClick={() => { scrollToId("demo"); closeMenu(); }}>KnoAI</button>
-            <button onClick={() => { scrollToId("about"); closeMenu(); }}>The builder</button>
-            <button onClick={() => { scrollToId("contact"); closeMenu(); }}>Contact</button>
+          <nav
+            className={`landing-nav-links ${mobileOpen ? "is-open" : ""}`}
+            aria-hidden={!mobileOpen}
+            id="landing-mobile-nav"
+          >
+            <button type="button" onClick={() => { scrollToId("problem"); closeMenu(); }}>Why Knovi</button>
+            <button type="button" onClick={() => { scrollToId("how-it-works"); closeMenu(); }}>How it works</button>
+            <button type="button" onClick={() => { scrollToId("how-knovi-works"); closeMenu(); }}>Tour</button>
+            <button type="button" onClick={() => { scrollToId("demo"); closeMenu(); }}>KnoAI</button>
+            <button type="button" onClick={() => { scrollToId("about"); closeMenu(); }}>The builder</button>
+            <button type="button" onClick={() => { scrollToId("contact"); closeMenu(); }}>Contact</button>
             <Link className="nav-login" to="/login" onClick={closeMenu}>Log in</Link>
             <Link className="nav-cta" to="/signup" onClick={closeMenu}>Get started <ArrowRight size={16} /></Link>
           </nav>
 
-          <button className="landing-menu" onClick={() => setMobileOpen((value) => !value)} aria-label="Toggle navigation">
+          <button
+            className="landing-menu"
+            type="button"
+            onClick={() => setMobileOpen((value) => !value)}
+            aria-label={mobileOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={mobileOpen}
+            aria-controls="landing-mobile-nav"
+          >
             {mobileOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
         </div>
+        {mobileOpen && (
+          <button
+            type="button"
+            className="landing-nav-backdrop"
+            aria-label="Close navigation"
+            onClick={closeMenu}
+          />
+        )}
       </header>
 
       <section className="landing-hero">

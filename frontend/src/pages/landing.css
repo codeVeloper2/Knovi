@@ -563,3 +563,525 @@
     transform: scale(0.59);
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   MOBILE LAYOUT REBUILD — overrides above media queries
+   Targets: phones + small tablets (≤850px), phones (≤500px)
+   Goals: no horizontal scroll, readable type, full-width CTAs,
+          stable hero preview, usable nav drawer, compact demo room
+   ═══════════════════════════════════════════════════════════════════ */
+
+.landing-page {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Nav must be relative so absolute drawer positions correctly */
+.landing-nav-inner {
+  position: relative;
+}
+
+@media (max-width: 850px) {
+  /* ── Nav drawer ───────────────────────────────────────────────── */
+  .landing-nav-inner {
+    padding: 12px 16px;
+  }
+
+  .landing-menu {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 10px;
+  }
+
+  .landing-nav-links {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 12px;
+    right: 12px;
+    z-index: 40;
+    padding: 10px;
+    background: rgba(9, 20, 38, 0.98);
+    border: 1px solid var(--lp-border);
+    border-radius: 16px;
+    display: none;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+    max-height: min(70vh, 520px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .landing-nav-links.is-open {
+    display: flex;
+  }
+
+  .landing-nav-links button,
+  .landing-nav-links a {
+    padding: 14px 14px;
+    text-align: left;
+    border-radius: 10px;
+    font-size: 15px;
+    min-height: 44px;
+  }
+
+  .landing-nav-links button:active,
+  .landing-nav-links a:active {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .landing-nav-links .nav-login {
+    margin-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding-top: 14px;
+  }
+
+  .landing-nav-links .nav-cta {
+    text-align: center;
+    margin-top: 4px;
+    justify-content: center;
+  }
+
+  /* ── Hero ─────────────────────────────────────────────────────── */
+  .landing-hero {
+    padding: 48px 16px 56px;
+  }
+
+  .landing-hero-inner {
+    grid-template-columns: 1fr;
+    gap: 36px;
+    max-width: 100%;
+  }
+
+  .landing-hero-copy {
+    max-width: 100%;
+  }
+
+  .landing-hero h1 {
+    font-size: clamp(36px, 10vw, 52px);
+    line-height: 1.05;
+    margin: 14px 0 16px;
+  }
+
+  .hero-lede {
+    font-size: 16px;
+    line-height: 1.65;
+    max-width: 100%;
+  }
+
+  .hero-actions {
+    gap: 10px;
+    margin-top: 24px;
+  }
+
+  .hero-actions .primary-btn,
+  .hero-actions .ghost-btn {
+    flex: 1 1 auto;
+    min-height: 48px;
+    justify-content: center;
+  }
+
+  .hero-note {
+    font-size: 12px;
+    flex-wrap: wrap;
+  }
+
+  .hero-visual {
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+  }
+
+  .hero-window {
+    transform: none;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .landing-orb.orb-one {
+    width: 280px;
+    height: 280px;
+    right: -80px;
+    top: -40px;
+    opacity: 0.7;
+  }
+
+  .landing-orb.orb-two {
+    width: 180px;
+    height: 180px;
+    left: -60px;
+    bottom: -40px;
+  }
+
+  /* ── Sections ─────────────────────────────────────────────────── */
+  .landing-section {
+    padding: 64px 16px;
+    scroll-margin-top: 64px;
+  }
+
+  .section-heading h2 {
+    font-size: clamp(28px, 8vw, 42px);
+  }
+
+  .section-heading p {
+    font-size: 15px;
+  }
+
+  .problem-grid,
+  .steps-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-top: 32px;
+  }
+
+  .problem-card,
+  .step {
+    min-height: 0;
+    padding: 20px;
+  }
+
+  .problem-card h3,
+  .step h3 {
+    font-size: 18px;
+  }
+
+  /* ── Demo room ────────────────────────────────────────────────── */
+  .demo-section {
+    max-width: 100%;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .demo-room {
+    border-radius: 16px;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .demo-room-body {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .demo-room-sidebar {
+    display: none;
+  }
+
+  .demo-room-badge {
+    display: none;
+  }
+
+  .demo-room-header {
+    padding: 12px 14px;
+    gap: 8px;
+  }
+
+  .demo-room-titles span {
+    max-width: 160px;
+  }
+
+  .demo-room-phase {
+    font-size: 0.62rem;
+    padding: 4px 8px;
+  }
+
+  .demo-room-thread {
+    padding: 16px 14px 12px;
+    min-height: 280px;
+  }
+
+  .demo-room-composer {
+    padding: 12px 14px 16px;
+  }
+
+  .demo-msg {
+    max-width: 100%;
+  }
+
+  .demo-composer-cta a {
+    font-size: 0.82rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    text-align: center;
+  }
+
+  /* ── Builder / contact / CTA / footer ─────────────────────────── */
+  .builder-section {
+    padding-top: 24px;
+  }
+
+  .builder-card {
+    grid-template-columns: auto 1fr;
+    gap: 18px;
+    padding: 24px 20px;
+    border-radius: 18px;
+  }
+
+  .builder-mark {
+    display: none;
+  }
+
+  .builder-copy h2 {
+    font-size: clamp(24px, 6vw, 32px);
+  }
+
+  .builder-copy p {
+    font-size: 14px;
+  }
+
+  .contact-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+    padding: 24px 20px;
+    border-radius: 18px;
+  }
+
+  .contact-card h2 {
+    font-size: clamp(24px, 6vw, 30px);
+  }
+
+  .contact-actions {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .contact-btn {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .landing-final-cta {
+    margin: 32px auto 64px;
+    padding: 48px 16px;
+  }
+
+  .landing-final-cta h2 {
+    font-size: clamp(28px, 7vw, 42px);
+  }
+
+  .landing-final-cta .primary-btn {
+    min-height: 48px;
+    width: 100%;
+    max-width: 320px;
+  }
+
+  .landing-footer-inner {
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 20px 16px;
+  }
+
+  .footer-links {
+    order: 3;
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 12px 16px;
+  }
+
+  /* ── Hero Learn clone (scaled preview) ────────────────────────── */
+  .hero-learn-clone {
+    height: 340px;
+  }
+
+  .hero-learn-clone .preview-learn-shell {
+    width: 145%;
+    height: 500px;
+    transform: scale(0.69);
+    transform-origin: top left;
+  }
+
+  .hero-learn-clone .learn-sidebar {
+    display: none !important;
+  }
+
+  .hero-learn-clone .learn-shell {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 500px) {
+  .landing-brand {
+    font-size: 18px;
+  }
+
+  .landing-brand span {
+    /* keep name visible */
+  }
+
+  .landing-hero {
+    padding: 36px 14px 44px;
+  }
+
+  .landing-hero h1 {
+    font-size: clamp(32px, 9.5vw, 40px);
+  }
+
+  .hero-lede {
+    font-size: 15px;
+  }
+
+  .hero-actions {
+    flex-direction: column;
+  }
+
+  .hero-actions .primary-btn,
+  .hero-actions .ghost-btn {
+    width: 100%;
+  }
+
+  .hero-window {
+    border-radius: 14px;
+  }
+
+  .window-top {
+    height: 34px;
+    padding: 0 12px;
+  }
+
+  .landing-section {
+    padding: 52px 14px;
+  }
+
+  .section-heading h2 {
+    font-size: clamp(26px, 8vw, 34px);
+  }
+
+  .problem-card,
+  .step {
+    padding: 18px;
+  }
+
+  .builder-card {
+    grid-template-columns: 1fr;
+    padding: 20px 16px;
+  }
+
+  .builder-avatar {
+    width: 52px;
+    height: 52px;
+    font-size: 16px;
+    border-radius: 14px;
+  }
+
+  .contact-actions {
+    flex-direction: column;
+  }
+
+  .contact-btn {
+    width: 100%;
+  }
+
+  .footer-brand span {
+    display: none;
+  }
+
+  .landing-final-cta {
+    padding: 40px 14px;
+  }
+
+  /* Hero preview — tighter scale, still clipped by overflow:hidden */
+  .hero-learn-clone {
+    height: 300px;
+  }
+
+  .hero-learn-clone .preview-learn-shell {
+    width: 165%;
+    height: 480px;
+    transform: scale(0.61);
+  }
+
+  .hero-learn-clone .learn-home {
+    padding: 12px !important;
+  }
+
+  .hero-learn-clone .learn-subject-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+
+  .demo-room-header {
+    padding: 10px 12px;
+  }
+
+  .demo-room-back {
+    width: 32px;
+    height: 32px;
+  }
+
+  .demo-room-titles strong {
+    font-size: 0.9rem;
+  }
+
+  .demo-room-thread {
+    padding: 14px 12px 10px;
+    min-height: 240px;
+  }
+
+  .demo-room-composer {
+    padding: 10px 12px 14px;
+  }
+
+  .demo-composer-lock {
+    flex-wrap: wrap;
+  }
+}
+
+/* Safe area for notched phones */
+@supports (padding: max(0px)) {
+  .landing-nav-inner {
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+
+  @media (max-width: 850px) {
+    .landing-hero,
+    .landing-section,
+    .landing-final-cta {
+      padding-left: max(16px, env(safe-area-inset-left));
+      padding-right: max(16px, env(safe-area-inset-right));
+    }
+
+    .landing-footer-inner {
+      padding-bottom: max(20px, env(safe-area-inset-bottom));
+    }
+  }
+}
+
+/* Mobile nav backdrop (tap outside to close) */
+.landing-nav-backdrop {
+  display: none;
+}
+
+@media (max-width: 850px) {
+  .landing-nav-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 25;
+    border: 0;
+    background: rgba(0, 0, 0, 0.45);
+    cursor: pointer;
+  }
+
+  .landing-nav {
+    z-index: 30;
+  }
+
+  .landing-nav-inner {
+    z-index: 31;
+    position: relative;
+  }
+
+  .landing-nav-links {
+    z-index: 32;
+  }
+}
