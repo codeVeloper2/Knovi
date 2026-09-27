@@ -207,9 +207,13 @@ async def update_video_progress(
     await session.commit()
     await session.refresh(prog)
 
-    # ── Trigger streak + badge evaluation when a lesson/tutorial is completed ──
+    # ── XP + streak + badges when a lesson/tutorial is first completed ──
     if completed and not was_already_completed:
         from app.services import progress_service
+        await progress_service.award_xp(
+            session, user_id, progress_service.XP_LESSON_COMPLETE,
+            reason="lesson_complete",
+        )
         await progress_service.record_activity(session, user_id)
         await progress_service.evaluate_badges(session, user_id)
         # Check if this lesson's course is now fully complete → certificate

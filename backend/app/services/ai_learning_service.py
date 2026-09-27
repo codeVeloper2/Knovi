@@ -1005,6 +1005,19 @@ async def complete_session(session_id: int, user_id: int, db: AsyncSession) -> d
     session.completed_at = _now()
     await db.commit()
     await db.refresh(session)
+
+    # XP + streak for early complete (when summary path was not used).
+    try:
+        from app.services import progress_service
+        await progress_service.award_xp(
+            db, user_id, progress_service.XP_AI_SESSION_BASE,
+            reason="ai_session_complete",
+        )
+        await progress_service.record_activity(db, user_id)
+        await progress_service.evaluate_badges(db, user_id)
+    except Exception as progress_exc:
+        logger.warning("complete_session progress update failed (non-fatal): %s", progress_exc)
+
     return session.serialize()
 
 
@@ -3413,9 +3426,12 @@ Return JSON:
         },
     )
 
+    just_completed = False
     if session.status not in ("completed", "abandoned"):
         session.status       = "completed"
         session.completed_at = _now()
+        just_completed = True
+    session._knovi_just_completed = just_completed  # type: ignore[attr-defined]
 
     await db.commit()
     await db.refresh(summary)
@@ -3438,8 +3454,7 @@ Return JSON:
 
     # Persist this completed AI-learning evidence into the existing progress
     # architecture. The operation is idempotent and never touches challenge
-    # practice_score. Streak/activity is recorded through the same service used
-    # by the rest of Knovi.
+    # practice_score. XP + streak/activity go through the same progress service.
     try:
         await progress_service.record_ai_learning_progress(
             db,
@@ -3449,7 +3464,20 @@ Return JSON:
             completed_at=session.completed_at or _now(),
         )
         await db.commit()
-        await progress_service.record_activity(db, user_id)
+        # Award XP only once per session: the status was set to completed above
+        # when it was not already completed/abandoned. If we re-enter this path
+        # for an already-completed session, still safe — callers should not, but
+        # we gate on a short-lived attribute set only on first transition.
+        just_completed = getattr(session, "_knovi_just_completed", False)
+        if just_completed:
+            xp_amt = progress_service.xp_for_ai_session(overall_score)
+            await progress_service.award_xp(
+                db, user_id, xp_amt, reason="ai_session_complete",
+            )
+            await progress_service.record_activity(db, user_id)
+            await progress_service.evaluate_badges(db, user_id)
+        else:
+            await progress_service.record_activity(db, user_id)
     except Exception as progress_exc:
         logger.warning("AI learning progress update failed (non-fatal): %s", progress_exc)
 

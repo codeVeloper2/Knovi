@@ -1554,11 +1554,23 @@ async def _post_completion_learning_effects(
     ).scalars().all()
     objective_map = {row.id: row for row in objective_rows}
 
-    # A completed battle is also a normal learning activity for the existing
-    # streak/badge system. ``record_activity`` is idempotent for same-day
-    # repeats, and badge evaluation itself is duplicate-safe.
+    # XP + streak/badge for each participant in a finished battle.
+    # ``record_activity`` is idempotent for same-day repeats; badge eval is
+    # duplicate-safe. XP is granted once per result row (this runs once when
+    # the challenge is finalized). ChallengeResult has score (0–10) + accuracy.
+    top_score = max((r.score or 0) for r in result_rows) if result_rows else 0
     for result in result_rows:
         try:
+            accuracy = int(result.accuracy or 0)
+            is_winner = (result.score or 0) >= top_score and top_score > 0
+            if len(result_rows) == 1:
+                is_winner = True
+            xp_amt = progress_service.xp_for_challenge(
+                accuracy=accuracy, is_winner=bool(is_winner),
+            )
+            await progress_service.award_xp(
+                db, result.user_id, xp_amt, reason="challenge_complete",
+            )
             await progress_service.record_activity(db, result.user_id)
             await progress_service.evaluate_badges(db, result.user_id)
         except Exception as exc:

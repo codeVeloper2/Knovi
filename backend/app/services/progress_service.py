@@ -49,6 +49,72 @@ def _level_info(xp: int) -> dict:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# XP awards
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Balanced so a normal week of use reaches Explorer (~100) and Scholar (~300)
+# without grinding: ~2 AI sessions/day ≈ 100 XP/day is too high; these rates
+# assume a few meaningful completions per week.
+XP_LESSON_COMPLETE = 25          # video lesson or tutorial ≥90% watched
+XP_AI_SESSION_BASE = 40          # completed KnoAI Learning Room
+XP_AI_SESSION_SCORE_70 = 10      # bonus if overall_score ≥ 70
+XP_AI_SESSION_SCORE_85 = 15      # extra bonus if overall_score ≥ 85 (stacks)
+XP_CHALLENGE_COMPLETE = 30       # finished a challenge battle
+XP_CHALLENGE_WIN_BONUS = 15      # finished in 1st place (or sole winner)
+XP_CHALLENGE_HIGH_ACC = 10       # accuracy ≥ 80%
+
+
+async def award_xp(
+    session: AsyncSession,
+    user_id: int,
+    amount: int,
+    *,
+    reason: str = "",
+    commit: bool = True,
+) -> int:
+    """Add XP to the user. Returns the new total XP.
+
+    Caller should pass a positive amount. Zero/negative amounts are no-ops.
+    Does not evaluate badges — call ``evaluate_badges`` after if needed.
+    """
+    if amount <= 0:
+        user = (await session.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+        return (user.xp or 0) if user else 0
+
+    user = (await session.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if not user:
+        return 0
+
+    user.xp = (user.xp or 0) + int(amount)
+    await session.flush()
+    if commit:
+        await session.commit()
+    return user.xp or 0
+
+
+def xp_for_ai_session(overall_score: Optional[int] = None) -> int:
+    """XP granted for one completed AI Learning Room."""
+    xp = XP_AI_SESSION_BASE
+    if overall_score is not None:
+        score = max(0, min(100, int(overall_score)))
+        if score >= 70:
+            xp += XP_AI_SESSION_SCORE_70
+        if score >= 85:
+            xp += XP_AI_SESSION_SCORE_85
+    return xp
+
+
+def xp_for_challenge(*, accuracy: int = 0, is_winner: bool = False) -> int:
+    """XP granted for one finished challenge battle participation."""
+    xp = XP_CHALLENGE_COMPLETE
+    if is_winner:
+        xp += XP_CHALLENGE_WIN_BONUS
+    if accuracy >= 80:
+        xp += XP_CHALLENGE_HIGH_ACC
+    return xp
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Streak helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -229,14 +295,29 @@ async def _award(session: AsyncSession, user_id: int, badge_id: str) -> None:
 
 
 async def _count_completed_learn_activities(session: AsyncSession, user_id: int) -> int:
-    """Count completed lessons + completed tutorials for this user."""
-    result = await session.execute(
+    """Count completed lessons/tutorials + completed AI learning sessions."""
+    video = await session.execute(
         select(func.count()).where(
             VideoProgress.user_id == user_id,
             VideoProgress.completed.is_(True),
         )
     )
-    return result.scalar_one() or 0
+    video_n = video.scalar_one() or 0
+
+    # AI sessions — import lazily to avoid circular imports at module load.
+    try:
+        from app.models.ai_learning import AISession
+        ai = await session.execute(
+            select(func.count()).where(
+                AISession.user_id == user_id,
+                AISession.status == "completed",
+            )
+        )
+        ai_n = ai.scalar_one() or 0
+    except Exception:
+        ai_n = 0
+
+    return int(video_n) + int(ai_n)
 
 
 async def _count_ended_rooms(session: AsyncSession, user_id: int) -> int:
