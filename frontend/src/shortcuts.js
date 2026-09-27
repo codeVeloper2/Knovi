@@ -33,7 +33,7 @@ export const NAV_SHORTCUTS = {
 
 // Settings sub-nav shortcuts — also under the Shift+K leader.
 export const SETTINGS_SHORTCUTS = {
-  "/app/settings":                  { combo: "shift+k 1", keys: ["Shift", "K", "1"], label: "Profile" },
+  "/app/settings/profile":          { combo: "shift+k 1", keys: ["Shift", "K", "1"], label: "Profile" },
   "/app/settings/learning-profile": { combo: "shift+k 2", keys: ["Shift", "K", "2"], label: "Learning Profile" },
   "/app/settings/security":         { combo: "shift+k 3", keys: ["Shift", "K", "3"], label: "Security" },
   "/app/settings/notifications":    { combo: "shift+k 4", keys: ["Shift", "K", "4"], label: "Notifications" },

@@ -157,7 +157,7 @@ export default function DashboardLayout() {
   // require explicit confirmation before leaving the room. This prevents an
   // accidental hamburger/top-nav tap from silently interrupting a learning run.
   /** Returns true if navigation is allowed (or already there). False if a confirm dialog was shown. */
-  function requestNavigation(to) {
+  const requestNavigation = useCallback((to) => {
     if (to === location.pathname) return true;
     if (isAISessionRoom) {
       setPendingNavigation(to);
@@ -165,12 +165,18 @@ export default function DashboardLayout() {
       return false;
     }
     return true;
-  }
+  }, [location.pathname, isAISessionRoom]);
 
   /** Guard + navigate — used by keyboard shortcuts. */
-  function goTo(to) {
-    if (requestNavigation(to)) navigate(to);
-  }
+  const goTo = useCallback((to) => {
+    if (to === location.pathname) return;
+    if (isAISessionRoom) {
+      setPendingNavigation(to);
+      setExitRoomOpen(true);
+      return;
+    }
+    navigate(to);
+  }, [location.pathname, isAISessionRoom, navigate]);
 
   function confirmExitRoom() {
     const target = pendingNavigation;
