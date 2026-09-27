@@ -5,6 +5,7 @@ import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { NAV_SHORTCUTS, SETTINGS_SHORTCUTS, BACK_SHORTCUT, displayKey } from "../shortcuts";
 import { LogoMark } from "./Logo";
 import ShortcutsModal from "./ShortcutsModal";
+import ProductTour, { hasCompletedTour } from "./ProductTour";
 import ConfirmDialog from "./ConfirmDialog";
 import NotificationsBell from "./NotificationsPanel";
 import MobileTopBar from "./MobileTopBar";
@@ -66,10 +67,23 @@ export default function DashboardLayout() {
   const [pendingNavigation,    setPendingNavigation]    = useState(null);
   const [loggingOut,           setLoggingOut]           = useState(false);
   const [desktopSettingsHover, setDesktopSettingsHover] = useState(false);
+  const [tourOpen,             setTourOpen]             = useState(false);
   const settingsLeaveTimer = useRef(null);
 
   function openSettings()  { clearTimeout(settingsLeaveTimer.current); setDesktopSettingsHover(true);  }
   function closeSettings() { settingsLeaveTimer.current = setTimeout(() => setDesktopSettingsHover(false), 120); }
+
+  // First-time product tour on Home for registered students.
+  useEffect(() => {
+    if (location.pathname !== "/app") return;
+    if (!user) return;
+    // Only after profile is complete (past /onboarding).
+    if (profile && profile.profileComplete === false) return;
+    if (hasCompletedTour(user.uid)) return;
+    // Small delay so layout + nav are painted.
+    const t = setTimeout(() => setTourOpen(true), 600);
+    return () => clearTimeout(t);
+  }, [location.pathname, user, profile]);
 
   const inSettings     = location.pathname.startsWith("/app/settings");
   const isLearn        = location.pathname.startsWith("/app/learn");
@@ -209,6 +223,7 @@ export default function DashboardLayout() {
           setDrawerOpen(false);
         }}
         title={label}
+        data-tour={label.toLowerCase()}
       >
         <span className="dash-link-icon-wrap"><Icon /></span>
         <span className="dash-link-label">{label}</span>
@@ -253,7 +268,8 @@ export default function DashboardLayout() {
                 <NavLink key={to} to={to} end={end}
                   className={({ isActive }) => `desktop-nav-item${isActive ? " active" : ""}`}
                   onClick={(e) => { if (requestNavigation(to) === false) e.preventDefault(); }}
-                  title={label}>
+                  title={label}
+                  data-tour={label.toLowerCase()}>
                   <div className="desktop-nav-icon-wrap"><Icon /></div>
                   <span>{label}</span>
                 </NavLink>
@@ -269,7 +285,8 @@ export default function DashboardLayout() {
               <NavLink to="/app/settings"
                 className={({ isActive }) => `desktop-nav-item${isActive ? " active" : ""}`}
                 onClick={(e) => { if (requestNavigation("/app/settings") === false) e.preventDefault(); }}
-                title="Settings">
+                title="Settings"
+                data-tour="settings">
                 <SettingsIcon />
                 <span>Settings</span>
                 <ChevronDown open={desktopSettingsHover} />
@@ -308,6 +325,11 @@ export default function DashboardLayout() {
 
       <FeedbackWidget />
       <ShortcutsModal open={scOpen} onClose={() => setScOpen(false)} />
+      <ProductTour
+        open={tourOpen}
+        onClose={() => setTourOpen(false)}
+        userId={user?.uid}
+      />
       <ConfirmDialog
         open={exitRoomOpen}
         title="Leave the Learning Room?"

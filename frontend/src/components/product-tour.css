@@ -1,0 +1,154 @@
+/* ── First-time product tour ─────────────────────────────────────────────── */
+
+.ptour {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  pointer-events: none;
+}
+
+.ptour-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  transition: clip-path 0.25s ease, background 0.25s ease;
+}
+
+.ptour-spotlight {
+  position: absolute;
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 2px rgba(99, 140, 255, 0.95),
+    0 0 0 6px rgba(99, 140, 255, 0.25),
+    0 12px 40px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  transition: top 0.25s ease, left 0.25s ease, width 0.25s ease, height 0.25s ease;
+  z-index: 1;
+}
+
+.ptour-card {
+  position: absolute;
+  z-index: 2;
+  width: min(360px, calc(100vw - 32px));
+  padding: 18px 18px 14px;
+  border-radius: 16px;
+  background: linear-gradient(165deg, #0f1c33 0%, #0a1424 100%);
+  border: 1px solid rgba(123, 168, 224, 0.28);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  color: #e8edf7;
+  pointer-events: auto;
+  animation: ptourIn 0.28s ease;
+}
+
+@keyframes ptourIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+.ptour-progress {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.ptour-progress > span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #93a4c3;
+}
+
+.ptour-dots {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.ptour-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 99px;
+  background: rgba(148, 163, 184, 0.35);
+  display: block;
+  transition: background 0.2s, width 0.2s;
+}
+
+.ptour-dots i.on {
+  width: 16px;
+  background: #7ba8e0;
+}
+
+.ptour-dots i.done {
+  background: rgba(123, 168, 224, 0.7);
+}
+
+.ptour-card h2 {
+  margin: 0 0 8px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #f1f5f9;
+}
+
+.ptour-card p {
+  margin: 0 0 16px;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: #b6c3d9;
+}
+
+.ptour-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ptour-actions-right {
+  display: flex;
+  gap: 8px;
+}
+
+.ptour-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, transform 0.1s;
+}
+
+.ptour-btn:active { transform: scale(0.97); }
+
+.ptour-btn.ghost {
+  background: transparent;
+  color: #94a3b8;
+}
+
+.ptour-btn.ghost:hover {
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.ptour-btn.primary {
+  background: linear-gradient(135deg, #5b8def, #3d6fd8);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(59, 111, 216, 0.35);
+}
+
+.ptour-btn.primary:hover {
+  filter: brightness(1.06);
+}
+
+@media (max-width: 820px) {
+  .ptour-card {
+    width: min(340px, calc(100vw - 24px));
+  }
+}

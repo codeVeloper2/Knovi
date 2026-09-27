@@ -37,7 +37,7 @@ export default function MobileFabMenu() {
       {isOpen && <div className="mobile-fab-overlay" onClick={() => setIsOpen(false)} aria-hidden="true" />}
       <div className={`fab-diamond fab-diamond--three${isOpen ? " open" : ""}`} aria-hidden={!isOpen}>
         {FAB_ITEMS.map(item => (
-          <button key={item.to} type="button" className={`fab-item fab-item--${item.pos}${current?.to === item.to ? " active" : ""}`} onClick={() => go(item.to)} aria-label={item.label} tabIndex={isOpen ? 0 : -1}>
+          <button key={item.to} type="button" className={`fab-item fab-item--${item.pos}${current?.to === item.to ? " active" : ""}`} onClick={() => go(item.to)} aria-label={item.label} data-tour={item.label.toLowerCase()} tabIndex={isOpen ? 0 : -1}>
             <span className="fab-item-icon"><item.Icon width={20} height={20} /></span>
             <span className="fab-item-label">{item.label}</span>
           </button>

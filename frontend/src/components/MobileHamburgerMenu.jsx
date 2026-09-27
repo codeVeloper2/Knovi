@@ -35,6 +35,7 @@ function NavItem({ to, label, Icon, iconMod, end, onNavigate, badge }) {
       className={({ isActive }) =>
         `hmenu-item${isActive ? " hmenu-item--active" : ""}`
       }
+      data-tour={label.toLowerCase()}
     >
       <span className={`hmenu-item-icon hmenu-item-icon--${iconMod}`} aria-hidden="true">
         <Icon width={18} height={18} />
