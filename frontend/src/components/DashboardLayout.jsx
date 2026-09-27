@@ -142,11 +142,20 @@ export default function DashboardLayout() {
   // While an AI Learning Room is active, keep the rest of the app visible but
   // require explicit confirmation before leaving the room. This prevents an
   // accidental hamburger/top-nav tap from silently interrupting a learning run.
+  /** Returns true if navigation is allowed (or already there). False if a confirm dialog was shown. */
   function requestNavigation(to) {
-    if (!isAISessionRoom || to === location.pathname) return true;
-    setPendingNavigation(to);
-    setExitRoomOpen(true);
-    return false;
+    if (to === location.pathname) return true;
+    if (isAISessionRoom) {
+      setPendingNavigation(to);
+      setExitRoomOpen(true);
+      return false;
+    }
+    return true;
+  }
+
+  /** Guard + navigate — used by keyboard shortcuts. */
+  function goTo(to) {
+    if (requestNavigation(to)) navigate(to);
   }
 
   function confirmExitRoom() {
@@ -175,9 +184,9 @@ export default function DashboardLayout() {
   }
 
   useKeyboardShortcuts([
-    ...Object.entries(NAV_SHORTCUTS).map(([to, s]) => ({ combo: s.combo, run: () => requestNavigation(to) })),
-    ...Object.entries(SETTINGS_SHORTCUTS).map(([to, s]) => ({ combo: s.combo, run: () => requestNavigation(to) })),
-    { combo: BACK_SHORTCUT.combo, run: () => requestNavigation("/app") },
+    ...Object.entries(NAV_SHORTCUTS).map(([to, s]) => ({ combo: s.combo, run: () => goTo(to) })),
+    ...Object.entries(SETTINGS_SHORTCUTS).map(([to, s]) => ({ combo: s.combo, run: () => goTo(to) })),
+    { combo: BACK_SHORTCUT.combo, run: () => goTo("/app") },
     { combo: "mod+b", run: () => toggle() },
     { combo: "?",     run: () => setScOpen(true), allowInInputs: false },
   ]);

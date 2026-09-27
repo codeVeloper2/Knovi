@@ -6,34 +6,41 @@
  *  - the sidebar pills (hint shown inside each nav item)
  *  - the shortcuts help modal
  *
- * `combo` is what the handler matches ("mod+d" = Ctrl/Cmd+D).
+ * Combo formats:
+ *  - "mod+d"     => Ctrl/Cmd + D (simultaneous)
+ *  - "shift+k h" => Shift+K, then H (leader sequence)
+ *  - "/" / "?"   => single key
+ *
  * `keys` is what we display as <kbd> pills.
  *
- * We avoid combos the browser/OS reserves and can't be overridden
- * (Ctrl+T/W/N/Tab). We also avoid Ctrl+R since the user has no other way to
- * reload the page.
+ * Navigation uses a Shift+K leader sequence so we don't fight the browser
+ * for reserved Ctrl/Cmd combos.
  */
 
-// Main navigation shortcuts (Ctrl/Cmd + letter) — keyed by route.
+// Leader key for sequential navigation: Shift+K, then a letter.
+export const LEADER = { combo: "shift+k", keys: ["Shift", "K"], label: "Leader" };
+
+// Main navigation shortcuts — all use the Shift+K leader sequence.
 export const NAV_SHORTCUTS = {
-  "/app":          { combo: "mod+h", keys: ["Ctrl", "H"], label: "Home" },
-  "/app/discover": { combo: "mod+d", keys: ["Ctrl", "D"], label: "Discover" },
-  "/app/chat":     { combo: "mod+e", keys: ["Ctrl", "E"], label: "Chat" },
-  "/app/learn":    { combo: "mod+l", keys: ["Ctrl", "L"], label: "Learn" },
-  "/app/progress": { combo: "mod+u", keys: ["Ctrl", "U"], label: "Progress" },
-  "/app/settings": { combo: "mod+s", keys: ["Ctrl", "S"], label: "Settings" },
+  "/app":           { combo: "shift+k h", keys: ["Shift", "K", "H"], label: "Home" },
+  "/app/discover":  { combo: "shift+k d", keys: ["Shift", "K", "D"], label: "Discover" },
+  "/app/chat":      { combo: "shift+k e", keys: ["Shift", "K", "E"], label: "Chat" },
+  "/app/challenge": { combo: "shift+k c", keys: ["Shift", "K", "C"], label: "Challenge" },
+  "/app/learn":     { combo: "shift+k l", keys: ["Shift", "K", "L"], label: "Learn" },
+  "/app/progress":  { combo: "shift+k p", keys: ["Shift", "K", "P"], label: "Progress" },
+  "/app/settings":  { combo: "shift+k s", keys: ["Shift", "K", "S"], label: "Settings" },
 };
 
-// Settings sub-nav shortcuts (Ctrl/Cmd + digit) — keyed by route.
+// Settings sub-nav shortcuts — also under the Shift+K leader.
 export const SETTINGS_SHORTCUTS = {
-  "/app/settings":                  { combo: "mod+1", keys: ["Ctrl", "1"], label: "Profile" },
-  "/app/settings/learning-profile": { combo: "mod+2", keys: ["Ctrl", "2"], label: "Learning Profile" },
-  "/app/settings/security":         { combo: "mod+3", keys: ["Ctrl", "3"], label: "Security" },
-  "/app/settings/notifications":    { combo: "mod+4", keys: ["Ctrl", "4"], label: "Notifications" },
+  "/app/settings":                  { combo: "shift+k 1", keys: ["Shift", "K", "1"], label: "Profile" },
+  "/app/settings/learning-profile": { combo: "shift+k 2", keys: ["Shift", "K", "2"], label: "Learning Profile" },
+  "/app/settings/security":         { combo: "shift+k 3", keys: ["Shift", "K", "3"], label: "Security" },
+  "/app/settings/notifications":    { combo: "shift+k 4", keys: ["Shift", "K", "4"], label: "Notifications" },
 };
 
 // Back-to-menu (from settings) shortcut.
-export const BACK_SHORTCUT = { combo: "mod+m", keys: ["Ctrl", "M"], label: "Back to menu" };
+export const BACK_SHORTCUT = { combo: "shift+k m", keys: ["Shift", "K", "M"], label: "Back to menu" };
 
 // Action shortcuts (shown in the help modal).
 export const ACTION_SHORTCUTS = [
