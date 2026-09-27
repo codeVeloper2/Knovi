@@ -722,6 +722,12 @@ export function createChallenge({ opponentId, subjectId, topicId, conceptId, que
   });
 }
 
+/** Concepts both you and opponent have meaningfully learned (for peer challenges). */
+export function getSharedChallengeConcepts(opponentId) {
+  return get(`/api/challenges/shared-concepts?opponent_id=${encodeURIComponent(opponentId)}`);
+}
+
+
 export function acceptChallenge(challengeId) {
   return post(`/api/challenges/${challengeId}/accept`);
 }

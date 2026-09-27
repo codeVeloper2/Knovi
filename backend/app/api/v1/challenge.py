@@ -144,6 +144,21 @@ async def create_ai_challenge(
     return {"challenge": state, "message": "AI Challenge is ready. Your challenge countdown will begin now."}
 
 
+
+@router.get("/challenges/shared-concepts")
+async def shared_concepts(
+    opponent_id: int = Query(..., ge=1),
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Concepts both the current user and opponent have meaningfully learned."""
+    concepts = await challenge_service.list_shared_concepts(
+        user_id=user.id,
+        opponent_id=opponent_id,
+        db=session,
+    )
+    return {"concepts": concepts, "count": len(concepts)}
+
 @router.get("/challenges", response_model=ChallengeListOut)
 async def list_challenges(
     limit: int = Query(default=30, ge=1, le=50),
