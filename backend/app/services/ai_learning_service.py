@@ -2503,6 +2503,49 @@ def _parse_label_set(raw: str) -> set[str]:
     return set(parts)
 
 
+def _format_student_answer_for_display(question: AISessionQuestion, student_answer: str) -> str:
+    """Render the chosen MC/multi option(s) as 'Label — text' for the chat bubble."""
+    raw = (student_answer or "").strip()
+    if not raw:
+        return "(no answer)"
+    if question.question_type not in ("multiple_choice", "multi_select") or not question.options:
+        return raw
+
+    options = question.options if isinstance(question.options, list) else []
+    label_to_text: dict[str, str] = {}
+    for i, opt in enumerate(options):
+        if isinstance(opt, dict):
+            label = str(opt.get("label") or chr(65 + i)).strip().upper()
+            text = str(opt.get("text") or opt.get("value") or "").strip()
+        else:
+            label = chr(65 + i)
+            text = str(opt).strip()
+        label_to_text[label] = text
+
+    if question.question_type == "multi_select":
+        labels = sorted(_parse_label_set(raw))
+        if not labels:
+            return raw
+        lines = []
+        for label in labels:
+            text = label_to_text.get(label)
+            lines.append(f"{label} — {text}" if text else label)
+        return "\n".join(lines)
+
+    # single choice: match label or full text
+    student_upper = raw.upper()
+    for label, text in label_to_text.items():
+        if student_upper == label or student_upper == text.upper() or raw == text:
+            return f"{label} — {text}" if text else label
+        if student_upper.startswith(label) and len(raw) > 1 and raw[len(label):len(label)+1] in ("-", ")", ":", ".", " "):
+            return f"{label} — {text}" if text else label
+    # Fallback: if answer is just a letter we know
+    if student_upper in label_to_text:
+        text = label_to_text[student_upper]
+        return f"{student_upper} — {text}" if text else student_upper
+    return raw
+
+
 def _score_option_answer(question: AISessionQuestion, student_answer: str) -> Optional[dict]:
     """Deterministic scoring for single and multi-select MC when possible."""
     if question.question_type not in ("multiple_choice", "multi_select") or not question.options:
@@ -2951,11 +2994,19 @@ Scoring guide:
     # Persist the practice interaction in the same conversation stream.
     # No second chat/message system is used: the existing learning-session
     # messages are the canonical history for both teaching and practice.
+    # For MC / multi-select, show the chosen option label with its full text
+    # (not a bare "D") so the transcript is readable.
+    display_answer = _format_student_answer_for_display(question, student_answer)
     await _add_message(
         session_id, "student", "answer",
-        f"**Practice question:** {question.question}\n\n**Answer:** {student_answer}",
+        f"**Practice question:** {question.question}\n\n**Answer:** {display_answer}",
         db,
-        extra={"questionId": question_id, "answerId": answer.id, "practice": True},
+        extra={
+            "questionId": question_id,
+            "answerId": answer.id,
+            "practice": True,
+            "rawAnswer": student_answer,
+        },
     )
 
     # Feedback message
@@ -3356,12 +3407,35 @@ Return JSON (all array fields required; may be empty):
         logger.error("Reteach generation failed: %s", exc)
         raise HTTPException(502, f"AI service error: {exc}")
 
+    # Models occasionally return a bare list or nested wrapper instead of the
+    # expected object. Normalize so .get() never crashes the reteach path.
+    if isinstance(parsed, list):
+        parsed = next((item for item in parsed if isinstance(item, dict)), {}) or {}
+    if not isinstance(parsed, dict):
+        parsed = {}
+    if "explanation" not in parsed:
+        for key in ("data", "result", "response", "content"):
+            inner = parsed.get(key)
+            if isinstance(inner, dict) and "explanation" in inner:
+                parsed = inner
+                break
+            if isinstance(inner, list):
+                candidate = next(
+                    (item for item in inner if isinstance(item, dict) and "explanation" in item),
+                    None,
+                )
+                if candidate:
+                    parsed = candidate
+                    break
+
     explanation   = _safe_str(parsed.get("explanation"), "Reteaching content temporarily unavailable.")
     encouragement = _safe_str(parsed.get("encouragement"), "A different perspective can make all the difference!")
 
     valid_objective_ids = {int(x) for x in current_task_objectives if str(x).isdigit()}
     covered_objective_ids: list[int] = []
     raw_covered = parsed.get("covered_objective_ids") or []
+    if not isinstance(raw_covered, list):
+        raw_covered = []
     for raw_id in raw_covered:
         try:
             oid = int(raw_id)

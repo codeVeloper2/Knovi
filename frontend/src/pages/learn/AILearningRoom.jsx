@@ -1452,31 +1452,53 @@ function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave, on
 
   if (!ai) {
     const studentMsgKey = String(msg.id || msg.localId || "");
+    const canSave = Number(msg.id) > 0;
     return (
       <div
         className={`ar-msg-student ${studentCopyRevealed ? "is-copy-revealed" : ""}`}
         data-msg-id={msg.id || msg.localId || ""}
-        onClick={() => {
-          if (msg.content) setStudentCopyRevealed(v => !v);
+        onMouseEnter={() => { if (msg.content) setStudentCopyRevealed(true); }}
+        onMouseLeave={() => setStudentCopyRevealed(false)}
+        onFocus={() => { if (msg.content) setStudentCopyRevealed(true); }}
+        onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget)) setStudentCopyRevealed(false);
         }}
       >
         <div className={`ar-msg-student-bubble ${msg.extra?._sendAnimate ? "is-send-animating" : ""}`}>
           <RichText content={msg.content} onCopy={onCopy} copiedId={copiedId} />
         </div>
         {msg.content && (
-          <button
-            type="button"
-            className={`ar-student-copy-reveal ${copiedId === studentMsgKey ? "is-copied" : ""}`}
-            aria-label={copiedId === studentMsgKey ? "Copied" : "Copy message"}
-            title={copiedId === studentMsgKey ? "Copied" : "Copy message"}
-            onClick={(e) => {
-              e.stopPropagation();
-              copyText(msg.content || "", studentMsgKey, onCopy);
-              setStudentCopyRevealed(false);
-            }}
-          >
-            <CopySvg active={copiedId === studentMsgKey} />
-          </button>
+          <div className="ar-student-msg-actions" role="toolbar" aria-label="Message actions">
+            <button
+              type="button"
+              className={`ar-student-action-btn ${copiedId === studentMsgKey ? "is-copied" : ""}`}
+              aria-label={copiedId === studentMsgKey ? "Copied" : "Copy message"}
+              title={copiedId === studentMsgKey ? "Copied" : "Copy message"}
+              onClick={(e) => {
+                e.stopPropagation();
+                copyText(msg.content || "", studentMsgKey, onCopy);
+              }}
+            >
+              <CopySvg active={copiedId === studentMsgKey} />
+            </button>
+            {canSave && (
+              <button
+                type="button"
+                className={`ar-student-action-btn ${isSaved ? "is-saved" : ""}`}
+                aria-label={isSaved ? "Remove from saved" : "Save message"}
+                title={isSaved ? "Saved" : "Save message"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSave?.(msg);
+                }}
+              >
+                {isSaved
+                  ? <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                  : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                }
+              </button>
+            )}
+          </div>
         )}
         <time className="ar-msg-time ar-msg-time-right">{formatClock(msg.createdAt)}</time>
       </div>

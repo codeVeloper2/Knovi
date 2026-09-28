@@ -1957,17 +1957,27 @@
   pointer-events: none;
 }
 
-/* Student message tap-to-copy action. The bubble sits above the SVG button;
-   tapping the message lets the button slide out from underneath it. */
+/* Student message actions (copy + save) — reveal on hover / focus */
 .ar-msg-student {
   position: relative;
 }
-.ar-student-copy-reveal {
+.ar-student-msg-actions {
   align-self: flex-end;
-  width: 36px;
-  height: 30px;
-  margin-top: -23px;
+  display: flex;
+  gap: 6px;
+  margin-top: -20px;
   margin-right: 2px;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-6px) scale(.94);
+  z-index: 1;
+  transition: opacity .18s ease, transform .22s cubic-bezier(.22,1,.36,1),
+    visibility .18s ease, margin-top .22s cubic-bezier(.22,1,.36,1);
+}
+.ar-student-action-btn {
+  width: 34px;
+  height: 30px;
   padding: 0;
   border: 1px solid rgba(255,255,255,.12);
   border-radius: 11px;
@@ -1975,28 +1985,27 @@
   color: #9db8d8;
   display: grid;
   place-items: center;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transform: translateY(-8px) scale(.92);
-  z-index: 0;
   box-shadow: 0 4px 14px rgba(0,0,0,.28);
   cursor: pointer;
-  transition: opacity .2s ease, transform .28s cubic-bezier(.22,1,.36,1),
-    visibility .2s ease, margin-top .28s cubic-bezier(.22,1,.36,1);
+  transition: color .15s ease, background .15s ease, transform .12s ease;
 }
-.ar-student-copy-reveal svg { display: block; }
-.ar-student-copy-reveal:hover { color: #fff; background: rgba(255,255,255,.12); }
-.ar-student-copy-reveal:active { transform: translateY(0) scale(.9); }
-.ar-msg-student.is-copy-revealed .ar-student-copy-reveal {
+.ar-student-action-btn svg { display: block; }
+.ar-student-action-btn:hover { color: #fff; background: rgba(255,255,255,.12); }
+.ar-student-action-btn:active { transform: scale(.92); }
+.ar-student-action-btn.is-copied { color: #71e0bd; }
+.ar-student-action-btn.is-saved { color: #9eaaff; }
+.ar-msg-student.is-copy-revealed .ar-student-msg-actions,
+.ar-msg-student:hover .ar-student-msg-actions,
+.ar-msg-student:focus-within .ar-student-msg-actions {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
   transform: translateY(0) scale(1);
-  margin-top: 5px;
+  margin-top: 6px;
 }
 .ar-msg-student.is-copy-revealed .ar-msg-student-bubble { z-index: 2; }
-.ar-student-copy-reveal.is-copied { color: #71e0bd; }
+/* Back-compat if any old class remains */
+.ar-student-copy-reveal { display: none; }
 
 /* Exact sent-message animation from the supplied HTML demo.
    0% starts off-screen, 50% reaches the thread, then the 65/80/90%
