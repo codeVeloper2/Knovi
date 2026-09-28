@@ -504,6 +504,58 @@ def _current_task_index_from_messages(messages: list) -> int:
     return int(_derive_learning_state(messages).get("currentTaskIndex", 0))
 
 
+def _persisted_learning_plan(teaching: list) -> list[dict]:
+    """Return the canonical learning plan stored in the teaching snapshot."""
+    for snapshot in sorted(teaching or [], key=lambda item: getattr(item, "created_at", None) or datetime.min, reverse=True):
+        try:
+            parsed = parse_json(snapshot.raw_content or "{}")
+            plan = parsed.get("learning_tasks") if isinstance(parsed, dict) else None
+            if isinstance(plan, list) and plan:
+                return plan
+        except Exception:
+            continue
+    return []
+
+
+_PENDING_QUESTION_START_RE = re.compile(
+    r"^\s*(?:what|why|how|when|where|who|which|can|could|would|should|do|does|did|is|are|was|were|will|may|might|shall|tell me|explain|give me)\b",
+    re.IGNORECASE,
+)
+
+def _looks_like_question_only(text: str) -> bool:
+    value = (text or "").strip()
+    if not value:
+        return False
+    if "?" in value:
+        # If the message is itself a question, treat it as a new request rather
+        # than pretending it answered the tutor's pending check.
+        return True
+    return bool(_PENDING_QUESTION_START_RE.match(value)) and len(value.split()) <= 18
+
+
+def _has_pending_tutor_question(messages: list) -> Optional[str]:
+    ordered = sorted(messages or [], key=lambda item: item.sequence)
+    latest_ai_seq = -1
+    latest_student_seq = -1
+    pending_question = None
+    for message in ordered:
+        if message.role == "ai" and message.message_type in ("teaching", "reteach"):
+            latest_ai_seq = message.sequence
+            pending_question = None
+            question_sentences = [part.strip() for part in re.split(r"(?<=[?!])\s+", (message.content or "").strip()) if part.strip()]
+            for part in reversed(question_sentences):
+                if part.endswith("?"):
+                    pending_question = part
+                    break
+        elif message.role == "student":
+            latest_student_seq = message.sequence
+            if latest_student_seq > latest_ai_seq:
+                pending_question = None
+    if pending_question and latest_ai_seq > latest_student_seq:
+        return pending_question
+    return None
+
+
 def _has_confirmed_task_transition(messages: list, target_task_index: int) -> bool:
     """Return True only when the immediately preceding task was explicitly completed.
 
@@ -1469,8 +1521,31 @@ async def respond_to_student(
 
     is_post_session = session.status == "completed"
 
+    # Snapshot the conversation gate BEFORE persisting the new student turn.
+    # This lets the tutor remember that it still has an unanswered question
+    # even after a refresh or a new HTTP request.
+    pending_tutor_question = None if is_post_session else _has_pending_tutor_question(session.messages)
+
     await _add_message(session_id, "student", "question", content, db)
     await db.flush()
+
+    # A real teacher does not abandon an unanswered check just because the
+    # learner asks a new question. Enforce that turn-taking rule server-side
+    # for clearly new question-only messages; once the learner answers, the
+    # normal AI path can evaluate it and then return to the learner's request.
+    if pending_tutor_question and _looks_like_question_only(content):
+        response_text = (
+            f"Before we jump to that, answer my question first: {pending_tutor_question}\n\n"
+            "Once you answer it, I’ll check your understanding and then we’ll come back to what you asked."
+        )
+        created = await _add_ai_response(
+            session_id, "teaching", response_text, db,
+            extra={"conversationGate": "pending_tutor_question"},
+        )
+        await db.commit()
+        for msg in created:
+            await db.refresh(msg)
+        return created[-1].serialize()
 
     # Handle foul language deterministically before calling an AI provider. This
     # prevents the model from reacting to or repeating abusive wording and saves
@@ -1505,6 +1580,27 @@ async def respond_to_student(
             f"{(current_teaching.explanation or '')[:600]}"
         )
 
+    plan_context = ""
+    if not is_post_session and learning_plan:
+        task_lines = []
+        for idx, task in enumerate(learning_plan):
+            status = "CURRENT" if idx == current_task_index else ("COMPLETED" if idx < current_task_index else "LOCKED")
+            task_lines.append(
+                f"{idx + 1}. [{status}] {task.get('title', 'Learning task')}: "
+                f"{task.get('description', '')} | Focus: {task.get('focus', '')}"
+            )
+        plan_context = (
+            "\nCANONICAL LEARNING PLAN (persisted session roadmap — do not invent or reorder tasks):\n"
+            + "\n".join(task_lines)
+            + f"\nCURRENT TASK INDEX: {current_task_index + 1}\n"
+            + (f"CURRENT TASK: {current_plan_task.get('title', '')} — {current_plan_task.get('focus', '')}\n" if current_plan_task else "")
+            + "Future tasks marked LOCKED must not be taught, solved, previewed in detail, or marked complete until the server advances the session."
+        )
+
+    pending_context = ""
+    if pending_tutor_question and not is_post_session:
+        pending_context = f"""\nPENDING TUTOR QUESTION — THIS HAS PRIORITY\nThe previous tutor turn ended with this unanswered question:\n{pending_tutor_question}\nThe student has now sent a new message before answering it. If the new message is a separate question/request rather than a genuine answer, do NOT answer the new request yet. First ask the student to answer the pending tutor question, then promise to return to the new request after evaluating that answer. If the new message does contain a genuine answer, evaluate it first; once evaluated, you may address the student's additional request within the session scope.\n"""
+
     subject, topic, concept = await _load_curriculum_chain(
         session.subject_id, session.topic_id, session.concept_id, db
     )
@@ -1528,6 +1624,9 @@ POST-SESSION FOLLOW-UP RULES:
 
     # Recover the current Learning Plan task from persisted server state.
     current_task_index = _current_task_index_from_messages(session.messages)
+    learning_plan = _persisted_learning_plan(session.teaching)
+    current_plan_task = learning_plan[current_task_index] if 0 <= current_task_index < len(learning_plan) else None
+    future_plan_tasks = learning_plan[current_task_index + 1:] if current_task_index + 1 < len(learning_plan) else []
 
     # Count substantive exchanges so the AI can judge readiness
     teaching_exchange_count = sum(
@@ -1536,8 +1635,8 @@ POST-SESSION FOLLOW-UP RULES:
     )
 
     system_prompt = _STUDENT_BEHAVIOR_SYSTEM + "\n" + _MATH_FORMATTING_SYSTEM + "\n" + (
-        "You are KnoAI, the AI tutor on Knovi. You teach students concepts step by step. Peers may later challenge each other on what they learned with you — you are the teacher, not the students. "
-        "You always answer educational questions helpfully and warmly. "
+        "You are KnoAI, the AI tutor on Knovi. You teach students concepts step by step like a real teacher, while staying inside the active session scope. "
+        "During an active session, the current Concept is the primary answer boundary. Questions about the current Concept can be answered normally. Questions about the wider Topic may be acknowledged briefly and connected to the roadmap, but do not teach that material in depth before its place in the plan. Questions elsewhere in the Subject should receive an even shorter redirect toward the current lesson. Unrelated requests should be declined and redirected to learning. Never invent a new roadmap. "
         "Return JSON only — no markdown outside the response field."
     )
 
@@ -1548,6 +1647,15 @@ POST-SESSION FOLLOW-UP RULES:
 AGENTIC PROGRESSION RULES (critical — follow exactly):
 You are the teacher driving this session. You must decide when the student is ready for the quiz.
 Current exchange count: {teaching_exchange_count}
+
+SCOPE + ROADMAP ENFORCEMENT (MANDATORY):
+- The session is anchored to Subject → Topic → Concept. The CURRENT CONCEPT is the only scope that receives a normal, substantive answer during this active session.
+- A question elsewhere in the CURRENT TOPIC is allowed only as a brief bridge: acknowledge it, explain that it belongs to a later part of the roadmap, and return to the current task. Do not teach the later topic in detail.
+- A question elsewhere in the CURRENT SUBJECT gets an even shorter redirect back to the current topic/concept.
+- A question outside the SUBJECT is not answered; redirect it back to the lesson.
+- Never reveal or teach a LOCKED future task. Never mark, skip, or imply completion of a task that the persisted session state has not completed.
+- If the student asks for the learning plan, describe the CANONICAL LEARNING PLAN exactly as supplied above; do not create a different plan in the chat.
+- If PENDING TUTOR QUESTION is present, answer that conversational obligation before a new unrelated question. Do not let the student's new question interrupt an unanswered tutor check.
 
 IMPORTANT-POINT FORMATTING:
 - For normal educational responses, use `==...==` around the most important terms, definitions, rules, formulas, or conclusions so the Learning Room can render them with a coloured background highlight.
@@ -1629,6 +1737,8 @@ action_data field:
 
     prompt = f"""{curriculum_ctx}
 {teaching_context}
+{plan_context}
+{pending_context}
 {post_session_directive}
 {agentic_directive}
 

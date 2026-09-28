@@ -15,6 +15,8 @@ from app.services.ai_learning_service import (
     _has_confirmed_task_transition,
     _split_ai_response,
     _remove_embedded_quiz_from_teaching,
+    _has_pending_tutor_question,
+    _looks_like_question_only,
     _TRANSITION_CONFIRMATION_RE,
 )
 
@@ -231,3 +233,46 @@ def test_next_task_requires_persisted_completion_and_transition_confirmation():
     )
     assert _has_confirmed_task_transition([confirmed], 1)
     assert not _has_confirmed_task_transition([confirmed], 2)
+
+
+def test_pending_tutor_question_blocks_new_question_until_answered():
+    from app.models.ai_learning import AISessionMessage
+
+    messages = [
+        AISessionMessage(
+            id=1, session_id=1, role="ai", message_type="teaching",
+            content="Before we move on, explain in your own words what a place value means?",
+            sequence=1,
+        ),
+    ]
+    assert _has_pending_tutor_question(messages) == "Before we move on, explain in your own words what a place value means?"
+    assert _looks_like_question_only("what is the learning plan?")
+
+    messages.append(
+        AISessionMessage(
+            id=2, session_id=1, role="student", message_type="question",
+            content="A place value tells us how much a digit is worth based on its position.",
+            sequence=2,
+        )
+    )
+    assert _has_pending_tutor_question(messages) is None
+
+
+def test_pending_tutor_question_is_restored_from_persisted_sequence():
+    from app.models.ai_learning import AISessionMessage
+
+    messages = [
+        AISessionMessage(
+            id=1, session_id=1, role="ai", message_type="teaching",
+            content="What does base 4 allow each digit to be?", sequence=1,
+        ),
+        AISessionMessage(
+            id=2, session_id=1, role="student", message_type="question",
+            content="I need to think about it.", sequence=2,
+        ),
+        AISessionMessage(
+            id=3, session_id=1, role="ai", message_type="teaching",
+            content="Take your time. What does base 4 allow each digit to be?", sequence=3,
+        ),
+    ]
+    assert _has_pending_tutor_question(messages) == "Take your time. What does base 4 allow each digit to be?"
