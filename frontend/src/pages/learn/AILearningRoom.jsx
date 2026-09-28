@@ -2105,6 +2105,9 @@ function normalizeBaseNotation(text) {
   s = s.replace(/(\d+)\s*_\s*base\s*[- ]?\s*(\d+)/gi, "($1)_{$2}");
   // 12{base10} / 12{base 5}  (missing underscore — shows curly braces in UI)
   s = s.replace(/(\d+)\s*\{\s*base\s*[- ]?\s*(\d+)\s*\}/gi, "($1)_{$2}");
+  // Comma-separated digit lists are sometimes emitted when the model means a
+  // multi-digit number, e.g. `3, 5, 2_8`. Render that as `(352)_8`.
+  s = s.replace(/(\d+(?:\s*,\s*\d+)+)\s*_\s*\{?\s*(\d+)\s*\}?/g, (_, digits, base) => `(${digits.replace(/\s*,\s*/g, "")})_{${base}}`);
   // Already-ish: 12_{10} leave alone; 12_10 → (12)_{10} when clearly a base subscript
   s = s.replace(/(\d+)\s*_\s*\{\s*(\d+)\s*\}/g, "($1)_{$2}");
   s = s.replace(/(\d+)\s*_(\d+)(?!\d)/g, "($1)_{$2}");
@@ -2141,6 +2144,11 @@ function normalizeMathSource(text) {
   s = normalizeBaseNotation(s);
   // Normalize the most common JSON/LLM escaping mistakes before detecting math.
   // A model sometimes returns `\\log_2 16\` instead of `\log_2 16`.
+  // It can also accidentally drop the leading slash from `\times`, producing
+  // `imes` (or `/times`). Fix only math-like multiplication patterns so ordinary
+  // prose containing the word "times" is left untouched.
+  s = s.replace(/(?<=\d)\s*\/times(?=\s*\d)/g, "\\times");
+  s = s.replace(/(?<=\d)\s*imes(?=\s*\d)/g, "\\times");
   // Do this only after fenced code is protected so real source code is untouched.
   s = s.replace(/\\\\(?=[A-Za-z])/g, "\\");
   s = s.replace(/\\(?=\s|[.!?,;:]|$)/g, "");
@@ -2232,8 +2240,11 @@ function normalizeMathSource(text) {
 
 function normalizeLatexSource(latex) {
   let src = String(latex || "").trim();
-  // Some model outputs use a forward slash for TeX commands (e.g. /times).
-  // Normalize those before KaTeX sees the expression.
+  // Normalize common malformed multiplication commands before KaTeX sees them.
+  // Providers occasionally emit `imes` or `/times` instead of `\times`.
+  src = src.replace(/\/times\b/g, "\\times");
+  src = src.replace(/(?<=\d)\s*imes(?=\s*\d)/g, "\\times");
+  src = src.replace(/(?<![A-Za-z])times(?=\s*\d)/g, "\\times");
   src = src.replace(/\\\?(?:times|cdot|div|pm|mp|leq|geq|neq|approx|sqrt|frac|cdot)\b/g, (m) => {
     const command = m.replace(/^\\?/, "");
     return `\\${command}`;

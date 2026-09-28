@@ -90,7 +90,7 @@ GENERAL MATH SYNTAX:
 - Roots: $\sqrt{x}$
 - Inequalities: $x\geq -2$, $x<4$, $a\neq b$
 - Greek letters: $\alpha$, $\theta$, $\pi$
-- Multiplication: $\times$ or $\cdot$
+- Multiplication: $\times$ or $\cdot$. Never output `imes`, `/times`, or `times` as a math operator.
 - Sets: $x\in A$, $A\subseteq B$
 - Sums/integrals: $\sum_{i=1}^{n} i$, $\int_0^1 x\,dx$
 - Never rely on Markdown underscores/carets to render math; use KaTeX delimiters.
@@ -323,6 +323,20 @@ def _extract_questions(parsed: Any) -> list:
 
 def _safe_str(v: Any, fallback: str = "") -> str:
     return v.strip() if isinstance(v, str) and v.strip() else fallback
+
+
+def _normalize_ai_math_typos(text: str) -> str:
+    """Repair small, known math-token typos without rewriting normal prose.
+
+    AI providers occasionally drop the leading slash from ``\times`` and return
+    values such as ``3imes8^2`` or ``3/times8^2``. These are invalid KaTeX and
+    become visible to learners. Only repair the unambiguous digit/operator/digit
+    pattern so ordinary uses of the word ``times`` are not changed.
+    """
+    value = str(text or "")
+    value = re.sub(r"(?<=\d)\s*/times(?=\s*\d)", r"\\times", value)
+    value = re.sub(r"(?<=\d)\s*imes(?=\s*\d)", r"\\times", value)
+    return value
 
 
 def _safe_int(v: Any, lo: int = 0, hi: int = 100) -> Optional[int]:
@@ -1322,6 +1336,7 @@ Return JSON (all fields required; arrays may be empty []):
     if current_plan:
         parsed["learning_tasks"] = current_plan
     explanation  = _safe_str(parsed.get("explanation"), "Teaching content temporarily unavailable.")
+    explanation  = _normalize_ai_math_typos(explanation)
     explanation  = _remove_embedded_quiz_from_teaching(explanation)
     raw_plan = current_plan if current_plan else _safe_list(parsed.get("learning_tasks"))
     learning_tasks = []
@@ -1344,15 +1359,15 @@ Return JSON (all fields required; arrays may be empty []):
                 mapped_objective_ids.append(oid)
         learning_tasks.append({
             "id": str(task.get("id") or f"task-{idx}"),
-            "title": _safe_str(task.get("title"), f"Learning task {idx}"),
-            "description": _safe_str(task.get("description"), ""),
-            "focus": _safe_str(task.get("focus"), ""),
+            "title": _normalize_ai_math_typos(_safe_str(task.get("title"), f"Learning task {idx}")),
+            "description": _normalize_ai_math_typos(_safe_str(task.get("description"), "")),
+            "focus": _normalize_ai_math_typos(_safe_str(task.get("focus"), "")),
             "recommendedMinutes": mins,
             "objectiveIds": mapped_objective_ids,
             "order": idx,
         })
-    summary_text = _safe_str(parsed.get("summary"), "")
-    study_prompt = _safe_str(parsed.get("study_prompt"), "Take time to read through the material above carefully.")
+    summary_text = _normalize_ai_math_typos(_safe_str(parsed.get("summary"), ""))
+    study_prompt = _normalize_ai_math_typos(_safe_str(parsed.get("study_prompt"), "Take time to read through the material above carefully."))
 
     # Only focused teaching counts as objective coverage. The orientation may list
     # planned tasks, but it does not itself establish that those objectives were taught.
@@ -1385,12 +1400,12 @@ Return JSON (all fields required; arrays may be empty []):
         strategy=strategy,
         attempt_number=attempt_number,
         explanation=explanation,
-        key_points=_safe_list(parsed.get("key_points")),
-        examples=_safe_list(parsed.get("examples")),
-        formulas=_safe_list(parsed.get("formulas")),
-        analogies=_safe_list(parsed.get("analogies")),
-        worked_examples=_safe_list(parsed.get("worked_examples")),
-        misconceptions=_safe_list(parsed.get("misconceptions")),
+        key_points=[_normalize_ai_math_typos(str(v)) for v in _safe_list(parsed.get("key_points"))],
+        examples=[_normalize_ai_math_typos(str(v)) for v in _safe_list(parsed.get("examples"))],
+        formulas=[_normalize_ai_math_typos(str(v)) for v in _safe_list(parsed.get("formulas"))],
+        analogies=[_normalize_ai_math_typos(str(v)) for v in _safe_list(parsed.get("analogies"))],
+        worked_examples=[_normalize_ai_math_typos(str(v)) for v in _safe_list(parsed.get("worked_examples"))],
+        misconceptions=[_normalize_ai_math_typos(str(v)) for v in _safe_list(parsed.get("misconceptions"))],
         objective_ids=covered_objective_ids,
         summary=summary_text,
         raw_content=stored_raw_content,
@@ -3578,8 +3593,8 @@ Return JSON (all array fields required; may be empty):
 
     parsed = _coerce_json_object(parsed, preferred_keys=("explanation", "summary", "key_points"))
 
-    explanation   = _safe_str(parsed.get("explanation"), "Reteaching content temporarily unavailable.")
-    encouragement = _safe_str(parsed.get("encouragement"), "A different perspective can make all the difference!")
+    explanation   = _normalize_ai_math_typos(_safe_str(parsed.get("explanation"), "Reteaching content temporarily unavailable."))
+    encouragement = _normalize_ai_math_typos(_safe_str(parsed.get("encouragement"), "A different perspective can make all the difference!"))
 
     valid_objective_ids = {int(x) for x in current_task_objectives if str(x).isdigit()}
     covered_objective_ids: list[int] = []
@@ -3601,14 +3616,14 @@ Return JSON (all array fields required; may be empty):
         strategy=new_strategy,
         attempt_number=attempt_number,
         explanation=explanation,
-        key_points=_safe_list(parsed.get("key_points")),
-        examples=_safe_list(parsed.get("examples")),
-        formulas=_safe_list(parsed.get("formulas")),
-        analogies=_safe_list(parsed.get("analogies")),
-        worked_examples=_safe_list(parsed.get("worked_examples")),
-        misconceptions=_safe_list(parsed.get("misconceptions")),
+        key_points=[_normalize_ai_math_typos(str(v)) for v in _safe_list(parsed.get("key_points"))],
+        examples=[_normalize_ai_math_typos(str(v)) for v in _safe_list(parsed.get("examples"))],
+        formulas=[_normalize_ai_math_typos(str(v)) for v in _safe_list(parsed.get("formulas"))],
+        analogies=[_normalize_ai_math_typos(str(v)) for v in _safe_list(parsed.get("analogies"))],
+        worked_examples=[_normalize_ai_math_typos(str(v)) for v in _safe_list(parsed.get("worked_examples"))],
+        misconceptions=[_normalize_ai_math_typos(str(v)) for v in _safe_list(parsed.get("misconceptions"))],
         objective_ids=covered_objective_ids,
-        summary=_safe_str(parsed.get("summary")),
+        summary=_normalize_ai_math_typos(_safe_str(parsed.get("summary"))),
         raw_content=raw,
         is_current=True,
     )
