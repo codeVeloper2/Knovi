@@ -452,8 +452,24 @@ export default function Chat() {
     });
     return () => ws.close();
   }, [screen, myId]);
+  // Always pin to the latest message when opening a chat or when new messages arrive.
   useEffect(() => {
-    requestAnimationFrame(() => { if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight; });
+    const el = messagesRef.current;
+    if (!el) return undefined;
+    const pin = () => {
+      el.scrollTop = el.scrollHeight;
+    };
+    pin();
+    const raf = requestAnimationFrame(() => {
+      pin();
+      // Second frame + short timeout catch late layout (images, fonts).
+      requestAnimationFrame(pin);
+    });
+    const t = setTimeout(pin, 80);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t);
+    };
   }, [screen, messages.length]);
 
   const openChat = async (id) => {

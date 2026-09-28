@@ -483,11 +483,23 @@ export default function AILearningRoom() {
 
   function scrollConversationToBottom(behavior = "smooth") {
     const el = conversationRef.current;
-    if (el) {
-      el.scrollTo({ top: el.scrollHeight, behavior });
-    } else {
-      bottomRef.current?.scrollIntoView({ behavior, block: "end" });
-    }
+    const run = () => {
+      if (el) {
+        if (behavior === "auto") {
+          el.scrollTop = el.scrollHeight;
+        } else {
+          el.scrollTo({ top: el.scrollHeight, behavior });
+        }
+      } else {
+        bottomRef.current?.scrollIntoView({ behavior, block: "end" });
+      }
+    };
+    run();
+    // Layout can lag (markdown, katex, images) — pin again next frames.
+    requestAnimationFrame(() => {
+      run();
+      requestAnimationFrame(run);
+    });
     stickToBottomRef.current = true;
     setShowScrollBottom(false);
   }
@@ -509,13 +521,20 @@ export default function AILearningRoom() {
     ta.style.height = `${next}px`;
   }
 
-  // Enter room / new messages / AI replies → stay pinned to latest when user is near bottom
+  // Enter room → always start at the latest message
+  useEffect(() => {
+    stickToBottomRef.current = true;
+    const t = setTimeout(() => scrollConversationToBottom("auto"), 30);
+    return () => clearTimeout(t);
+  }, [sessionId]);
+
+  // New messages / AI replies → stay pinned to latest when user is near bottom
   useEffect(() => {
     if (!messages.length && !currentQuestion) return;
-    if (!stickToBottomRef.current && aiWorking) return;
-    // Instant on first paint, smooth for follow-ups
-    const behavior = messages.length <= 2 ? "auto" : "smooth";
-    requestAnimationFrame(() => scrollConversationToBottom(behavior));
+    if (!stickToBottomRef.current) return;
+    const behavior = messages.length <= 3 ? "auto" : "smooth";
+    const t = setTimeout(() => scrollConversationToBottom(behavior), 16);
+    return () => clearTimeout(t);
   }, [messages.length, phase, currentQuestion?.id, typingMessageId, aiWorking]);
 
   useEffect(() => {

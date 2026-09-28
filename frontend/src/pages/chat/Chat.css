@@ -75,6 +75,20 @@
 .pu-user-info span.online { color:var(--pu-teal); }
 
 .pu-messages { flex:1; min-height:0; overflow:auto; padding:12px 12px 8px; display:flex; flex-direction:column; gap:2px; -webkit-overflow-scrolling:touch; }
+
+/* Scrollable areas: keep overflow, hide the light/default track */
+.pu-chat-list,
+.pu-messages {
+  scrollbar-width: none;           /* Firefox */
+  -ms-overflow-style: none;        /* legacy Edge */
+}
+.pu-chat-list::-webkit-scrollbar,
+.pu-messages::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;                   /* Chrome / Safari */
+}
+
 .pu-day-divider { text-align:center; margin:12px 0 8px; color:var(--pu-dim); font-size:12px; font-weight:500; }
 .pu-message-row { position:relative; display:flex; align-items:flex-end; gap:8px; max-width:85%; margin-bottom:4px; }
 .pu-message-row.incoming { align-self:flex-start; }

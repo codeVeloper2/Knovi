@@ -357,9 +357,12 @@
   scrollbar-width: thin;
   scrollbar-color: rgba(123,168,224,.24) transparent;
 }
-.ar-conversation::-webkit-scrollbar,
+.ar-conversation {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.ar-conversation::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .ar-sidebar::-webkit-scrollbar { width: 6px; }
-.ar-conversation::-webkit-scrollbar-thumb,
 .ar-sidebar::-webkit-scrollbar-thumb { background: rgba(123,168,224,.22); border-radius: 99px; }
 
 .ar-message {
