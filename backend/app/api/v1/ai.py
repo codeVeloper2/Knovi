@@ -12,8 +12,10 @@ router = APIRouter()
 # question prompts can reach the model. Answers are cached so the public loop
 # does not repeatedly spend provider credits once a response has been created.
 LANDING_DEMO_QUESTIONS = (
-    "Can you explain what a number base is in a simple way?",
-    "Can you give me a simple example of a number base?",
+    "Can you explain photosynthesis simply?",
+    "Why does the moon not fall to Earth?",
+    "How do I solve 2x + 4 = 10?",
+    "What is the difference between speed and velocity?",
 )
 LANDING_DEMO_SYSTEM = (
     "You are KnoAI, the learning companion inside Knovi. "

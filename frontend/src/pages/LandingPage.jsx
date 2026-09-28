@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, CheckCircle2, Mail, Menu, Sparkles, Users, X, Zap } from "lucide-react";
+import { ArrowRight, CheckCircle2, Mail, Menu, MessageCircle, Sparkles, Users, X, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 import { landingDemo } from "../api";
 import { KnoAILogo, LogoMark } from "../components/Logo";
@@ -8,21 +8,11 @@ import "./landing.css";
 import HowKnoviWorks from "./HowKnoviWorks";
 
 const DEMO_QUESTIONS = [
-  "Can you explain what a number base is in a simple way?",
-  "Can you give me a simple example of a number base?",
+  "Can you explain photosynthesis simply?",
+  "Why does the moon not fall to Earth?",
+  "How do I solve 2x + 4 = 10?",
+  "What is the difference between speed and velocity?",
 ];
-
-function WhatsAppIcon({ size = 18 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <path
-        fill="currentColor"
-        d="M20.52 3.48A11.8 11.8 0 0 0 12.07 0C5.55 0 .24 5.31.24 11.83c0 2.09.55 4.13 1.59 5.92L.14 24l6.4-1.68a11.78 11.78 0 0 0 5.53 1.38h.01c6.52 0 11.82-5.31 11.82-11.83 0-3.16-1.23-6.13-3.38-8.39Zm-8.45 18.2h-.01a9.82 9.82 0 0 1-5.01-1.37l-.36-.21-3.8 1 1.01-3.7-.23-.38a9.82 9.82 0 0 1-1.5-5.2C2.17 6.4 6.61 1.96 12.08 1.96c2.65 0 5.14 1.03 7.02 2.92a9.85 9.85 0 0 1 2.9 7.01c0 5.47-4.45 9.79-9.93 9.79Zm5.42-7.34c-.3-.15-1.77-.87-2.04-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.95 1.17-.17.2-.35.22-.65.07-.3-.15-1.27-.47-2.42-1.49-.89-.79-1.49-1.77-1.67-2.07-.17-.3-.02-.46.13-.61.14-.14.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.49s1.07 2.89 1.22 3.09c.15.2 2.1 3.2 5.09 4.49.71.31 1.27.49 1.7.63.72.23 1.37.2 1.89.12.58-.09 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.12-.27-.2-.57-.35Z"
-      />
-    </svg>
-  );
-}
-
 
 function scrollToId(id) {
   document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -30,49 +20,54 @@ function scrollToId(id) {
 
 export default function LandingPage() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [demo, setDemo] = useState(() => {
-    try {
-      const saved = JSON.parse(sessionStorage.getItem("knovi.landingDemo") || "null");
-      if (saved && Number.isInteger(saved.completed) && saved.completed >= 0 && saved.completed <= DEMO_QUESTIONS.length) {
-        return {
-          completed: saved.completed,
-          answers: Array.isArray(saved.answers) ? saved.answers.slice(0, DEMO_QUESTIONS.length) : [],
-          loading: false,
-        };
-      }
-    } catch {}
-    return { completed: 0, answers: [], loading: false };
-  });
+  const [demo, setDemo] = useState({ question: DEMO_QUESTIONS[0], answer: "", loading: true, questionIndex: 0 });
   const [demoError, setDemoError] = useState("");
+  const timerRef = useRef(null);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    try {
-      sessionStorage.setItem("knovi.landingDemo", JSON.stringify({
-        completed: demo.completed,
-        answers: demo.answers,
-      }));
-    } catch {}
-  }, [demo.completed, demo.answers]);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      clearTimeout(timerRef.current);
+    };
+  }, []);
 
-  async function runDemoPrompt() {
-    if (demo.loading || demo.completed >= DEMO_QUESTIONS.length) return;
-
-    const questionIndex = demo.completed;
+  useEffect(() => {
+    let cancelled = false;
+    const questionIndex = demo.questionIndex;
+    const question = DEMO_QUESTIONS[questionIndex];
+    setDemo((current) => ({ ...current, question, answer: "", loading: true }));
     setDemoError("");
-    setDemo((current) => ({ ...current, loading: true }));
 
-    try {
-      const data = await landingDemo(questionIndex);
-      setDemo((current) => ({
-        completed: questionIndex + 1,
-        answers: [...current.answers, data.answer || ""],
-        loading: false,
-      }));
-    } catch (error) {
-      setDemoError(error.message || "KnoAI is temporarily unavailable.");
-      setDemo((current) => ({ ...current, loading: false }));
-    }
-  }
+    landingDemo(questionIndex)
+      .then((data) => {
+        if (cancelled || !mountedRef.current) return;
+        setDemo((current) => ({ ...current, answer: data.answer || "", loading: false }));
+        timerRef.current = setTimeout(() => {
+          setDemo((current) => ({
+            ...current,
+            questionIndex: (current.questionIndex + 1) % DEMO_QUESTIONS.length,
+          }));
+        }, 6200);
+      })
+      .catch((error) => {
+        if (cancelled || !mountedRef.current) return;
+        setDemoError(error.message || "KnoAI is temporarily unavailable.");
+        setDemo((current) => ({ ...current, loading: false }));
+        timerRef.current = setTimeout(() => {
+          setDemo((current) => ({
+            ...current,
+            questionIndex: (current.questionIndex + 1) % DEMO_QUESTIONS.length,
+          }));
+        }, 3500);
+      });
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timerRef.current);
+    };
+  }, [demo.questionIndex]);
 
   const closeMenu = () => setMobileOpen(false);
 
@@ -269,14 +264,15 @@ export default function LandingPage() {
       <section id="demo" className="landing-section demo-section">
         <div className="section-heading reveal">
           <span className="section-label">LIVE KNOAI DEMO</span>
-          <h2>The real learning room.<br /><span>One guided demo session.</span></h2>
+          <h2>Not a video.<br /><span>A real learning room.</span></h2>
           <p>
-            This uses the same Learning Room structure and message experience as <strong>/app/learn</strong>.
-            The demo keeps the learner's input locked to two guided questions, while every KnoAI response is generated live.
+            This is a read-only clone of the AI Learning Room. Preset questions rotate automatically
+            and KnoAI answers through the live service — you cannot type or ask your own questions here.
           </p>
         </div>
 
-        <div className="demo-room reveal delay-one" aria-label="KnoAI live learning room demo">
+        <div className="demo-room reveal delay-one" aria-label="AI Learning Room demo (read-only)">
+          {/* Room header — mirrors the real AI Learning Room */}
           <header className="demo-room-header">
             <div className="demo-room-header-left">
               <span className="demo-room-back" aria-hidden="true">
@@ -286,101 +282,93 @@ export default function LandingPage() {
               </span>
               <div className="demo-room-titles">
                 <strong>AI Learning Room</strong>
-                <span>Teaching · Mathematics · Number Bases</span>
+                <span>Teaching · Biology · Photosynthesis</span>
               </div>
             </div>
             <div className="demo-room-header-right">
               <span className="demo-room-phase">TEACHING</span>
-              <span className="demo-room-badge">LIVE DEMO</span>
+              <span className="demo-room-badge">READ-ONLY DEMO</span>
             </div>
           </header>
 
           <div className="demo-room-body">
+            {/* Simplified learning plan sidebar */}
             <aside className="demo-room-sidebar" aria-hidden="true">
               <div className="demo-sidebar-head">
                 <span className="demo-eyebrow">LEARNING PLAN</span>
-                <strong>{demo.completed >= 2 ? "2 of 3 complete" : demo.completed >= 1 ? "1 of 3 complete" : "0 of 3 complete"}</strong>
+                <strong>1 of 3 complete</strong>
               </div>
               <div className="demo-plan-progress">
-                <div className="demo-plan-ring"><span>{demo.completed >= 2 ? "67%" : demo.completed >= 1 ? "33%" : "0%"}</span></div>
+                <div className="demo-plan-ring"><span>33%</span></div>
                 <div>
-                  <b>Understand number bases</b>
+                  <b>Understand the core idea</b>
                   <small>CURRENT FOCUS</small>
                 </div>
               </div>
               <ul className="demo-task-list">
-                <li className={demo.completed >= 1 ? "done" : "active"}><span>{demo.completed >= 1 ? "✓" : "1"}</span> Core explanation</li>
-                <li className={demo.completed >= 2 ? "done" : demo.completed === 1 ? "active" : ""}><span>{demo.completed >= 2 ? "✓" : "2"}</span> Worked example</li>
+                <li className="done"><span>✓</span> Set the goal</li>
+                <li className="active"><span>2</span> Core explanation</li>
                 <li><span>3</span> Quick check</li>
               </ul>
             </aside>
 
+            {/* Message thread */}
             <div className="demo-room-main">
               <div className="demo-room-thread">
                 <div className="demo-room-context">
                   <KnoAILogo size={22} />
                   <div>
                     <strong>KnoAI tutor</strong>
-                    <small>Guided learning session</small>
+                    <small>Guided demo · fixed questions only</small>
                   </div>
                 </div>
 
-                {DEMO_QUESTIONS.slice(0, Math.min(demo.completed + (demo.loading ? 1 : 0), DEMO_QUESTIONS.length)).map((question, index) => (
-                  <Fragment key={`demo-turn-${index}`}>
-                    <div className="demo-msg demo-msg-user">
-                      <div className="demo-msg-meta">You</div>
-                      <div className="demo-msg-bubble demo-msg-bubble-user">{question}</div>
-                    </div>
-                    {(index < demo.completed || (demo.loading && index === demo.completed)) && (
-                      <div className="demo-msg demo-msg-ai">
-                        <div className="demo-msg-meta"><KnoAILogo size={18} /><span>KnoAI</span></div>
-                        <div className="demo-msg-bubble demo-msg-bubble-ai">
-                          {demo.loading && index === demo.completed ? (
-                            <span className="demo-thinking" aria-label="KnoAI is thinking"><i /><i /><i /></span>
-                          ) : (demo.answers[index] || "")}
-                        </div>
-                      </div>
-                    )}
-                  </Fragment>
-                ))}
+                <div className="demo-msg demo-msg-user" key={`q-${demo.questionIndex}`}>
+                  <div className="demo-msg-meta">You</div>
+                  <div className="demo-msg-bubble demo-msg-bubble-user">{demo.question}</div>
+                </div>
 
-                {demoError && <div className="demo-error demo-inline-error">{demoError}</div>}
-
-                {demo.completed === 1 && !demo.loading && (
-                  <div className="demo-next-prompt">
-                    <span>Next guided prompt</span>
-                    <strong>{DEMO_QUESTIONS[1]}</strong>
+                <div className="demo-msg demo-msg-ai" key={`a-${demo.questionIndex}-${demo.loading ? "load" : "ready"}`}>
+                  <div className="demo-msg-meta">
+                    <KnoAILogo size={18} />
+                    <span>KnoAI</span>
                   </div>
-                )}
-
+                  <div className="demo-msg-bubble demo-msg-bubble-ai">
+                    {demo.loading ? (
+                      <span className="demo-thinking" aria-label="KnoAI is thinking">
+                        <i /><i /><i />
+                      </span>
+                    ) : demoError ? (
+                      <span className="demo-error">{demoError}</span>
+                    ) : (
+                      demo.answer
+                    )}
+                  </div>
+                </div>
               </div>
 
+              {/* Locked composer — looks like the real input, cannot type */}
               <div className="demo-room-composer" aria-disabled="true">
-                {demo.completed < DEMO_QUESTIONS.length ? (
-                  <>
-                    <div className="demo-composer-lock">
-                      <span className="demo-lock-icon" aria-hidden="true">🔒</span>
-                      <div className="demo-composer-field">
-                        <span className="demo-composer-placeholder">{DEMO_QUESTIONS[demo.completed]}</span>
-                        <span className="demo-composer-hint">Guided demo prompt · input is locked</span>
-                      </div>
-                      <button type="button" className="demo-composer-send" onClick={runDemoPrompt} disabled={demo.loading}>
-                        {demo.loading ? "Thinking…" : demo.completed === 0 ? "Send" : "Continue"}
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <div className="demo-composer-cta demo-limit-cta">
-                    <div>
-                      <strong>You've reached the end of the demo.</strong>
-                      <span>Create an account or log in to get full access to KNoAI.</span>
-                    </div>
-                    <div className="demo-cta-actions">
-                      <Link to="/signup" className="demo-cta-primary">Create account <ArrowRight size={15} /></Link>
-                      <Link to="/login" className="demo-cta-secondary">Log in</Link>
-                    </div>
+                <div className="demo-composer-lock">
+                  <span className="demo-lock-icon" aria-hidden="true">🔒</span>
+                  <div className="demo-composer-field">
+                    <span className="demo-composer-placeholder">
+                      Ask anything about this concept…
+                    </span>
+                    <span className="demo-composer-hint">
+                      Input is disabled on the landing page. Sign up to use the full AI Learning Room.
+                    </span>
                   </div>
-                )}
+                  <button type="button" className="demo-composer-send" disabled tabIndex={-1} aria-hidden="true">
+                    Send
+                  </button>
+                </div>
+                <div className="demo-composer-cta">
+                  <Link to="/signup">
+                    Create a free account to ask your own questions
+                    <ArrowRight size={15} />
+                  </Link>
+                </div>
               </div>
             </div>
           </div>
@@ -398,7 +386,7 @@ export default function LandingPage() {
       <section id="contact" className="landing-section contact-section">
         <div className="contact-card reveal">
           <div><span className="section-label">CONTACT</span><h2>Want to talk about Knovi?</h2><p>Questions, feedback, collaboration ideas or just want to see what is being built? Reach out through the project.</p></div>
-          <div className="contact-actions"><a href="mailto:codeveloper95@gmail.com" className="contact-btn"><Mail size={18} /> codeveloper95@gmail.com</a><a href="https://wa.me/2347041344892" target="_blank" rel="noreferrer" className="contact-btn secondary"><WhatsAppIcon size={18} /> 07041344892</a></div>
+          <div className="contact-actions"><a href="mailto:codeveloper95@gmail.com" className="contact-btn"><Mail size={18} /> codeveloper95@gmail.com</a><a href="https://wa.me/2347041344892" target="_blank" rel="noreferrer" className="contact-btn secondary"><MessageCircle size={18} /> 07041344892</a></div>
         </div>
       </section>
 
