@@ -1129,7 +1129,7 @@ Each task must be concrete and independently assessable.
 Choose 3–7 tasks. Choose a study duration of 2–10 minutes for each task based on complexity.
 Return learning_tasks as:
 [
-  {"title":"...", "description":"...", "focus":"...", "recommended_minutes":5, "objective_ids":[101]}
+  {"title":"...", "description":"Use plain language; wrap math in $...$ e.g. base $b$ uses digits $0$ to $b-1$.", "focus":"...", "recommended_minutes":5, "objective_ids":[101]}
 ]
 """ if not current_plan else ""
 

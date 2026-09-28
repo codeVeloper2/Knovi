@@ -1068,8 +1068,8 @@ export default function AILearningRoom() {
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
                         ) : i + 1}</span>
                         <span className="ar-plan-menu-copy">
-                          <b>{taskTitle(task)}</b>
-                          <small>{taskDescription(task)}</small>
+                          <b><InlineRich text={taskTitle(task)} /></b>
+                          <small><InlineRich text={taskDescription(task)} /></small>
                           <em>{done ? "Completed" : current ? "Current focus" : "Upcoming"}</em>
                         </span>
                       </div>
@@ -1101,7 +1101,7 @@ export default function AILearningRoom() {
               <div className="ar-plan-progress">
                 <div className="ar-plan-ring" style={{ "--p": `${planProgress * 3.6}deg` }}><span>{planProgress}%</span></div>
                 <div>
-                  <strong>{currentTask ? taskTitle(currentTask) : "Preparing your plan"}</strong>
+                  <strong>{currentTask ? <InlineRich text={taskTitle(currentTask)} /> : "Preparing your plan"}</strong>
                   <small>{currentTask ? "CURRENT FOCUS" : "Your tutor is building the learning plan."}</small>
                 </div>
               </div>
@@ -1113,8 +1113,8 @@ export default function AILearningRoom() {
                     <div key={i} className={`ar-task ${active ? "active" : ""} ${done ? "done" : ""}`} aria-current={active ? "step" : undefined}>
                       <span className="ar-task-number">{done ? "✓" : i + 1}</span>
                       <span className="ar-task-copy">
-                        <b>{taskTitle(task)}</b>
-                        <small>{taskDescription(task)}</small>
+                        <b><InlineRich text={taskTitle(task)} /></b>
+                        <small><InlineRich text={taskDescription(task)} /></small>
                         <em>{done ? "✓ COMPLETED" : active ? "CURRENT FOCUS" : "UPCOMING"}</em>
                       </span>
                     </div>
@@ -1490,14 +1490,14 @@ function SidebarPlan({ plan, current, completed, progress, onClose }) {
   return <div className="ar-panel-inner">
     <div className="ar-panel-head"><div><span className="ar-eyebrow">ROADMAP</span><h2>Learning plan</h2></div><button className="ar-mobile-close" onClick={onClose}>×</button></div>
     <div className="ar-plan-progress"><div className="ar-plan-ring" style={{ "--p": `${progress * 3.6}deg` }}><span>{progress}%</span></div><div><strong>{completed.length} of {plan.length || 0} complete</strong><small>The roadmap is context. KnoAI drives the conversation.</small></div></div>
-    <div className="ar-task-list">{plan.length ? plan.map((task, i) => <div key={i} className={`ar-task ${completed.includes(i) ? "done" : current === i ? "active" : ""}`}><span className="ar-task-number">{completed.includes(i) ? "✓" : i + 1}</span><span className="ar-task-copy"><b>{taskTitle(task)}</b><small>{taskDescription(task)}</small><em>{completed.includes(i) ? "Completed" : current === i ? "Current focus" : taskMeta(task)}</em></span></div>) : <div className="ar-empty-plan"><span>✦</span><p>Your tutor is building the learning context.</p></div>}</div>
+    <div className="ar-task-list">{plan.length ? plan.map((task, i) => <div key={i} className={`ar-task ${completed.includes(i) ? "done" : current === i ? "active" : ""}`}><span className="ar-task-number">{completed.includes(i) ? "✓" : i + 1}</span><span className="ar-task-copy"><b><InlineRich text={taskTitle(task)} /></b><small><InlineRich text={taskDescription(task)} /></small><em>{completed.includes(i) ? "Completed" : current === i ? "Current focus" : taskMeta(task)}</em></span></div>) : <div className="ar-empty-plan"><span>✦</span><p>Your tutor is building the learning context.</p></div>}</div>
   </div>;
 }
 
 function WorkspacePanel({ session, task, phase, progress, familiarity, intent, answeredCount, questionCount, onStudy, onClose }) {
   return <div className="ar-panel-inner">
     <div className="ar-panel-head"><div><span className="ar-eyebrow">WORKSPACE</span><h2>Session tools</h2></div><button className="ar-mobile-close" onClick={onClose}>×</button></div>
-    <div className="ar-current-card"><span className="ar-current-kicker">NOW LEARNING</span><h3>{taskTitle(task) || session?.conceptName || "Building your lesson"}</h3><p>{taskDescription(task) || "Talk with KnoAI. It decides when you're ready."}</p><div className="ar-context-facts">{familiarity && <span>Starting point: {formatFamiliarity(familiarity)}</span>}{intent && <span>Goal: {formatIntent(intent)}</span>}</div><span className={`ar-phase-pill ar-phase-${phase}`}>{phase.replace("_", " ")}</span></div>
+    <div className="ar-current-card"><span className="ar-current-kicker">NOW LEARNING</span><h3>{taskTitle(task) ? <InlineRich text={taskTitle(task)} /> : (session?.conceptName || "Building your lesson")}</h3><p>{taskDescription(task) ? <InlineRich text={taskDescription(task)} /> : "Talk with KnoAI. It decides when you're ready."}</p><div className="ar-context-facts">{familiarity && <span>Starting point: {formatFamiliarity(familiarity)}</span>}{intent && <span>Goal: {formatIntent(intent)}</span>}</div><span className={`ar-phase-pill ar-phase-${phase}`}>{phase.replace("_", " ")}</span></div>
     <div className="ar-stats-card"><div><b>{progress}%</b><span>Progress</span></div><div><b>{answeredCount}</b><span>Checks</span></div><div><b>{questionCount}</b><span>This run</span></div></div>
     {(phase === "teaching" || phase === "reteaching") && <button className="ar-study-tool" onClick={onStudy}><span>◷</span><b>Study timer</b><small>5-minute focus before continuing.</small></button>}
     <div className="ar-tool-tip"><b>Stay in the conversation.</b><span>Ask for examples, simpler explanations, or real-world applications. KnoAI decides when to check you.</span></div>
@@ -1530,7 +1530,7 @@ function PracticeBanner() {
   return <div className="ar-practice-banner" role="status"><span>🔒</span><div><strong>PRACTICE MODE</strong><span>Teaching content is hidden. Show what you understand.</span></div></div>;
 }
 function PreparingCard() { return <div className="ar-preparing-card"><div className="ar-preparing-orb">✦</div><div><span className="ar-eyebrow">BUILDING YOUR LESSON</span><h3>KnoAI is assembling the right starting point</h3><p>It is combining the concept, your starting level, and the learning goal into a focused conversation.</p><div className="ar-loading-line"><i /><i /><i /></div></div></div>; }
-function StudyCard({ seconds, task }) { return <div className="ar-study-card"><div className="ar-study-orbit"><span>{formatTime(seconds)}</span><small>Focus</small></div><div className="ar-study-copy"><span className="ar-eyebrow">STUDY MODE</span><h3>{taskTitle(task) || "Study the current idea"}</h3><p>Review what KnoAI taught, then come back to the conversation.</p></div></div>; }
+function StudyCard({ seconds, task }) { return <div className="ar-study-card"><div className="ar-study-orbit"><span>{formatTime(seconds)}</span><small>Focus</small></div><div className="ar-study-copy"><span className="ar-eyebrow">STUDY MODE</span><h3>{taskTitle(task) ? <InlineRich text={taskTitle(task)} /> : "Study the current idea"}</h3><p>Review what KnoAI taught, then come back to the conversation.</p></div></div>; }
 
 function QuizArtifact({ question, index, total, answer, setAnswer, onSubmit, submitting, results, hintOpen, setHintOpen }) {
   const options = Array.isArray(question.options) ? question.options : [];
@@ -1545,8 +1545,8 @@ function QuizArtifact({ question, index, total, answer, setAnswer, onSubmit, sub
     <div className="ar-quiz-progress">{Array.from({ length: total }, (_, i) => <i key={i} className={i < index ? "done" : i === index ? "current" : ""} />)}</div>
     <div className="ar-quiz-question"><RichText content={question.question} onCopy={() => {}} copiedId={null} /></div>
     <button type="button" className="ar-hint-toggle" onClick={() => { setHintOpen(v => !v); setHintUsed(true); }} disabled={submitting}>{hintOpen ? "Hide hint" : "Need a hint?"}</button>
-    {hintOpen && <div className="ar-practice-hint"><strong>Hint</strong><span>{hint}</span></div>}
-    {mc ? <div className="ar-options">{options.map((opt, i) => { const value = typeof opt === "string" ? opt : (opt.value ?? opt.label ?? opt.text); const text = typeof opt === "string" ? opt : (opt.text ?? opt.label ?? opt.value); return <button key={`${question.id}-${i}`} className={`ar-option ${answer === value ? "selected" : ""}`} onClick={() => setAnswer(value)} disabled={submitting}><span>{String.fromCharCode(65 + i)}</span><b>{text}</b></button>; })}</div> : <textarea className="ar-answer-box" rows={5} value={answer} onChange={e => setAnswer(e.target.value)} placeholder="Work it out, then give KnoAI your answer…" disabled={submitting} />}
+    {hintOpen && <div className="ar-practice-hint"><strong>Hint</strong><span><InlineRich text={hint} /></span></div>}
+    {mc ? <div className="ar-options">{options.map((opt, i) => { const value = typeof opt === "string" ? opt : (opt.value ?? opt.label ?? opt.text); const text = typeof opt === "string" ? opt : (opt.text ?? opt.label ?? opt.value); return <button key={`${question.id}-${i}`} className={`ar-option ${answer === value ? "selected" : ""}`} onClick={() => setAnswer(value)} disabled={submitting}><span>{String.fromCharCode(65 + i)}</span><b><InlineRich text={text} /></b></button>; })}</div> : <textarea className="ar-answer-box" rows={5} value={answer} onChange={e => setAnswer(e.target.value)} placeholder="Work it out, then give KnoAI your answer…" disabled={submitting} />}
     <div className="ar-quiz-foot"><span>{Object.keys(results).length} response{Object.keys(results).length !== 1 ? "s" : ""} recorded.</span><button onClick={onSubmit} disabled={!answer.trim() || submitting}>{submitting ? "Evaluating…" : index + 1 === total ? "Finish mastery check" : "Submit →"}</button></div>
   </section>;
 }
@@ -1809,7 +1809,8 @@ function normalizeMathSource(text) {
   // Protect already-delimited math. A single-$ span is accepted only when it
   // actually looks like mathematics; this prevents an unmatched $ in normal
   // prose from swallowing half of a paragraph and rendering it as KaTeX.
-  const inlineMathPattern = /\$(?=[^$\n]{1,48}\$)(?=[^$\n]*(?:\\[A-Za-z]+|[0-9]|[=<>^_{}]))[^$\n]+\$/g;
+  // Accept short math incl. single-letter vars ($b$, $n$) and expressions ($b-1$, $0$).
+  const inlineMathPattern = /\$(?=[^$\n]{1,64}\$)(?=[^$\n]*(?:\\[A-Za-z]+|[0-9A-Za-z]|[=<>^_{}+\-*/]))[^$\n]{1,64}\$/g;
   s = s.replace(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|PLACEHOLDER)/g, (m) => {
     protectedBlocks.push(m);
     return `\u0000MATH${protectedBlocks.length - 1}\u0000`;
@@ -1948,6 +1949,13 @@ function inlineMarkdown(text) {
 async function copyText(text, id, onCopy) { try { await navigator.clipboard?.writeText(text); onCopy(id); setTimeout(() => onCopy(null), 1300); } catch {} }
 function formatFamiliarity(v) { return ({ new: "new to this", seen_before: "seen it before", know_basics: "basics understood", know_well: "confident", need_help: "needs help" })[v] || v; }
 function formatIntent(v) { return ({ teach_me: "learn the concept", explain_simply: "simple explanation", give_examples: "learn through examples", go_deeper: "go deeper", already_know: "probe understanding", quiz_me: "diagnostic first", broaden: "broaden context", teach_it_back: "explain it back (Feynman)", custom: "custom goal" })[v] || v; }
+/** Short text (plan items, options, hints) with KaTeX + light markdown. */
+function InlineRich({ text, as: Tag = "span", className }) {
+  if (text == null || text === "") return null;
+  const nodes = inlineMarkdown(normalizeMathSource(String(text)));
+  return <Tag className={className}>{nodes}</Tag>;
+}
+
 function taskTitle(task) { return task?.title || task?.name || task?.concept || task?.task || "Learning step"; }
 function taskDescription(task) { return task?.description || task?.objective || task?.goal || task?.summary || "Build understanding and apply the idea."; }
 function taskMeta(task) { return task?.estimatedMinutes ? `${task.estimatedMinutes} min` : task?.recommended_minutes ? `${task.recommended_minutes} min` : task?.type || "Guided learning"; }
