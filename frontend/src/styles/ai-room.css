@@ -403,6 +403,10 @@
 .ar-message-user .ar-message-meta { justify-content: flex-end; }
 .ar-message-meta time { margin-left: 5px; }
 .ar-message-card {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  overflow-wrap: anywhere;
   border: 1px solid var(--ar-border);
   border-radius: 5px 15px 15px 15px;
   background: linear-gradient(145deg, rgba(12,34,61,.95), rgba(8,25,45,.96));
@@ -430,7 +434,15 @@
   text-transform: uppercase;
 }
 
-.ar-rich { color: #dbe7f8; font-size: 13px; line-height: 1.72; }
+.ar-rich {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  color: #dbe7f8;
+  font-size: 13px;
+  line-height: 1.72;
+}
 .ar-rich > :first-child { margin-top: 0; }
 .ar-rich > :last-child { margin-bottom: 0; }
 .ar-rich p { margin: 0 0 12px; }
@@ -2754,7 +2766,14 @@
 /* KaTeX on dark surfaces */
 .ar-rich .katex { font-size: 1.05em; color: #e8eef8; }
 .ar-rich .katex .mord, .ar-rich .katex .mbin, .ar-rich .katex .mrel, .ar-rich .katex .mopen, .ar-rich .katex .mclose { color: inherit; }
-.ar-math { display: inline-block; vertical-align: middle; margin: 0 0.15em; max-width: 100%; overflow-x: auto; }
+.ar-math {
+  display: inline;
+  vertical-align: baseline;
+  margin: 0 0.15em;
+  max-width: none;
+  overflow: visible;
+  white-space: normal;
+}
 .ar-math-display, .ar-math-block {
   display: block;
   overflow-x: auto;
@@ -2774,6 +2793,14 @@
 }
 .ar-quiz-question .ar-rich p { margin: 0; font-size: inherit; }
 .ar-quiz-question .katex { font-size: 1.1em; }
+
+.ar-rich .ar-math:not(.ar-math-display):not(.ar-math-block) {
+  display: inline;
+  max-width: none;
+  overflow: visible;
+  vertical-align: baseline;
+  white-space: normal;
+}
 
 /* ── Live graph plot player ─────────────────────────────────────── */
 .gp-player {

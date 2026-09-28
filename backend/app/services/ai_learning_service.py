@@ -1461,7 +1461,7 @@ $x = 3$
 ==Answer: $x=3$==
 ```
 - Do not put ordinary explanatory prose inside a calculation block. Use one mathematical step per line and keep the final line as the answer.
-- Number bases: always write $(n)_{b}$ e.g. $(10)_{5}$ or $10_{5}$. Never write 10_base5, 10_{base5}, 10{base5}, or jam many conversions on one line.
+- Number bases: always write $(n)_{{b}}$ e.g. $(10)_{{5}}$ or $10_{{5}}$. Never write 10_base5, 10_{{base5}}, 10{{base5}}, or jam many conversions on one line.
 
 action field rules:
 - null         → continue teaching/conversing normally
