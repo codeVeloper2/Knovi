@@ -2124,14 +2124,21 @@ function normalizeBaseNotation(text) {
 
 /** Wrap bare LaTeX commands in $...$ so KaTeX can render them. */
 function normalizeMathSource(text) {
-  let s = normalizeBaseNotation(String(text || ""));
-  // Unicode operators → keep as-is (they render); also map common words
-  // Protect fenced code
+  let s = String(text || "");
+  // Protect fenced code AND already-delimited mathematics before applying any
+  // prose-level normalization. Otherwise a TeX command such as \times or an
+  // exponent can be modified while we are still parsing ordinary text.
   const protectedBlocks = [];
   s = s.replace(/```[\s\S]*?```/g, (m) => {
     protectedBlocks.push(m);
     return `\u0000CODE${protectedBlocks.length - 1}\u0000`;
   });
+  s = s.replace(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$(?=[^$\n]{1,120}\$)[^$\n]{1,120}\$)/g, (m) => {
+    protectedBlocks.push(m);
+    return `\u0000MATH${protectedBlocks.length - 1}\u0000`;
+  });
+
+  s = normalizeBaseNotation(s);
   // Normalize the most common JSON/LLM escaping mistakes before detecting math.
   // A model sometimes returns `\\log_2 16\` instead of `\log_2 16`.
   // Do this only after fenced code is protected so real source code is untouched.
@@ -2148,20 +2155,6 @@ function normalizeMathSource(text) {
 
   // Remove TeX spacing commands that sometimes leak outside math delimiters.
   s = s.replace(/\\[!,;:]/g, "");
-
-  // Protect already-delimited math. A single-$ span is accepted only when it
-  // actually looks like mathematics; this prevents an unmatched $ in normal
-  // prose from swallowing half of a paragraph and rendering it as KaTeX.
-  // Accept short math incl. single-letter vars ($b$, $n$) and expressions ($b-1$, $0$).
-  const inlineMathPattern = /\$(?=[^$\n]{1,64}\$)(?=[^$\n]*(?:\\[A-Za-z]+|[0-9A-Za-z]|[=<>^_{}+\-*/]))[^$\n]{1,64}\$/g;
-  s = s.replace(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|PLACEHOLDER)/g, (m) => {
-    protectedBlocks.push(m);
-    return `\u0000MATH${protectedBlocks.length - 1}\u0000`;
-  });
-  s = s.replace(inlineMathPattern, (m) => {
-    protectedBlocks.push(m);
-    return `\u0000MATH${protectedBlocks.length - 1}\u0000`;
-  });
 
   // Some model responses use `((10))`, `((100))`, or `((c))` as an
   // accidental stand-in for inline math. Convert only simple numeric/identifier
@@ -2237,9 +2230,24 @@ function normalizeMathSource(text) {
   return s;
 }
 
+function normalizeLatexSource(latex) {
+  let src = String(latex || "").trim();
+  // Some model outputs use a forward slash for TeX commands (e.g. /times).
+  // Normalize those before KaTeX sees the expression.
+  src = src.replace(/\\\?(?:times|cdot|div|pm|mp|leq|geq|neq|approx|sqrt|frac|cdot)\b/g, (m) => {
+    const command = m.replace(/^\\?/, "");
+    return `\\${command}`;
+  });
+  // Normalize accidental spaces around exponent markers: b ^ n -> b^n.
+  src = src.replace(/([A-Za-z0-9)\]}])\s*\^\s*([A-Za-z0-9(])/g, "$1^$2");
+  // Collapse JSON-style double escaping that can leak into rendered math.
+  src = src.replace(/\\\\(?=[A-Za-z])/g, "\\");
+  return src;
+}
+
 function renderMath(latex, displayMode = false) {
   try {
-    let src = String(latex || "").trim();
+    let src = normalizeLatexSource(latex);
     // Strip leftover outer $ if any
     if (src.startsWith("$$") && src.endsWith("$$")) src = src.slice(2, -2).trim();
     if (src.startsWith("$") && src.endsWith("$")) src = src.slice(1, -1).trim();
