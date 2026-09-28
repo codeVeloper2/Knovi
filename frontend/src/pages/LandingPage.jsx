@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, CheckCircle2, Github, Mail, Menu, Sparkles, Users, X, Zap } from "lucide-react";
+import { ArrowRight, CheckCircle2, Mail, Menu, MessageCircle, Sparkles, Users, X, Zap } from "lucide-react";
 import { Link } from "react-router-dom";
 import { landingDemo } from "../api";
 import { KnoAILogo, LogoMark } from "../components/Logo";
@@ -386,7 +386,7 @@ export default function LandingPage() {
       <section id="contact" className="landing-section contact-section">
         <div className="contact-card reveal">
           <div><span className="section-label">CONTACT</span><h2>Want to talk about Knovi?</h2><p>Questions, feedback, collaboration ideas or just want to see what is being built? Reach out through the project.</p></div>
-          <div className="contact-actions"><a href="https://github.com/codeVeloper2/Knovi" target="_blank" rel="noreferrer" className="contact-btn"><Github size={18} /> GitHub</a><a href="mailto:hello@knovi.app" className="contact-btn secondary"><Mail size={18} /> Email</a></div>
+          <div className="contact-actions"><a href="mailto:codeveloper95@gmail.com" className="contact-btn"><Mail size={18} /> codeveloper95@gmail.com</a><a href="https://wa.me/2347041344892" target="_blank" rel="noreferrer" className="contact-btn secondary"><MessageCircle size={18} /> 07041344892</a></div>
         </div>
       </section>
 
