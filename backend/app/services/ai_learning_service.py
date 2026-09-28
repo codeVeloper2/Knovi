@@ -64,9 +64,16 @@ MATH + MARKDOWN OUTPUT CONTRACT (MANDATORY):
 - Valid examples: $c=3$, $5^3=125$, $\log_{5}(125)=3$, $\frac{a}{b}$, $\sqrt{x}$, $x\geq -2$.
 - For logarithms, prefer explicit notation such as $\log_{5}(125)$ or $\log_{10}(100)$.
 - Never emit malformed forms such as \\log2 16, \\log5 125, raw \\log_b a, ((10)), ((c)), or a formula with no KaTeX delimiters.
-- Never put a trailing backslash after a formula. Never visibly double-escape LaTeX (for example \\log instead of \log).
+- Never put a trailing backslash after a formula.
 - Use Markdown emphasis only outside math: **bold**, *italic*, and ==highlight==.
 - Do not put ==...== inside a mathematical expression. Highlight the surrounding explanatory phrase instead.
+
+JSON ESCAPING FOR LATEX (CRITICAL — READ CAREFULLY):
+- Your entire response is JSON. Inside every JSON string value that contains LaTeX, every backslash MUST be written as TWO backslashes (\\).
+- Correct JSON example: {"explanation": "Speed is $v = \\frac{d}{t}$ and units are $\\text{m/s}$."}
+- Wrong (will corrupt math): {"explanation": "Speed is $v = \frac{d}{t}$ ..."}  ← single backslash turns \\f into form-feed and \\t into tab.
+- The *visible* math the student sees must still look like single-backslash LaTeX ($\\frac$ becomes \frac after JSON parsing). Never write triple or more backslashes.
+- Always double-escape: \\frac, \\text, \\times, \\sqrt, \\log, \\alpha, etc.
 
 WORKED CALCULATIONS (MANDATORY):
 - Whenever you perform a step-by-step calculation, put the ENTIRE working inside a fenced block beginning with ```calculation and ending with ```.
@@ -74,7 +81,7 @@ WORKED CALCULATIONS (MANDATORY):
 - Put exactly one meaningful mathematical step on each line.
 - Every mathematical line MUST use valid KaTeX delimiters ($...$ or $$...$$).
 - The final line may use ==Answer: $...$==.
-- Example:
+- Example (remember to double every backslash inside the JSON string that holds this block):
 ```calculation
 $5^1 = 5$
 $5^2 = 25$
@@ -94,7 +101,6 @@ GENERAL MATH SYNTAX:
 - Sets: $x\in A$, $A\subseteq B$
 - Sums/integrals: $\sum_{i=1}^{n} i$, $\int_0^1 x\,dx$
 - Never rely on Markdown underscores/carets to render math; use KaTeX delimiters.
-- If math appears inside JSON strings, preserve the same visible $...$ / $$...$$ delimiters.
 """
 
 # ── Teaching strategy rotation ────────────────────────────────────────────────
@@ -326,14 +332,31 @@ def _safe_str(v: Any, fallback: str = "") -> str:
 
 
 def _normalize_ai_math_typos(text: str) -> str:
-    """Repair small, known math-token typos without rewriting normal prose.
+    """Repair small, known math-token typos and JSON-unescaping damage.
 
-    AI providers occasionally drop the leading slash from ``\times`` and return
-    values such as ``3imes8^2`` or ``3/times8^2``. These are invalid KaTeX and
-    become visible to learners. Only repair the unambiguous digit/operator/digit
-    pattern so ordinary uses of the word ``times`` are not changed.
+    1. AI providers occasionally drop the leading slash from ``\\times`` and
+       return values such as ``3imes8^2`` or ``3/times8^2``.
+    2. When a model emits single-backslash LaTeX inside a JSON string
+       (e.g. ``\\frac`` written as ``\\f``), ``json.loads`` turns the escape
+       sequences into control characters:
+         \\f → form-feed (U+000C)
+         \\t → tab
+         \\b → backspace
+         \\r → carriage return
+       Restore the intended LaTeX command so KaTeX can render it.
+    Only repair unambiguous patterns so ordinary prose is left untouched.
     """
     value = str(text or "")
+    # Restore control characters that commonly arise from unescaped LaTeX
+    # commands inside JSON strings. Order matters: do these before other
+    # substitutions so subsequent regexes see the restored backslash.
+    value = value.replace("\x0c", "\\f")   # form feed ← \f  (\\frac, \\forall, ...)
+    value = value.replace("\t", "\\t")     # tab       ← \t  (\\text, \\times, \\theta, ...)
+    value = value.replace("\x08", "\\b")   # backspace ← \b  (\\beta, \\binom, ...)
+    value = value.replace("\r", "\\r")     # CR        ← \r  (\\rho, \\rightarrow, ...)
+    # Note: we deliberately do NOT restore \\n → newline because real newlines
+    # are extremely common in multi-line explanations and calculation blocks.
+
     value = re.sub(r"(?<=\d)\s*/times(?=\s*\d)", r"\\times", value)
     value = re.sub(r"(?<=\d)\s*imes(?=\s*\d)", r"\\times", value)
     return value
@@ -710,6 +733,7 @@ async def _add_ai_response(
     extra: Optional[dict] = None,
 ) -> list[AISessionMessage]:
     """Persist a tutor response as 1–3 separate AI chat messages."""
+    content = _normalize_ai_math_typos(content)
     chunks = _split_ai_response(content) or [""]
     group_id = str(uuid.uuid4())
     created: list[AISessionMessage] = []

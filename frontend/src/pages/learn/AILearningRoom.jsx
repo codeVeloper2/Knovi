@@ -2128,6 +2128,13 @@ function normalizeBaseNotation(text) {
 /** Wrap bare LaTeX commands in $...$ so KaTeX can render them. */
 function normalizeMathSource(text) {
   let s = String(text || "");
+  // Repair control characters that appear when a model emitted single-backslash
+  // LaTeX inside a JSON string (\f → form-feed, \t → tab, etc.). Restore the
+  // intended backslash so subsequent KaTeX detection and rendering work.
+  s = s.replace(/\x0c/g, "\\f")   // form feed  ← \f (\frac, \forall, ...)
+       .replace(/\t/g, "\\t")     // tab        ← \t (\text, \times, \theta, ...)
+       .replace(/\x08/g, "\\b")   // backspace  ← \b (\beta, \binom, ...)
+       .replace(/\r/g, "\\r");    // CR         ← \r (\rho, \rightarrow, ...)
   // Protect fenced code AND already-delimited mathematics before applying any
   // prose-level normalization. Otherwise a TeX command such as \times or an
   // exponent can be modified while we are still parsing ordinary text.
