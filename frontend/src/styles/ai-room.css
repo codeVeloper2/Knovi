@@ -571,15 +571,27 @@
   color: #e0ebff;
 }
 .ar-calculation-copy svg { display: block; }
-.ar-calculation-body { padding: 12px 14px 13px; overflow-x: auto; }
+.ar-calculation-body {
+  padding: 12px 14px 13px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(123,168,224,.25) transparent;
+}
+.ar-calculation-body::-webkit-scrollbar { height: 4px; }
+.ar-calculation-body::-webkit-scrollbar-thumb {
+  background: rgba(123,168,224,.25);
+  border-radius: 99px;
+}
 .ar-calculation-step {
   min-height: 25px;
-  display: flex;
-  align-items: center;
+  display: block;
   color: #d9ecff;
   font-size: 13px;
-  line-height: 1.7;
+  line-height: 1.75;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .ar-calculation-step + .ar-calculation-step { margin-top: 2px; }
 .ar-calculation-step:last-child {

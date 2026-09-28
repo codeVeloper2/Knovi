@@ -1603,7 +1603,7 @@ function RichText({ content, onCopy, copiedId }) {
             </div>
             <div className="ar-calculation-body">
               {codeLines.filter(line => line.trim()).map((line, j) => (
-                <div className="ar-calculation-step" key={j}>{inlineMarkdown(normalizeMathSource(line.trim()))}</div>
+                <div className="ar-calculation-step" key={j}>{inlineMarkdown(normalizeMathSource(normalizeBaseNotation(line.trim())))}</div>
               ))}
             </div>
           </div>
@@ -1779,9 +1779,38 @@ function splitTableRow(line) {
   return value.split("|").map(cell => cell.trim());
 }
 
+
+/** Fix common LLM number-base notation into KaTeX-friendly form.
+ *  e.g. 10_base5, 10_{base5}, 2{base10}, 10_5 → 10_{5} / (10)_{5}
+ */
+function normalizeBaseNotation(text) {
+  let s = String(text || "");
+  // 12_{base 10} / 12_{base10} / 12_{base 5}
+  s = s.replace(/(\d+)\s*_\s*\{\s*base\s*[- ]?\s*(\d+)\s*\}/gi, "($1)_{$2}");
+  // 12_base10 / 12_base5 (no braces)
+  s = s.replace(/(\d+)\s*_\s*base\s*[- ]?\s*(\d+)/gi, "($1)_{$2}");
+  // 12{base10} / 12{base 5}  (missing underscore — shows curly braces in UI)
+  s = s.replace(/(\d+)\s*\{\s*base\s*[- ]?\s*(\d+)\s*\}/gi, "($1)_{$2}");
+  // Already-ish: 12_{10} leave alone; 12_10 → (12)_{10} when clearly a base subscript
+  s = s.replace(/(\d+)\s*_\s*\{\s*(\d+)\s*\}/g, "($1)_{$2}");
+  s = s.replace(/(\d+)\s*_(\d+)(?!\d)/g, "($1)_{$2}");
+  // Split jammed sequences: "0_5 1_5 2_5" already spaced; if "0=0 1=1" on one line keep
+  // Wrap whole line in $...$ when it looks like pure equations and has no $ yet
+  if (!/\$/.test(s) && /[=+]/.test(s) && /\d/.test(s) && s.length < 200) {
+    // segment on multiple equations separated by 2+ spaces or " ; "
+    const parts = s.split(/\s{2,}|\s*;\s*/).map((p) => p.trim()).filter(Boolean);
+    if (parts.length > 1) {
+      s = parts.map((p) => (p.startsWith("$") ? p : `$${p}$`)).join("\\quad ");
+    } else if (!s.startsWith("$")) {
+      s = `$${s}$`;
+    }
+  }
+  return s;
+}
+
 /** Wrap bare LaTeX commands in $...$ so KaTeX can render them. */
 function normalizeMathSource(text) {
-  let s = String(text || "");
+  let s = normalizeBaseNotation(String(text || ""));
   // Unicode operators → keep as-is (they render); also map common words
   // Protect fenced code
   const protectedBlocks = [];
