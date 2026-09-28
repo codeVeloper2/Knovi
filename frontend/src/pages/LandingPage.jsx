@@ -9,9 +9,9 @@ import HowKnoviWorks from "./HowKnoviWorks";
 
 const DEMO_QUESTIONS = [
   "Can you explain photosynthesis simply?",
-  "Why do i need to minus 3 from the right side in this equation and why's the answer 1? 3x + 3 = 6",
+  "Why does the moon not fall to Earth?",
   "How do I solve 2x + 4 = 10?",
-  "What is the difference between speed, acceleration and velocity? And give me a real life example.",
+  "What is the difference between speed and velocity?",
 ];
 
 function scrollToId(id) {
