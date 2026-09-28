@@ -68,8 +68,18 @@ function useTypewriter(targetText, active) {
 // track the last spoken word boundary and replay from that word on resume.
 
 function _cleanForTTS(text) {
-  return String(text)
-    .replace(/```[\s\S]*?```/g, ", code block, ")
+  let source = String(text || "");
+  // The UI renders mathematics as KaTeX, but screen speech should follow the
+  // visible prose rather than reading TeX delimiters, backslashes, or markup.
+  // Normalize first so bare number-base notation is also recognized as math.
+  try { source = normalizeMathSource(source); } catch {}
+  source = source
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/\$\$[\s\S]*?\$\$/g, " ")
+    .replace(/\\\[[\s\S]*?\\\]/g, " ")
+    .replace(/\\\([\s\S]*?\\\)/g, " ")
+    .replace(/\$(?=[^$\n]{1,120}\$)[^$\n]{1,120}\$/g, " ")
+    .replace(/\\(?:[A-Za-z]+|[^A-Za-z\s])/g, " ")
     .replace(/#{1,6}\s+/g, "")
     .replace(/[*_`~>]+/g, "")
     .replace(/([.!?])\s+/g, "$1  ")
@@ -78,6 +88,16 @@ function _cleanForTTS(text) {
     .replace(/—/g, ", ")
     .replace(/\s+/g, " ")
     .trim();
+  return source;
+}
+
+function visibleTextForTTS(node) {
+  if (!node) return "";
+  const clone = node.cloneNode(true);
+  // KaTeX has an accessibility layer containing the original TeX. Remove the
+  // entire rendered math subtree so TTS only speaks what the learner sees as prose.
+  clone.querySelectorAll?.(".katex, .ar-agent-badge, .ar-locked-label, .ar-msg-icons, .ar-transition-actions, .ar-graph-wrap").forEach(el => el.remove());
+  return _cleanForTTS(clone.innerText || clone.textContent || "");
 }
 
 function _pickVoice() {
@@ -461,7 +481,7 @@ export default function AILearningRoom() {
           }];
         });
 
-        if (ttsRef.current) speakText(nudge.content || "");
+        if (ttsRef.current) speakText(_cleanForTTS(nudge.content || ""));
         console.log(`[IdleNudge] Nudge #${nextNudge} added`, nudge.id);
       } catch (e) {
         console.warn("[IdleNudge] Failed:", e?.message);
@@ -498,11 +518,18 @@ export default function AILearningRoom() {
 
   // Per-question countdown: start (or resume) timer on the server, then tick locally.
   const [questionSecondsLeft, setQuestionSecondsLeft] = useState(null);
+  const [timerExpiredModal, setTimerExpiredModal] = useState(false);
   const questionTimerRef = useRef(null);
+  const timerExpiredSubmitRef = useRef(null);
   const autoSubmitLockRef = useRef(false);
 
   useEffect(() => {
     autoSubmitLockRef.current = false;
+    setTimerExpiredModal(false);
+    if (timerExpiredSubmitRef.current) {
+      clearTimeout(timerExpiredSubmitRef.current);
+      timerExpiredSubmitRef.current = null;
+    }
     setQuestionSecondsLeft(null);
     if (questionTimerRef.current) {
       clearInterval(questionTimerRef.current);
@@ -539,10 +566,13 @@ export default function AILearningRoom() {
           questionTimerRef.current = null;
           if (!autoSubmitLockRef.current) {
             autoSubmitLockRef.current = true;
-            // Defer so state flush can finish before submit
-            setTimeout(() => {
-              submitAnswer({ timedOut: true, forceEmpty: true }).catch(() => {});
-            }, 0);
+            setTimerExpiredModal(true);
+            // Give the learner a clear "time's up" state before the automatic
+            // submission starts. The latest selected answer is still submitted.
+            timerExpiredSubmitRef.current = setTimeout(() => {
+              timerExpiredSubmitRef.current = null;
+              submitAnswer({ timedOut: true }).catch(() => {});
+            }, 1200);
           }
           return 0;
         }
@@ -555,6 +585,10 @@ export default function AILearningRoom() {
       if (questionTimerRef.current) {
         clearInterval(questionTimerRef.current);
         questionTimerRef.current = null;
+      }
+      if (timerExpiredSubmitRef.current) {
+        clearTimeout(timerExpiredSubmitRef.current);
+        timerExpiredSubmitRef.current = null;
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -718,7 +752,7 @@ export default function AILearningRoom() {
     if (!chunks.length) return;
     if (spokenGroupsRef.current.has(groupId)) return;
     spokenGroupsRef.current.add(groupId);
-    const full = chunks.map(m => m.content || "").join(" ");
+    const full = _cleanForTTS(chunks.map(m => m.content || "").join(" "));
     speakText(full);
   }
 
@@ -801,7 +835,7 @@ export default function AILearningRoom() {
       await revealCanonicalMessages(canonical, msg.extra?.responseGroupId || null);
       if (ttsRef.current) {
         if (msg.extra?.responseGroupId) speakGroupMessages(canonical, msg.extra.responseGroupId);
-        else speakText(msg.content || "");
+        else speakText(_cleanForTTS(msg.content || ""));
       }
       if (msg.extra?.taskCompleted === true && Number.isInteger(Number(msg.extra?.taskIndex))) {
         const completedIndex = Number(msg.extra.taskIndex);
@@ -839,7 +873,7 @@ export default function AILearningRoom() {
             setPhase("teaching");
             const nm = fMsgs.filter(m => m.role === "ai" && Number(m.extra?.taskIndex) === nextIndex);
             const g = nm.find(m => m.extra?.responseGroupId)?.extra?.responseGroupId;
-            if (ttsRef.current) { if (g) speakGroupMessages(nm, g); else if (nm.length) speakText(nm.map(m => m.content).join(" ")); }
+            if (ttsRef.current) { if (g) speakGroupMessages(nm, g); else if (nm.length) speakText(_cleanForTTS(nm.map(m => m.content).join(" "))); }
           } finally { setAiWorking(false); }
         }
       }
@@ -873,6 +907,7 @@ export default function AILearningRoom() {
     const answer = forceEmpty && !timedOut ? "" : String(latest || "").trim();
     if (!answer && !timedOut && !forceEmpty) return;
     setSubmitting(true); setError(null);
+    if (timedOut) setTimerExpiredModal(true);
     try {
       const evaluation = await api.submitAnswer(sessionId, currentQuestion.id, answer, null, hintUsed, timedOut);
       setCheckResults(prev => ({ ...prev, [currentQuestion.id]: { ...evaluation, questionId: currentQuestion.id, studentAnswer: answer, question: currentQuestion.question, questionType: currentQuestion.questionType, options: currentQuestion.options || null } }));
@@ -884,6 +919,7 @@ export default function AILearningRoom() {
       setAnswerInput("");
       setHintOpen(false);
       setHintUsed(false);
+      setTimerExpiredModal(false);
       // If KnoAI returned an inline correction, give the student a moment to read it
       // (messages stream already contains Quick correction) before the next item.
       if (evaluation?.correctionNote && !timedOut) {
@@ -891,7 +927,10 @@ export default function AILearningRoom() {
       }
       if (next < questions.length) { setQIndex(next); return; }
       await finishPracticeRun();
-    } catch (err) { setError(err.message || "Could not evaluate that answer."); }
+    } catch (err) {
+      if (timedOut) setTimerExpiredModal(false);
+      setError(err.message || "Could not evaluate that answer.");
+    }
     finally { setSubmitting(false); }
   }
 
@@ -1275,6 +1314,7 @@ export default function AILearningRoom() {
                 setHintOpen={setHintOpen}
                 setHintUsed={setHintUsed}
                 secondsLeft={questionSecondsLeft}
+                timerExpired={timerExpiredModal}
               />
             )}
             <div ref={bottomRef} />
@@ -1405,6 +1445,7 @@ function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave, on
 
   // "idle" | "loading" | "playing" | "paused"
   const [ttsState, setTtsState] = useState("idle");
+  const aiBodyRef = useRef(null);
 
   const { displayed, done } = useTypewriter(msg.content || "", ai && isTypingNow);
   const shownContent = (ai && isTypingNow) ? displayed : (msg.content || "");
@@ -1428,9 +1469,10 @@ function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave, on
       setTtsState("playing");
       return;
     }
-    // idle — start fresh
+    // idle — start fresh. Read the rendered prose, not the raw KaTeX source.
     setTtsState("loading");
-    speakText(msg.content || "", {
+    const readable = visibleTextForTTS(aiBodyRef.current) || _cleanForTTS(msg.content || "");
+    speakText(readable, {
       onStart: () => setTtsState("playing"),
       onEnd:   () => setTtsState("idle"),
     });
@@ -1526,7 +1568,7 @@ function MessageCard({ msg, onCopy, copiedId, onTutorAction, isSaved, onSave, on
         <time className="ar-msg-time">{formatClock(msg.createdAt)}</time>
       </div>
 
-      <div className="ar-msg-ai-body">
+      <div className="ar-msg-ai-body" ref={aiBodyRef}>
         {locked && <div className="ar-locked-label">🔒 Teaching temporarily hidden</div>}
         {action && <div className="ar-agent-badge"><span>✦</span>{activityLabel(action)}</div>}
         <RichText content={shownContent} onCopy={onCopy} copiedId={copiedId} />
@@ -1663,7 +1705,49 @@ function PracticeBanner() {
 function PreparingCard() { return <div className="ar-preparing-card"><div className="ar-preparing-orb">✦</div><div><span className="ar-eyebrow">BUILDING YOUR LESSON</span><h3>KnoAI is assembling the right starting point</h3><p>It is combining the concept, your starting level, and the learning goal into a focused conversation.</p><div className="ar-loading-line"><i /><i /><i /></div></div></div>; }
 function StudyCard({ seconds, task }) { return <div className="ar-study-card"><div className="ar-study-orbit"><span>{formatTime(seconds)}</span><small>Focus</small></div><div className="ar-study-copy"><span className="ar-eyebrow">STUDY MODE</span><h3>{taskTitle(task) ? <InlineRich text={taskTitle(task)} /> : "Study the current idea"}</h3><p>Review what KnoAI taught, then come back to the conversation.</p></div></div>; }
 
-function QuizArtifact({ question, index, total, answer, setAnswer, onSubmit, submitting, results, hintOpen, setHintOpen, setHintUsed, secondsLeft }) {
+function TimerClock({ secondsLeft, urgent = false, size = 38 }) {
+  const [tick, setTick] = useState(() => Date.now());
+  useEffect(() => {
+    if (secondsLeft == null) return undefined;
+    const id = window.setInterval(() => setTick(Date.now()), 250);
+    return () => window.clearInterval(id);
+  }, [secondsLeft]);
+
+  const second = Math.max(0, Number(secondsLeft || 0)) % 60;
+  const fractional = ((tick % 1000) / 1000);
+  const angle = ((second + fractional) % 60) * 6;
+  const r = 17;
+  const cx = 20;
+  const cy = 20;
+  const rad = ((angle - 90) * Math.PI) / 180;
+  const handX = cx + Math.cos(rad) * 12.5;
+  const handY = cy + Math.sin(rad) * 12.5;
+
+  return (
+    <svg
+      className={`ar-timer-clock ${urgent ? "urgent" : ""}`}
+      width={size}
+      height={size}
+      viewBox="0 0 40 40"
+      role="img"
+      aria-label={`Timer: ${formatTime(secondsLeft)} remaining`}
+    >
+      <circle cx="20" cy="20" r={r} className="ar-timer-clock-face" />
+      {Array.from({ length: 12 }, (_, i) => {
+        const a = (i * 30 - 90) * Math.PI / 180;
+        const x1 = cx + Math.cos(a) * 14.5;
+        const y1 = cy + Math.sin(a) * 14.5;
+        const x2 = cx + Math.cos(a) * 16.5;
+        const y2 = cy + Math.sin(a) * 16.5;
+        return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} className="ar-timer-clock-tick" />;
+      })}
+      <line x1="20" y1="20" x2={handX} y2={handY} className="ar-timer-clock-hand" />
+      <circle cx="20" cy="20" r="2.2" className="ar-timer-clock-pin" />
+    </svg>
+  );
+}
+
+function QuizArtifact({ question, index, total, answer, setAnswer, onSubmit, submitting, results, hintOpen, setHintOpen, setHintUsed, secondsLeft, timerExpired }) {
   const options = Array.isArray(question.options) ? question.options : [];
   const qType = question.questionType || "";
   const qTextLower = String(question.question || "").toLowerCase();
@@ -1715,12 +1799,24 @@ function QuizArtifact({ question, index, total, answer, setAnswer, onSubmit, sub
       <div className="ar-quiz-head-meta">
         {timerLabel != null && (
           <span className={`ar-question-timer ${timerUrgent ? "urgent" : ""}`} title="Time remaining for this question" aria-live="polite">
-            {timerLabel}
+            <TimerClock secondsLeft={secondsLeft} urgent={timerUrgent} />
+            <strong>{timerLabel}</strong>
           </span>
         )}
         <span className="ar-quiz-count">{index + 1}/{total}</span>
       </div>
     </div>
+    {timerExpired && (
+      <div className="ar-timer-expired-overlay" role="dialog" aria-modal="true" aria-live="assertive" aria-label="Time expired">
+        <div className="ar-timer-expired-modal">
+          <div className="ar-timer-expired-icon"><TimerClock secondsLeft={0} urgent size={52} /></div>
+          <span className="ar-eyebrow">TIME'S UP</span>
+          <h3>Time has ended</h3>
+          <p>Your answer is being submitted automatically. Please wait for the next question.</p>
+          <div className="ar-timer-expired-spinner" aria-hidden="true"><i /><i /><i /></div>
+        </div>
+      </div>
+    )}
     <div className="ar-quiz-progress">{Array.from({ length: total }, (_, i) => <i key={i} className={i < index ? "done" : i === index ? "current" : ""} />)}</div>
     <div className="ar-quiz-question"><RichText content={question.question} onCopy={() => {}} copiedId={null} /></div>
     {isMulti && <p className="ar-multi-hint">Select all that apply.</p>}
@@ -2117,6 +2213,11 @@ function normalizeMathSource(text) {
   for (const re of bareMacros) {
     s = s.replace(re, (m) => `$${m}$`);
   }
+
+  // Number-base notation is common in multiple-choice options, e.g. (789)_{9}.
+  // Wrap it as a math span even when the model omitted $...$ delimiters.
+  s = s.replace(/(?<![\w$])((?:\(\d+\)|\d+))\s*_\s*\{\s*\d+\s*\}(?![\w])/g, (m) => `$${m}$`);
+  s = s.replace(/(?<![\w$])((?:\(\d+\)|\d+))\s*_\s*\d+(?![\w])/g, (m) => `$${m}$`);
 
   // Simple powers / subscripts outside math: x^2, x_1 (letter/number base)
   s = s.replace(/(?<![\\$A-Za-z])([A-Za-z]|[0-9]+)(\^[A-Za-z0-9]|_\{[^{}]+\}|\^[0-9]+|_{[0-9]+}|_[0-9])(?![A-Za-z0-9{])/g, (m) => {
