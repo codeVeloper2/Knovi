@@ -563,3 +563,27 @@
     transform: scale(0.59);
   }
 }
+
+/* Live demo controls: same room surface, but with a guided/locked composer. */
+.demo-composer-lock { width: 100%; }
+.demo-composer-field { min-width: 0; }
+.demo-composer-placeholder { overflow-wrap: anywhere; word-break: break-word; }
+.demo-composer-send { cursor: pointer; }
+.demo-composer-send:disabled { cursor: wait; opacity: .7; }
+.demo-inline-error { margin: 8px auto 0; }
+.demo-next-prompt { margin: 4px 0 0 42px; padding: 12px 14px; border: 1px dashed rgba(126,156,255,.25); border-radius: 13px; background: rgba(84,113,255,.055); }
+.demo-next-prompt span { display:block; color:#7385a2; font-size:10px; text-transform:uppercase; letter-spacing:.1em; font-weight:800; margin-bottom:5px; }
+.demo-next-prompt strong { display:block; color:#cdd8eb; font-size:12px; line-height:1.5; }
+.demo-limit-cta { align-items:center; }
+.demo-limit-cta > div:first-child { display:flex; flex-direction:column; gap:4px; min-width:0; }
+.demo-limit-cta strong { color:#dfe8f7; font-size:13px; }
+.demo-limit-cta span { color:#75869f; font-size:11px; line-height:1.5; }
+.demo-cta-actions { display:flex; gap:8px; flex:0 0 auto; }
+.demo-cta-primary,.demo-cta-secondary { display:inline-flex; align-items:center; justify-content:center; gap:6px; text-decoration:none; border-radius:9px; padding:9px 12px; font-size:11px; font-weight:800; }
+.demo-cta-primary { color:#fff; background:linear-gradient(135deg,#5d78ff,#35cfe4); }
+.demo-cta-secondary { color:#c3d0e3; border:1px solid rgba(255,255,255,.1); background:#101d31; }
+.contact-btn.secondary svg { color:#25d366; }
+@media(max-width:700px){ .demo-limit-cta{align-items:flex-start; flex-direction:column;} .demo-cta-actions{width:100%;} .demo-cta-primary,.demo-cta-secondary{flex:1;} .demo-next-prompt{margin-left:0;} }
+/* The demo composer is locked for typing, but its guided Send/Continue control remains clickable. */
+.demo-composer-lock { pointer-events: auto; }
+.demo-composer-send:not(:disabled) { cursor: pointer; color: #fff; background: linear-gradient(135deg,#5d78ff,#35cfe4); opacity: 1; }
