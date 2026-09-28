@@ -908,6 +908,15 @@
 .ar-layout.ar-left-collapsed.ar-right-collapsed {
   grid-template-columns: minmax(0, 1fr);
 }
+.ar-layout.ar-left-collapsed {
+  position: relative;
+}
+.ar-layout.ar-left-collapsed > .ar-main {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
 .ar-work-sidebar,
 .ar-right-restore,
 .ar-right-edge-toggle { display: none !important; }
@@ -1184,13 +1193,18 @@
   border-radius: 10px;
 }
 
-.ar-left-restore { left: 0; }
+.ar-left-restore {
+  left: 0;
+  z-index: 40;
+  border-radius: 0 10px 10px 0;
+  border-left: 0;
+}
 .ar-right-restore { right: 0; }
 
 /* The restore controls are desktop focus controls; mobile uses the Plan/Tools drawers. */
 @media (max-width: 900px) {
   .ar-sidebar-edge-toggle,
-  .ar-sidebar-restore { display: none; }
+  .ar-sidebar-restore { display: none !important; }
 }
 
 
@@ -2657,12 +2671,8 @@
   font-size: 13px;
 }
 
-.ar-layout.ar-left-open,
-.ar-layout.ar-left-collapsed {
-  grid-template-columns: minmax(0, 1fr) 280px;
-}
-
-.ar-left-restore { display: none !important; }
+/* Legacy two-column overrides removed — layout is driven by
+   .ar-left-open / .ar-left-collapsed + .ar-right-collapsed classes above. */
 .ar-learning-room-context { display: none !important; }
 
 @media (max-width: 760px) {
@@ -2762,8 +2772,10 @@
 @media (min-width: 761px) {
   .ar-layout.ar-left-open.ar-right-open { grid-template-columns: 285px minmax(0, 1fr) 280px; }
   .ar-layout.ar-left-open.ar-right-collapsed { grid-template-columns: 285px minmax(0, 1fr); }
-  .ar-layout.ar-left-collapsed.ar-right-open { grid-template-columns: 0 minmax(0, 1fr) 280px; }
-  .ar-layout.ar-left-collapsed.ar-right-collapsed { grid-template-columns: 0 minmax(0, 1fr); }
+  /* Collapsed plan: one full-width track only — never leave a 0px first column
+     (that used to squash .ar-main into zero width and break the room). */
+  .ar-layout.ar-left-collapsed.ar-right-open { grid-template-columns: minmax(0, 1fr) 280px; }
+  .ar-layout.ar-left-collapsed.ar-right-collapsed { grid-template-columns: minmax(0, 1fr); }
   .ar-layout.ar-left-collapsed .ar-plan-sidebar { display: none; }
 }
 

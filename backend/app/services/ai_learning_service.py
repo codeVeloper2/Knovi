@@ -309,6 +309,87 @@ def _safe_int(v: Any, lo: int = 0, hi: int = 100) -> Optional[int]:
     return None
 
 
+def _coerce_json_object(parsed: Any, preferred_keys: tuple[str, ...] = ()) -> dict:
+    """Normalize AI JSON so callers can safely use .get().
+
+    Models sometimes return a list, a stringified object, or a nested wrapper
+    instead of the expected top-level dict. Never raise from shape alone.
+    """
+    if isinstance(parsed, list):
+        for item in parsed:
+            if isinstance(item, dict) and preferred_keys and any(k in item for k in preferred_keys):
+                return item
+        for item in parsed:
+            if isinstance(item, dict):
+                return item
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    if preferred_keys and not any(k in parsed for k in preferred_keys):
+        for key in ("data", "result", "response", "content", "output"):
+            inner = parsed.get(key)
+            if isinstance(inner, dict) and (
+                not preferred_keys or any(k in inner for k in preferred_keys)
+            ):
+                return inner
+            if isinstance(inner, list):
+                for item in inner:
+                    if isinstance(item, dict) and (
+                        not preferred_keys or any(k in item for k in preferred_keys)
+                    ):
+                        return item
+    return parsed
+
+
+def _normalize_mc_options(raw_options: Any) -> list[dict]:
+    """Force options into [{'label': 'A', 'text': '...'}, ...] with unique labels."""
+    if not isinstance(raw_options, list):
+        return []
+    out: list[dict] = []
+    used: set[str] = set()
+    for i, opt in enumerate(raw_options):
+        if isinstance(opt, dict):
+            label = str(opt.get("label") or chr(65 + i)).strip().upper() or chr(65 + i)
+            text = str(opt.get("text") or opt.get("value") or opt.get("label") or "").strip()
+        else:
+            label = chr(65 + i)
+            text = str(opt).strip()
+        base = label
+        n = 0
+        while label in used:
+            n += 1
+            label = f"{base}{n}"
+        used.add(label)
+        out.append({"label": label, "text": text or label})
+    return out
+
+
+def _validate_mc_expected(qtype: str, options: list[dict], expected_raw: str) -> Optional[str]:
+    """Return normalized expected_answer or None if the MC item is invalid."""
+    expected = (expected_raw or "").strip()
+    if not expected or not options:
+        return None
+    valid_labels = {str(o.get("label") or "").strip().upper() for o in options}
+    valid_labels.discard("")
+    if qtype == "multiple_choice":
+        labels = _parse_label_set(expected)
+        if len(labels) == 1 and next(iter(labels)) in valid_labels:
+            return next(iter(labels))
+        exp_lower = expected.lower()
+        for o in options:
+            lab = str(o.get("label") or "").strip().upper()
+            txt = str(o.get("text") or "").strip()
+            if exp_lower == lab.lower() or exp_lower == txt.lower():
+                return lab
+        return None
+    if qtype == "multi_select":
+        labels = _parse_label_set(expected)
+        if not labels or not labels.issubset(valid_labels):
+            return None
+        return ",".join(sorted(labels))
+    return expected
+
+
 def _remove_embedded_quiz_from_teaching(text: str) -> str:
     """Keep formal assessment content out of the teaching message stream.
 
@@ -2413,29 +2494,62 @@ and do not add unstated conditions. Return JSON only:
         else:
             stage = "transfer"
         skill = _safe_str(q.get("skill"), "application")
+        options_norm = None
+        expected_norm = _safe_str(q.get("expected_answer"))
+        if qtype in ("multiple_choice", "multi_select"):
+            options_norm = _normalize_mc_options(q.get("options"))
+            # Upgrade single-label multi or multi-label single when shape mismatches
+            label_count = len(_parse_label_set(expected_norm))
+            if qtype == "multiple_choice" and label_count > 1:
+                qtype = "multi_select"
+            if qtype == "multi_select" and len(options_norm) < 2:
+                # Cannot be a valid select-all item — fall back to short answer
+                qtype = "short_answer"
+                options_norm = None
+            elif options_norm:
+                validated = _validate_mc_expected(qtype, options_norm, expected_norm)
+                if not validated:
+                    # Invalid key → demote to short_answer so we never ship a broken MC item
+                    logger.warning(
+                        "Dropping invalid %s item (session=%s): expected=%r options=%s",
+                        qtype, session_id, expected_norm, options_norm,
+                    )
+                    qtype = "short_answer"
+                    options_norm = None
+                else:
+                    expected_norm = validated
+            else:
+                qtype = "short_answer"
+                options_norm = None
+
         raw_limit = q.get("time_limit_seconds")
         try:
             time_limit = int(raw_limit) if raw_limit is not None else None
         except (TypeError, ValueError):
             time_limit = None
+        # Fair defaults: enough time to think, not a speed race
         if time_limit is None:
-            # Sensible defaults by type when the model omits a limit
             time_limit = {
-                "multiple_choice": 60,
-                "multi_select": 90,
+                "multiple_choice": 75,
+                "multi_select": 120,
                 "true_false": 45,
-                "short_answer": 90,
-                "calculation": 120,
-                "explanation": 120,
-                "application": 150,
-            }.get(qtype, 90)
-        time_limit = max(30, min(300, time_limit))
+                "short_answer": 120,
+                "calculation": 180,
+                "explanation": 150,
+                "application": 180,
+            }.get(qtype, 120)
+        # Stage adjustments: transfer needs more time; retention can be shorter
+        if stage == "transfer":
+            time_limit = max(time_limit, 150)
+        elif stage == "retention" and qtype in ("multiple_choice", "true_false"):
+            time_limit = min(time_limit, 90)
+        time_limit = max(45, min(300, time_limit))
         obj = AISessionQuestion(
             session_id=session_id,
             question=_safe_str(q.get("question"), "Question unavailable."),
             question_type=qtype,
-            options=q.get("options") if qtype in ("multiple_choice", "multi_select") else None,
-            expected_answer=_safe_str(q.get("expected_answer")),
+            options=options_norm,
+            expected_answer=expected_norm,
             rubric=_safe_str(q.get("rubric")),
             hint=_safe_str(q.get("hint")),
             stage=stage,
@@ -2569,16 +2683,20 @@ def _score_option_answer(question: AISessionQuestion, student_answer: str) -> Op
                 if student == ol or student == ot or student == f"{ol} - {ot}" or student == f"{ol}) {ot}":
                     matched = ol == label.upper()
                     break
+        correct_display = _format_student_answer_for_display(question, label)
         return {
             "is_correct": matched,
             "score": 100 if matched else 0,
             "understanding": "strong" if matched else "weak",
             "feedback": (
-                "Correct — you selected the right option."
+                f"Correct — you selected the right option.\n\n**Correct answer:** {correct_display}"
                 if matched
-                else f"Not quite. The correct option was {label}."
+                else f"Not quite.\n\n**Correct answer:** {correct_display}"
             ),
-            "correction_note": None if matched else f"The correct choice is {label}. Review the idea and try a similar problem next time.",
+            "correction_note": None if matched else (
+                f"The correct choice is **{correct_display}**. "
+                "Review why the other options break the rule, then try a similar problem."
+            ),
             "misconception": None,
             "needs_reteach": not matched,
             "recommended_strategy": None if matched else "reteach_with_worked_example",
@@ -2610,16 +2728,25 @@ def _score_option_answer(question: AISessionQuestion, student_answer: str) -> Op
         wrong = len(student_set - expected_set)
         score = max(0, min(100, int(round(100 * (overlap / total) - 25 * wrong))))
         understanding = "strong" if score >= 80 else ("partial" if score >= 40 else "weak")
+    correct_display = _format_student_answer_for_display(
+        question, ",".join(sorted(expected_set))
+    )
     return {
         "is_correct": exact,
         "score": score,
         "understanding": understanding,
         "feedback": (
-            "Correct — you selected all the right options."
+            f"Correct — you selected all the right options.\n\n**Correct answer:**\n{correct_display}"
             if exact
-            else f"Partial or incorrect. Correct labels: {', '.join(sorted(expected_set))}."
+            else (
+                f"Partial or incorrect (score {score}/100).\n\n"
+                f"**Correct answer:**\n{correct_display}"
+            )
         ),
-        "correction_note": None if exact else f"Correct selections: {', '.join(sorted(expected_set))}.",
+        "correction_note": None if exact else (
+            f"The full correct selection is:\n{correct_display}\n"
+            "Check which rule each option does or does not satisfy."
+        ),
         "misconception": None,
         "needs_reteach": understanding != "strong",
         "recommended_strategy": None if understanding == "strong" else "reteach_with_worked_example",
@@ -2878,7 +3005,10 @@ Scoring guide:
                 raw, provider = await call_with_fallback(
                     prompt, system=system_prompt, temperature=0.4, json_mode=True
                 )
-                parsed = parse_json(raw)
+                parsed = _coerce_json_object(
+                    parse_json(raw),
+                    preferred_keys=("score", "understanding", "feedback", "is_correct"),
+                )
             except Exception as exc:
                 logger.error("Answer evaluation failed: %s", exc)
                 parsed = {
@@ -2888,6 +3018,9 @@ Scoring guide:
                     "misconception": None, "needs_reteach": False, "recommended_strategy": None,
                 }
                 provider = "none"
+
+    if not isinstance(parsed, dict):
+        parsed = {}
 
     # Clamp and validate AI output
     raw_score   = parsed.get("score")
@@ -3009,12 +3142,21 @@ Scoring guide:
         },
     )
 
-    # Feedback message
+    # Feedback message — always surface the full correct key for MC/multi
     correctness_label = "Correct!" if answer.is_correct else ("Close." if understanding == "partial" else "Not quite.")
     score_display     = f"{answer.score}/100" if answer.score is not None else "–"
+    feedback_body = answer.feedback or ""
+    if question.question_type in ("multiple_choice", "multi_select") and question.expected_answer:
+        key_display = _format_student_answer_for_display(question, question.expected_answer)
+        if key_display and "**Correct answer:**" not in feedback_body:
+            feedback_body = (
+                f"{feedback_body.rstrip()}\n\n**Correct answer:**\n{key_display}"
+                if feedback_body.strip()
+                else f"**Correct answer:**\n{key_display}"
+            )
     feedback_content  = (
         f"**{correctness_label}** (Score: {score_display})\n\n"
-        f"{answer.feedback}"
+        f"{feedback_body}"
     )
     await _add_message(
         session_id, "ai", "feedback", feedback_content, db,
@@ -3023,6 +3165,11 @@ Scoring guide:
             "answerId":      answer.id,
             "score":         answer.score,
             "understanding": understanding,
+            "correctAnswerDisplay": (
+                _format_student_answer_for_display(question, question.expected_answer)
+                if question.question_type in ("multiple_choice", "multi_select") and question.expected_answer
+                else None
+            ),
         },
     )
 
@@ -3407,26 +3554,7 @@ Return JSON (all array fields required; may be empty):
         logger.error("Reteach generation failed: %s", exc)
         raise HTTPException(502, f"AI service error: {exc}")
 
-    # Models occasionally return a bare list or nested wrapper instead of the
-    # expected object. Normalize so .get() never crashes the reteach path.
-    if isinstance(parsed, list):
-        parsed = next((item for item in parsed if isinstance(item, dict)), {}) or {}
-    if not isinstance(parsed, dict):
-        parsed = {}
-    if "explanation" not in parsed:
-        for key in ("data", "result", "response", "content"):
-            inner = parsed.get(key)
-            if isinstance(inner, dict) and "explanation" in inner:
-                parsed = inner
-                break
-            if isinstance(inner, list):
-                candidate = next(
-                    (item for item in inner if isinstance(item, dict) and "explanation" in item),
-                    None,
-                )
-                if candidate:
-                    parsed = candidate
-                    break
+    parsed = _coerce_json_object(parsed, preferred_keys=("explanation", "summary", "key_points"))
 
     explanation   = _safe_str(parsed.get("explanation"), "Reteaching content temporarily unavailable.")
     encouragement = _safe_str(parsed.get("encouragement"), "A different perspective can make all the difference!")
@@ -3621,7 +3749,10 @@ Return JSON:
         raw, _ = await call_with_fallback(
             prompt, system=system_prompt, temperature=0.6, json_mode=True
         )
-        parsed = parse_json(raw)
+        parsed = _coerce_json_object(
+            parse_json(raw),
+            preferred_keys=("summary_text", "key_ideas", "mastery_level", "review_after_days"),
+        )
     except Exception as exc:
         logger.error("Summary generation failed: %s", exc)
         parsed = {
@@ -3630,6 +3761,16 @@ Return JSON:
             "strengths":       [],
             "areas_for_practice": [],
             "recommended_next":   None,
+            "teaching_methods_used": strategies_used,
+        }
+
+    if not isinstance(parsed, dict):
+        parsed = {
+            "summary_text": f"You completed a learning session on {concept.name}.",
+            "key_ideas": [],
+            "strengths": [],
+            "areas_for_practice": [],
+            "recommended_next": None,
             "teaching_methods_used": strategies_used,
         }
 
@@ -3667,16 +3808,44 @@ Return JSON:
 
     await db.flush()
 
-    review_days = int(parsed.get("review_after_days") or review_days)
+    try:
+        review_days = int(parsed.get("review_after_days") or review_days)
+    except (TypeError, ValueError):
+        pass
     mastery_level = _safe_str(parsed.get("mastery_level"), mastery_level) or mastery_level
     from datetime import timedelta
     review_date = (_now() + timedelta(days=max(0, review_days))).date().isoformat()
 
+    areas = _safe_list(parsed.get("areas_for_practice"))[:4]
+    strengths = _safe_list(parsed.get("strengths"))[:3]
+    next_step = _safe_str(parsed.get("recommended_next"))
+
     summary_body = summary.summary_text or "Session complete."
-    summary_body += (
-        f"\n\n**Review plan:** come back on **{review_date}** "
-        f"(mastery: {mastery_level}). Spaced review beats one long session."
-    )
+    summary_body += "\n\n**Spaced review plan**\n"
+    if review_days <= 0:
+        summary_body += (
+            f"- Mastery looks weak — **review today or tomorrow** (target: {review_date}).\n"
+            "- Re-do 2–3 similar problems from memory before reading notes.\n"
+        )
+    elif review_days == 1:
+        summary_body += (
+            f"- Come back on **{review_date}** for a short retrieval check.\n"
+            "- Spend 10–15 minutes: 3 problems, no notes first, then check.\n"
+        )
+    else:
+        summary_body += (
+            f"- Schedule a revisit on **{review_date}** (~{review_days} days).\n"
+            "- Quick self-test: cover the notes, solve one guided + one transfer problem.\n"
+        )
+    summary_body += f"- Current mastery signal: **{mastery_level}**.\n"
+    if strengths:
+        summary_body += "- Strengths: " + "; ".join(str(s) for s in strengths) + "\n"
+    if areas:
+        summary_body += "- Focus next time: " + "; ".join(str(a) for a in areas) + "\n"
+    if next_step:
+        summary_body += f"- Next step: {next_step}\n"
+    summary_body += "\nSpaced review beats one long session — short return visits lock the skill in."
+
     await _add_message(
         session_id, "ai", "summary",
         summary_body,
@@ -3685,6 +3854,9 @@ Return JSON:
             "reviewDate": review_date,
             "reviewAfterDays": review_days,
             "masteryLevel": mastery_level,
+            "areasForPractice": areas,
+            "strengths": strengths,
+            "recommendedNext": next_step or None,
             "finalTask": True,
             "taskCompleted": True,
         },

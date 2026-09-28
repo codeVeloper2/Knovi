@@ -1171,6 +1171,18 @@ export default function AILearningRoom() {
         </div>
       </header>
 
+      {/* Restore control sits outside the grid so it never steals a column/row when collapsed */}
+      {!leftOpen && (
+        <button
+          type="button"
+          className="ar-sidebar-restore ar-left-restore"
+          onClick={toggleLeftSidebar}
+          aria-label="Show learning plan"
+          title="Show learning plan"
+        >
+          ›
+        </button>
+      )}
       <div className={`ar-layout ${leftOpen ? "ar-left-open" : "ar-left-collapsed"} ar-right-collapsed`}>
         {leftOpen && (
           <aside className="ar-sidebar ar-plan-sidebar">

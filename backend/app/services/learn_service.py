@@ -307,15 +307,16 @@ async def toggle_saved(
         raise HTTPException(400, "Unsupported saved resource type.")
 
     if content_type == "explanation":
+        # Allow saving both tutor (AI) and learner messages from the Learning Room.
         message = (await session.execute(
             select(AISessionMessage).join(AILearningSession, AISessionMessage.session_id == AILearningSession.id).where(
                 AISessionMessage.id == content_id,
                 AILearningSession.user_id == user_id,
-                AISessionMessage.role == "ai",
+                AISessionMessage.role.in_(("ai", "student")),
             )
         )).scalar_one_or_none()
         if not message:
-            raise HTTPException(404, "AI explanation not found.")
+            raise HTTPException(404, "Message not found in your learning sessions.")
 
     existing = (await session.execute(
         select(SavedContent).where(
@@ -356,12 +357,19 @@ async def _serialize_saved_explanation(
     extra = message.extra or {}
     task_title = extra.get("taskTitle") or extra.get("taskName") or extra.get("task")
 
+    role = (message.role or "ai").lower()
+    default_title = (
+        "Saved student answer"
+        if role == "student"
+        else (concept.name if concept else "Saved tutor explanation")
+    )
     return {
         "id": saved_row.id,
         "messageId": message.id,
         "sessionId": message.session_id,
         "contentType": "explanation",
-        "title": task_title or (concept.name if concept else "Saved tutor explanation"),
+        "role": role,
+        "title": task_title or default_title,
         "content": message.content,
         "subject": subject.name if subject else "",
         "classLevel": subject.class_level if subject else "",
