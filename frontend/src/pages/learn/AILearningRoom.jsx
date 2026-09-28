@@ -2135,6 +2135,24 @@ function normalizeMathSource(text) {
        .replace(/\t/g, "\\t")     // tab        ← \t (\text, \times, \theta, ...)
        .replace(/\x08/g, "\\b")   // backspace  ← \b (\beta, \binom, ...)
        .replace(/\r/g, "\\r");    // CR         ← \r (\rho, \rightarrow, ...)
+
+  // Heuristic: if a form-feed was already turned into a bare newline (or the
+  // control char was stripped), we often see a line that starts with "rac{"
+  // or "rac " right after an equals / open-math. Re-insert the missing \f.
+  s = s.replace(/(=|\$|\s|^)\s*\nrac\s*\{/g, "$1\\frac{");
+  s = s.replace(/(=|\$|\s|^)\s*rac\s*\{/g, "$1\\frac{");
+
+  // Clean common answer-line garbage the model still produces:
+  //   == Answer :v = 5\text{ m/s}==$`$`$   →  ==Answer: $v = 5\text{ m/s}$==
+  s = s.replace(/==\s*Answer\s*:\s*/gi, "==Answer: ");
+  s = s.replace(/(==Answer:\s*)([^$\n=]+?)(==)?\s*[`$]+\s*$/gm, (_, pfx, body) => {
+    const cleaned = body.replace(/[`$]+$/g, "").trim();
+    return cleaned.startsWith("$") ? `${pfx}${cleaned}==` : `${pfx}$${cleaned}$==`;
+  });
+  // Trailing stray $ ` after a closed math span
+  s = s.replace(/(\$[^$\n]+\$)\s*[`$]+/g, "$1");
+  s = s.replace(/==\s*[`$]+/g, "==");
+
   // Protect fenced code AND already-delimited mathematics before applying any
   // prose-level normalization. Otherwise a TeX command such as \times or an
   // exponent can be modified while we are still parsing ordinary text.

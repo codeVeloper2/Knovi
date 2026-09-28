@@ -357,6 +357,11 @@ def _normalize_ai_math_typos(text: str) -> str:
     # Note: we deliberately do NOT restore \\n → newline because real newlines
     # are extremely common in multi-line explanations and calculation blocks.
 
+    # Heuristic for cases where form-feed was already lost / turned into a newline:
+    # a line beginning with "rac{" after = or $ is almost always a broken \\frac.
+    value = re.sub(r"(=|\$|\s|^)\s*\nrac\s*\{", r"\1\\frac{", value)
+    value = re.sub(r"(=|\$|\s|^)\s*rac\s*\{", r"\1\\frac{", value)
+
     value = re.sub(r"(?<=\d)\s*/times(?=\s*\d)", r"\\times", value)
     value = re.sub(r"(?<=\d)\s*imes(?=\s*\d)", r"\\times", value)
     return value
