@@ -153,7 +153,7 @@ export default function Home() {
           <div className="home2-actions">
             <button onClick={() => navigate("/app/learn")}><span>✦</span><div><strong>Start Learning</strong><small>Choose a concept and learn with AI</small></div><b>→</b></button>
             <button onClick={() => navigate("/app/learn")}><span>⚡</span><div><strong>Join a Challenge</strong><small>Challenge flow from your learning area</small></div><b>→</b></button>
-            <button onClick={() => navigate("/app/learn")}><span>◉</span><div><strong>Open AI Study Room</strong><small>Get personalized help</small></div><b>→</b></button>
+            <button onClick={() => navigate("/app/learn")}><span>◉</span><div><strong>Open KnoAI Learning Room</strong><small>Learn concepts with your AI tutor</small></div><b>→</b></button>
             <button onClick={() => navigate("/app/progress")}><span>◔</span><div><strong>View Progress</strong><small>Track your growth</small></div><b>→</b></button>
           </div>
         </Section>

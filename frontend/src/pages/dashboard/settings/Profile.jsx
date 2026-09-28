@@ -120,7 +120,7 @@ export default function SettingsProfile() {
           <div className="field field-full">
             <label htmlFor="pf-bio">Bio</label>
             <textarea id="pf-bio" rows={3} value={bio} onChange={(e) => setBio(e.target.value)}
-              placeholder="Tell classmates a bit about you." />
+              placeholder="A short intro other students may see on your profile." />
           </div>
         </div>
 

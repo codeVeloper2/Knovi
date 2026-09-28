@@ -30,7 +30,7 @@ export default function Terms() {
 
         <h2>1. What Knovi is</h2>
         <p>
-          Knovi is an educational platform that combines an adaptive AI tutor with peer learning.
+          Knovi is an educational platform where an adaptive AI tutor (KnoAI) teaches students, and peers can challenge each other on concepts they have both learned.
           Students can work through concepts with AI support, discover other learners, message
           matched peers, share tutorials, and take part in learning challenges.
         </p>

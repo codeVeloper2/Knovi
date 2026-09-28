@@ -57,9 +57,9 @@ def send_email(to_email: str, subject: str, html_body: str, text_body: str) -> N
 
 # A small educational strip shown at the bottom of every email.
 EDU_TIP = (
-    "Knovi is a student-first learning community. Learn from classmates who "
-    "excel where you struggle, and teach what you know best — because the best "
-    "way to master something is to explain it to someone else."
+    "Knovi is a student-first learning platform. KnoAI teaches you concepts step "
+    "by step, then you can challenge peers who learned the same material — so "
+    "practice stays fair and focused on what you actually studied."
 )
 
 
@@ -92,7 +92,7 @@ def _footer() -> str:
             <hr style="border:0;border-top:1px solid #24324f;margin:26px 0 16px;" />
             <p style="font-size:12px;line-height:1.6;color:#64748b;margin:0 0 12px;">{EDU_TIP}</p>
             <p style="font-size:11px;color:#475569;margin:0;">
-              © Knovi — Learn. Teach. Grow.<br />
+              © Knovi — Learn. Challenge. Grow.<br />
               You're receiving this because an account action was requested with this email address.
             </p>"""
 
@@ -122,7 +122,7 @@ def _shell(title: str, intro: str, button_label: str, link: str, footer: str) ->
             {_footer()}
           </td></tr>
         </table>
-        <p style="font-size:11px;color:#475569;margin:16px 0 0;">© Knovi — Learn. Teach. Grow.</p>
+        <p style="font-size:11px;color:#475569;margin:16px 0 0;">© Knovi — Learn. Challenge. Grow.</p>
       </td></tr>
     </table>
   </body>
@@ -184,7 +184,7 @@ def _code_shell(code: str, title: str, intro: str) -> str:
             <div style="text-align:left;">{_footer()}</div>
           </td></tr>
         </table>
-        <p style="font-size:11px;color:#475569;margin:16px 0 0;">© Knovi — Learn. Teach. Grow.</p>
+        <p style="font-size:11px;color:#475569;margin:16px 0 0;">© Knovi — Learn. Challenge. Grow.</p>
       </td></tr>
     </table>
   </body>
@@ -204,7 +204,7 @@ def verification_code_email(code: str) -> tuple[str, str, str]:
     text = (
         f"Welcome to Knovi!\n\nYour verification code is: {code}\n"
         "It expires in 15 minutes. Enter it in Knovi to activate your account.\n\n"
-        "Knovi — Learn. Teach. Grow."
+        "Knovi — Learn. Challenge. Grow."
     )
     return subject, html, text
 
@@ -239,7 +239,7 @@ def activity_email(title: str, what: str) -> tuple[str, str, str]:
             {_footer()}
           </td></tr>
         </table>
-        <p style="font-size:11px;color:#475569;margin:16px 0 0;">© Knovi — Learn. Teach. Grow.</p>
+        <p style="font-size:11px;color:#475569;margin:16px 0 0;">© Knovi — Learn. Challenge. Grow.</p>
       </td></tr>
     </table>
   </body>
@@ -247,7 +247,7 @@ def activity_email(title: str, what: str) -> tuple[str, str, str]:
     text = (
         f"{title}\n\n{intro}\n\n"
         "If this wasn't you, reset your password immediately and contact Knovi support.\n\n"
-        "Knovi — Learn. Teach. Grow."
+        "Knovi — Learn. Challenge. Grow."
     )
     return subject, html, text
 
@@ -281,7 +281,7 @@ def notification_email(title: str, body: str, cta_label: str = "Open Knovi", cta
             {_footer()}
           </td></tr>
         </table>
-        <p style="font-size:11px;color:#475569;margin:16px 0 0;">© Knovi — Learn. Teach. Grow.</p>
+        <p style="font-size:11px;color:#475569;margin:16px 0 0;">© Knovi — Learn. Challenge. Grow.</p>
       </td></tr>
     </table>
   </body>
@@ -289,7 +289,7 @@ def notification_email(title: str, body: str, cta_label: str = "Open Knovi", cta
     text = f"{title}\n\n{body}\n"
     if cta_url:
         text += f"\n{cta_label}: {cta_url}\n"
-    text += "\nKnovi — Learn. Teach. Grow."
+    text += "\nKnovi — Learn. Challenge. Grow."
     return subject, html, text
 
 
@@ -329,7 +329,7 @@ def account_deleted_email(name: str = "") -> tuple[str, str, str]:
             {_footer()}
           </td></tr>
         </table>
-        <p style="font-size:11px;color:#475569;margin:16px 0 0;">© Knovi — Learn. Teach. Grow.</p>
+        <p style="font-size:11px;color:#475569;margin:16px 0 0;">© Knovi — Learn. Challenge. Grow.</p>
       </td></tr>
     </table>
   </body>
@@ -338,7 +338,7 @@ def account_deleted_email(name: str = "") -> tuple[str, str, str]:
         f"{hello}\n\n{intro}\n\n"
         "If you didn't request this, contact Knovi support right away.\n\n"
         "We're sorry to see you go — you're welcome back anytime.\n\n"
-        "Knovi — Learn. Teach. Grow."
+        "Knovi — Learn. Challenge. Grow."
     )
     return subject, html, text
 
@@ -356,6 +356,6 @@ def reset_code_email(code: str) -> tuple[str, str, str]:
     text = (
         f"Your Knovi password reset code is: {code}\n"
         "It expires in 15 minutes. If you didn't request this, ignore this email.\n\n"
-        "Knovi — Learn. Teach. Grow."
+        "Knovi — Learn. Challenge. Grow."
     )
     return subject, html, text

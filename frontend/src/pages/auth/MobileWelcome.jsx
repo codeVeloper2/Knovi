@@ -190,7 +190,7 @@ export default function MobileWelcome() {
           <div className="mob-splash-illus">
             <SplashIllustration />
           </div>
-          <p className="mob-splash-tagline">Learn. Teach. Grow.</p>
+          <p className="mob-splash-tagline">Learn. Challenge. Grow.</p>
           <div className="mob-splash-dots">
             <span className="mob-dot mob-dot--active" />
             <span className="mob-dot" />

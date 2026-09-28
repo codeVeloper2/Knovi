@@ -220,7 +220,7 @@ export default function SettingsMobile() {
         <span>Log out</span>
       </button>
 
-      <p className="settings-hub-footer">Knovi · Learn. Teach. Grow.</p>
+      <p className="settings-hub-footer">Knovi · Learn. Challenge. Grow.</p>
 
       {showAvatar && (
         <div

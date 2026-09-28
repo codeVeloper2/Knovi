@@ -27,7 +27,7 @@ BADGE_CATALOGUE = [
         "id": "study_buddy",
         "name": "Study Buddy",
         "emoji": "🤝",
-        "desc": "Complete your first Study Room session",
+        "desc": "Complete your first KnoAI learning session",
     },
     {
         "id": "dedicated_learner",
@@ -51,13 +51,13 @@ BADGE_CATALOGUE = [
         "id": "knowledge_sharer",
         "name": "Knowledge Sharer",
         "emoji": "💡",
-        "desc": "Help another student in 5 Study Room sessions",
+        "desc": "Complete 5 KnoAI learning sessions",
     },
     {
         "id": "peer_mentor",
         "name": "Peer Mentor",
         "emoji": "🧑‍🏫",
-        "desc": "Help another student in 10 Study Room sessions",
+        "desc": "Complete 10 KnoAI learning sessions",
     },
     {
         "id": "growing_learner",
@@ -75,7 +75,7 @@ BADGE_CATALOGUE = [
         "id": "team_player",
         "name": "Team Player",
         "emoji": "👥",
-        "desc": "Complete 10 collaborative Study Room sessions",
+        "desc": "Complete 10 KnoAI learning sessions",
     },
 ]
 

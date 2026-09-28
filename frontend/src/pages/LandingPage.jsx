@@ -103,8 +103,8 @@ export default function LandingPage() {
         <div className="landing-hero-inner">
           <div className="landing-hero-copy reveal">
             <div className="eyebrow"><Sparkles size={15} /> Learning should feel less lonely.</div>
-            <h1>Learn with people.<br /><span>Think with KnoAI.</span></h1>
-            <p className="hero-lede">Knovi brings peer learning and an adaptive AI tutor into one place — so when you are stuck, you have somewhere to turn.</p>
+            <h1>Learn with KnoAI.<br /><span>Challenge your peers.</span></h1>
+            <p className="hero-lede">Knovi pairs an adaptive AI tutor with peer challenges — so you learn with KnoAI, then test yourself against classmates who studied the same concepts.</p>
             <div className="hero-actions">
               <Link to="/signup" className="primary-btn">Start learning free <ArrowRight size={18} /></Link>
               <button className="ghost-btn" onClick={() => scrollToId("demo")}><span className="play-dot">▶</span> See KnoAI in action</button>
@@ -253,9 +253,9 @@ export default function LandingPage() {
       <section id="how-it-works" className="landing-section how-section">
         <div className="section-heading reveal"><span className="section-label">HOW IT WORKS</span><h2>One learning space.<br /><span>Three ways to move forward.</span></h2></div>
         <div className="steps-grid">
-          <div className="step reveal"><span className="step-number">01</span><div className="step-icon"><Users size={22} /></div><h3>Find your people</h3><p>Discover students who can teach what you need or learn what you know.</p></div>
+          <div className="step reveal"><span className="step-number">01</span><div className="step-icon"><Users size={22} /></div><h3>Find your people</h3><p>Discover classmates on the same journey — chat, compare progress, and challenge each other on shared concepts.</p></div>
           <div className="step reveal delay-one"><span className="step-number">02</span><div className="step-icon"><KnoAILogo size={25} /></div><h3>Ask KnoAI</h3><p>Work through concepts with an adaptive tutor that guides the conversation instead of dumping an answer.</p></div>
-          <div className="step reveal delay-two"><span className="step-number">03</span><div className="step-icon"><Zap size={22} /></div><h3>Keep going</h3><p>Study together, practise, challenge yourself and build progress around what you actually need.</p></div>
+          <div className="step reveal delay-two"><span className="step-number">03</span><div className="step-icon"><Zap size={22} /></div><h3>Keep going</h3><p>Practise with KnoAI, challenge peers on what you both learned, and track XP, streaks, and progress.</p></div>
         </div>
       </section>
 
@@ -390,7 +390,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="landing-final-cta reveal"><KnoAILogo size={54} /><span className="section-label">READY WHEN YOU ARE</span><h2>Learning gets better when you don't have to do it alone.</h2><Link to="/signup" className="primary-btn">Join Knovi <ArrowRight size={18} /></Link></section>
+      <section className="landing-final-cta reveal"><KnoAILogo size={54} /><span className="section-label">READY WHEN YOU ARE</span><h2>Learn with AI. Prove it with peers.</h2><Link to="/signup" className="primary-btn">Join Knovi <ArrowRight size={18} /></Link></section>
 
       <footer className="landing-footer"><div className="landing-footer-inner"><div className="footer-brand"><LogoMark size={30} /><strong>Knovi</strong><span>Learn. Connect. Grow.</span></div><div className="footer-links"><button onClick={() => scrollToId("problem")}>Why Knovi</button><button onClick={() => scrollToId("demo")}>KnoAI</button><Link to="/privacy">Privacy</Link><Link to="/terms">Terms</Link></div><span>© {new Date().getFullYear()} Knovi</span></div></footer>
     </main>

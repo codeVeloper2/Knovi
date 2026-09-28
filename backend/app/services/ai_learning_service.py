@@ -1418,7 +1418,7 @@ POST-SESSION FOLLOW-UP RULES:
     )
 
     system_prompt = _STUDENT_BEHAVIOR_SYSTEM + "\n" + _MATH_FORMATTING_SYSTEM + "\n" + (
-        "You are an AI tutor on Knovi, a peer learning platform for students. "
+        "You are KnoAI, the AI tutor on Knovi. You teach students concepts step by step. Peers may later challenge each other on what they learned with you — you are the teacher, not the students. "
         "You always answer educational questions helpfully and warmly. "
         "Return JSON only — no markdown outside the response field."
     )

@@ -27,7 +27,7 @@ const STEPS = [
   { id: "discover", label: "Discover", title: "Discover peers" },
   { id: "match", label: "Match", title: "Match request" },
   { id: "chat", label: "Chat", title: "Chat" },
-  { id: "study", label: "Study", title: "Study Room" },
+  { id: "study", label: "Challenge", title: "Quiz Battle" },
   { id: "settings", label: "Settings", title: "Settings" },
   { id: "cta", label: "Start", title: "Get started" },
 ];
@@ -52,7 +52,7 @@ function AppChrome({ active, children }) {
           <LogoMark size={22} />
           <b>Knovi</b>
         </div>
-        {["Home", "Discover", "Chat", "Learn", "Progress", "Settings"].map((item) => (
+        {["Home", "Discover", "Chat", "Challenge", "Learn", "Progress", "Settings"].map((item) => (
           <div key={item} className={`hkw-side-link${active === item ? " active" : ""}`}>{item}</div>
         ))}
       </aside>
@@ -365,20 +365,20 @@ function ScreenDiscover() {
 
 function ScreenMatch() {
   return (
-    <ShellChrome title="Match request">
+    <ShellChrome title="Challenge invite">
       <AppChrome active="Discover">
         <div className="hkw-stack center">
           <div className="hkw-peer big">
             <div className="hkw-avatar lg">C</div>
             <div>
               <b>Chidi O.</b>
-              <small>Can teach: Quadratic equations</small>
+              <small>Also learned: Quadratic equations</small>
             </div>
           </div>
           <div className="hkw-match-card">
-            <p>Request help with <b>General Mathematics · Quadratic equations</b></p>
-            <div className="hkw-btn primary">Send match request</div>
-            <small className="hkw-sent">✓ Request sent — waiting for Chidi</small>
+            <p>Challenge Chidi on <b>General Mathematics · Quadratic equations</b></p>
+            <div className="hkw-btn primary">Send challenge</div>
+            <small className="hkw-sent">✓ Challenge sent — waiting for Chidi</small>
           </div>
         </div>
       </AppChrome>
@@ -396,9 +396,9 @@ function ScreenChat() {
             <div><b>Chidi O.</b><small>Online · Mathematics</small></div>
           </div>
           <div className="hkw-chat-body">
-            <div className="hkw-bubble them">Hey! Happy to help with factoring quadratics.</div>
-            <div className="hkw-bubble me">Thanks — stuck on x² − 5x + 6.</div>
-            <div className="hkw-bubble them">Look for two numbers that multiply to 6 and add to −5.</div>
+            <div className="hkw-bubble them">Ready for a Quiz Battle on quadratics?</div>
+            <div className="hkw-bubble me">Yes — we both finished that concept with KnoAI.</div>
+            <div className="hkw-bubble them">Same timer, independent answers. Let's go.</div>
           </div>
           <div className="hkw-chat-input locked">Message… 🔒</div>
         </div>
@@ -409,33 +409,38 @@ function ScreenChat() {
 
 function ScreenStudy() {
   return (
-    <ShellChrome title="Study Room">
+    <ShellChrome title="Quiz Battle">
       <div className="hkw-study">
         <div className="hkw-study-top">
           <div>
-            <strong>Study Room</strong>
-            <small>Goal: Master factorization · with Chidi</small>
+            <strong>Quiz Battle</strong>
+            <small>Quadratic equations · vs Chidi · Question 2 of 5</small>
           </div>
-          <div className="hkw-timer">24:18</div>
+          <div className="hkw-timer">00:24</div>
         </div>
         <div className="hkw-study-grid">
-          <div className="hkw-study-panel">
-            <b>Shared notes</b>
-            <p>(x − 2)(x − 3) = x² − 5x + 6</p>
+          <div className="hkw-study-panel" style={{ gridColumn: "1 / -1" }}>
+            <b>Question</b>
+            <p>Which pair factors x² − 5x + 6?</p>
           </div>
           <div className="hkw-study-panel">
-            <b>Whiteboard</b>
-            <div className="hkw-whiteboard">x² − 5x + 6 = 0</div>
+            <b>A</b>
+            <small>(x − 1)(x − 6)</small>
           </div>
           <div className="hkw-study-panel">
-            <b>Materials</b>
-            <small>Quadratic equations · Worksheet</small>
+            <b>B</b>
+            <small>(x − 2)(x − 3)</small>
           </div>
           <div className="hkw-study-panel">
-            <b>Partner</b>
-            <small>Chidi · focused</small>
+            <b>C</b>
+            <small>(x + 2)(x + 3)</small>
+          </div>
+          <div className="hkw-study-panel">
+            <b>D</b>
+            <small>(x − 2)(x + 3)</small>
           </div>
         </div>
+        <div className="hkw-btn primary" style={{ marginTop: 12 }}>Next</div>
       </div>
     </ShellChrome>
   );
@@ -465,7 +470,7 @@ function ScreenCta() {
       <div className="hkw-cta">
         <LogoMark size={48} />
         <h2>Ready to learn with Knovi?</h2>
-        <p>AI tutoring, practice, peers, and progress — in one place.</p>
+        <p>KnoAI teaches you. Challenge peers on what you both learned. Track your progress.</p>
         <Link to="/signup" className="hkw-btn primary lg" tabIndex={-1}>
           Get Started <ArrowRight size={16} />
         </Link>

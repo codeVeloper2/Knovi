@@ -39,7 +39,7 @@ export function AuthShell({ topRight, mobileBack, children }) {
         </div>
 
         <div className="brand-footer">
-          <span className="brand-tagline">Learn. Teach. Grow.</span>
+          <span className="brand-tagline">Learn. Challenge. Grow.</span>
         </div>
       </section>
 

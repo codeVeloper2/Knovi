@@ -32,7 +32,7 @@ export default function Privacy() {
         <h3>Account &amp; profile</h3>
         <ul>
           <li>Email address, display name, and password (or Google sign-in details via Firebase Auth)</li>
-          <li>Profile photo, school grade, and subjects you can teach or want help with</li>
+          <li>Profile photo, school grade, and subjects or concepts you are learning</li>
           <li>Learning profile preferences (how you learn best, what you struggle with, help preferences)</li>
           <li>Privacy settings (whether your profile is public, whether others can message you directly)</li>
         </ul>
