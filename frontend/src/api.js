@@ -34,34 +34,19 @@ async function request(path, { method = "GET", body, auth = false, timeoutMs = 6
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let res;
-  let lastNetworkError = null;
-  const attempts = method === "GET" ? 2 : 1;
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    try {
-      res = await fetch(`${API_BASE}${path}`, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: body ? JSON.stringify(body) : undefined,
-        signal: controller.signal,
-      });
-      lastNetworkError = null;
-      break;
-    } catch (err) {
-      lastNetworkError = err;
-      if (err.name === "AbortError" || attempt === attempts - 1) break;
-      // A transient browser/network failure should not immediately turn the
-      // whole learning room into a red error banner. Retry safe GET requests
-      // once before surfacing the failure.
-      await new Promise(resolve => setTimeout(resolve, 350));
-    }
-  }
-  clearTimeout(timer);
-  if (!res) {
-    const err = lastNetworkError;
-    if (err?.name === "AbortError") {
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timer);
+    if (err.name === "AbortError") {
       // Distinguish an AI-prep timeout (long but normal) from a short standard timeout
       const label = timeoutMs >= AI_TIMEOUT
         ? "This is taking longer than expected. Please try again."
@@ -70,6 +55,7 @@ async function request(path, { method = "GET", body, auth = false, timeoutMs = 6
     }
     throw new Error("Can't connect right now. Please check your internet connection.");
   }
+  clearTimeout(timer);
 
   const data = await safeJson(res);
   if (!res.ok) {

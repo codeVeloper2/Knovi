@@ -299,6 +299,28 @@ def _safe_list(v: Any) -> list:
     return v if isinstance(v, list) else []
 
 
+def _extract_questions(parsed: Any) -> list:
+    """Extract generated questions from either an object or a direct list.
+
+    Gemini/Groq can validly return the question array directly even when the
+    prompt asks for {"questions": [...]}. Keep the quiz pipeline tolerant of
+    both response shapes instead of calling .get() on a list.
+    """
+    if isinstance(parsed, list):
+        return parsed
+    if isinstance(parsed, dict):
+        questions = parsed.get("questions")
+        if isinstance(questions, list):
+            return questions
+        for key in ("data", "result", "response", "content", "output"):
+            inner = parsed.get(key)
+            if isinstance(inner, dict) and isinstance(inner.get("questions"), list):
+                return inner["questions"]
+            if isinstance(inner, list):
+                return inner
+    return []
+
+
 def _safe_str(v: Any, fallback: str = "") -> str:
     return v.strip() if isinstance(v, str) and v.strip() else fallback
 
@@ -2169,7 +2191,7 @@ time_limit_seconds: integer seconds the learner should have for this question (6
 
     # Second-pass scope gate: reject questions that test content outside the
     # current task. Prefer targeted regeneration over failing the whole quiz.
-    raw_questions = _safe_list(parsed.get("questions"))
+    raw_questions = _extract_questions(parsed)
     if not raw_questions:
         raise HTTPException(502, "AI returned no questions.")
     if len(raw_questions) < count:
@@ -2238,7 +2260,7 @@ Return JSON only: {{"valid": true|false, "invalid_indexes": [0,1], "reason": "br
                 system=system_prompt, temperature=0.2, json_mode=True,
             )
             parsed = parse_json(raw2)
-            raw_questions = _safe_list(parsed.get("questions"))
+            raw_questions = _extract_questions(parsed)
             if len(raw_questions) < count:
                 raise HTTPException(
                     502,
@@ -2318,7 +2340,7 @@ Return JSON:
         logger.error("Quiz scope validation failed closed: %s", exc)
         raise HTTPException(502, "The tutor could not verify that the quiz is scoped to the current Learning Plan task.")
 
-    raw_questions = _safe_list(parsed.get("questions"))
+    raw_questions = _extract_questions(parsed)
     if not raw_questions:
         raise HTTPException(502, "AI returned no questions.")
     # After scope filtering we may have fewer than `count` items. Prefer a
@@ -2371,7 +2393,7 @@ IMPORTANT ASSESSMENT-QUALITY RULE: Each question and expected answer must be log
                 system=system_prompt, temperature=0.15, json_mode=True
             )
             parsed = parse_json(raw2)
-            raw_questions = _safe_list(parsed.get("questions"))
+            raw_questions = _extract_questions(parsed)
             if not raw_questions:
                 raise HTTPException(502, "The tutor could not produce a complete, high-quality mastery assessment.")
 
