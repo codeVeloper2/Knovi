@@ -65,9 +65,10 @@ EDU_TIP = (
 
 # Public logo PNG (hosted on Supabase Storage). Email clients load https://
 # images fine, unlike data: URIs (Gmail strips those) or SVG (not supported).
-LOGO_URL = (
-    "https://iqmwntlyqvyugbilqefb.supabase.co"
-    "https://knovi.pages.dev/knovi-logo.svg"
+# Prefer a PNG — many clients (Gmail) do not render SVG in email.
+LOGO_URL = os.getenv(
+    "EMAIL_LOGO_URL",
+    "https://knovi.pages.dev/knovi-logo.png",
 )
 
 
@@ -80,7 +81,7 @@ def _header() -> str:
                        style="display:block;border:0;border-radius:9px;" />
                 </td>
                 <td style="vertical-align:middle;font-size:22px;font-weight:800;color:#ffffff;">
-                  Peer<span style="color:#60a5fa;">Up</span>
+                  Kno<span style="color:#60a5fa;">vi</span>
                 </td>
               </tr>
             </table>"""

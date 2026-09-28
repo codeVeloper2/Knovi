@@ -445,15 +445,20 @@ function IncomingView({ challenge, busy, onAccept, onDecline, onBack }) {
 function LiveQuiz({ challenge, now, onAnswer, submitting }) {
   const q = challenge.currentQuestionData;
   const remaining = secondsUntil(challenge.questionDeadlineAt, now);
-  const [selected, setSelected] = useState(q?.hasSubmitted ? q.answer : null);
+  const [selected, setSelected] = useState(null);
   const isLast = q && Number(q.questionNumber) >= Number(challenge.questionCount);
-  const waiting = challenge.status === "waiting_for_opponent" || q?.hasSubmitted;
+  // Independent play: never wait on the opponent between questions.
+  const locked = Boolean(q?.hasSubmitted);
 
   useEffect(() => {
-    setSelected(q?.hasSubmitted ? q.answer : null);
-  }, [q?.id, q?.hasSubmitted, q?.answer]);
+    setSelected(null);
+  }, [q?.id]);
 
-  if (!q) return <QuizSkeleton label="Loading next question…" />;
+  if (!q) {
+    // Finished all questions on our side — waiting for results
+    if (challenge.status === "completed") return <QuizSkeleton label="Calculating results…" />;
+    return <QuizSkeleton label="Loading next question…" />;
+  }
 
   const progress = Math.round((Number(q.questionNumber) / Math.max(1, Number(challenge.questionCount))) * 100);
 
@@ -466,7 +471,7 @@ function LiveQuiz({ challenge, now, onAnswer, submitting }) {
         </div>
         <div className={`ch-timer ${remaining <= 5 ? "danger" : ""}`}>
           <span className="ch-timer-icon">◷</span>
-          00:{String(remaining).padStart(2, "0")}
+          00:{String(Math.max(0, remaining)).padStart(2, "0")}
         </div>
       </div>
 
@@ -477,7 +482,7 @@ function LiveQuiz({ challenge, now, onAnswer, submitting }) {
       <div className="ch-quiz-card">
         <div className="ch-quiz-meta">
           <span className="ch-diff">{q.difficulty || "medium"}</span>
-          <span className="ch-meta-hint">Theory + objectives</span>
+          <span className="ch-meta-hint">Same timer for both · results after the last question</span>
         </div>
         <h2 className="ch-quiz-question"><MathText text={q.question} /></h2>
 
@@ -488,7 +493,7 @@ function LiveQuiz({ challenge, now, onAnswer, submitting }) {
               type="button"
               role="option"
               aria-selected={selected === label}
-              disabled={waiting || submitting}
+              disabled={locked || submitting}
               className={`ch-option ${selected === label ? "selected" : ""}`}
               onClick={() => setSelected(label)}
             >
@@ -499,29 +504,14 @@ function LiveQuiz({ challenge, now, onAnswer, submitting }) {
         </div>
 
         <div className="ch-quiz-footer">
-          {waiting ? (
-            <div className="ch-submitted">
-              <span className="ch-submitted-check">✓</span>
-              <div>
-                <strong>Answer locked in</strong>
-                <small>
-                  {isLast
-                    ? (challenge.mode === "ai" ? "Scoring your challenge…" : "Waiting for opponent — then final score")
-                    : (challenge.mode === "ai" ? "Moving on when ready…" : "Waiting for your opponent…")}
-                </small>
-              </div>
-              {isLast ? <span className="ch-spinner" /> : null}
-            </div>
-          ) : (
-            <button
-              type="button"
-              className="ch-btn ch-btn-primary ch-btn-block"
-              disabled={!selected || submitting}
-              onClick={() => onAnswer(q.id, selected)}
-            >
-              {submitting ? "Submitting…" : isLast ? "Submit final answer" : "Submit answer"}
-            </button>
-          )}
+          <button
+            type="button"
+            className="ch-btn ch-btn-primary ch-btn-block"
+            disabled={!selected || submitting || locked}
+            onClick={() => onAnswer(q.id, selected)}
+          >
+            {submitting ? "Saving…" : isLast ? "Finish" : "Next"}
+          </button>
         </div>
       </div>
     </PageShell>
@@ -1007,11 +997,9 @@ export default function ChallengePage() {
       );
     }
     if (state === "countdown") return <CountdownView challenge={challenge} now={now} />;
-    if (["question_active", "waiting_for_opponent"].includes(state)) {
+    // Independent quiz: both players answer at their own pace. No per-question reveal.
+    if (["question_active", "waiting_for_opponent", "next_question", "question_reveal"].includes(state)) {
       return <LiveQuiz challenge={challenge} now={now} onAnswer={handleAnswer} submitting={submitting} />;
-    }
-    if (state === "question_reveal") {
-      return <RevealView challenge={challenge} onNext={loadChallenge} />;
     }
     if (state === "next_question") {
       return <QuizSkeleton label="Loading next question…" />;

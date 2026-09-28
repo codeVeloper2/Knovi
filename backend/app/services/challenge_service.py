@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from fastapi import HTTPException
-from sqlalchemy import and_, desc, or_, select
+from sqlalchemy import and_, desc, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -1670,6 +1670,16 @@ async def _advance_timers_locked(
                 challenge.current_question_deadline_at = question_start + timedelta(seconds=QUESTION_DURATION_SECONDS)
                 challenge.expires_at = challenge.started_at + BATTLE_TTL
                 _transition(challenge, "question_active")
+                # Equal per-question timer for every participant, tracked independently.
+                progress = {}
+                for pid in _participant_ids(challenge):
+                    progress[str(pid)] = {
+                        "questionNumber": 1,
+                        "startedAt": _iso(question_start),
+                        "deadlineAt": _iso(challenge.current_question_deadline_at),
+                        "finished": False,
+                    }
+                _save_progress(challenge, progress)
                 events.append(
                     {
                         "type": "question_started",
@@ -1680,8 +1690,12 @@ async def _advance_timers_locked(
                 now = now_utc()
                 continue
 
+        # Independent peer play: do not force a shared question_reveal when the
+        # global deadline elapses. Each player advances on their own submissions.
+        # (AI battles may still use reveal via other paths.)
         if (
             challenge.status in {"question_active", "waiting_for_opponent"}
+            and challenge.challenge_mode == "ai"
             and challenge.current_question_deadline_at
             and now >= challenge.current_question_deadline_at
         ):
@@ -1872,6 +1886,64 @@ async def mark_ready(
     return challenge, started_countdown
 
 
+
+def _progress_map(challenge: ChallengeSession) -> dict[str, Any]:
+    meta = dict(challenge.challenge_metadata or {})
+    progress = dict(meta.get("playerProgress") or {})
+    return progress
+
+
+def _save_progress(challenge: ChallengeSession, progress: dict[str, Any]) -> None:
+    meta = dict(challenge.challenge_metadata or {})
+    meta["playerProgress"] = progress
+    challenge.challenge_metadata = meta
+
+
+def _ensure_player_progress(challenge: ChallengeSession, user_id: int) -> dict[str, Any]:
+    """Return this player's independent quiz progress, initializing if needed."""
+    progress = _progress_map(challenge)
+    key = str(user_id)
+    if key not in progress:
+        started = challenge.current_question_started_at or challenge.started_at or now_utc()
+        deadline = challenge.current_question_deadline_at or (
+            started + timedelta(seconds=QUESTION_DURATION_SECONDS)
+        )
+        progress[key] = {
+            "questionNumber": max(1, int(challenge.current_question or 1)),
+            "startedAt": _iso(started),
+            "deadlineAt": _iso(deadline),
+            "finished": False,
+        }
+        _save_progress(challenge, progress)
+    return progress[key]
+
+
+def _parse_iso_dt(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+async def _player_finished(challenge: ChallengeSession, user_id: int, db: AsyncSession) -> bool:
+    progress = _ensure_player_progress(challenge, user_id)
+    if progress.get("finished"):
+        return True
+    answers = (
+        await db.execute(
+            select(func.count()).where(
+                ChallengeAnswer.challenge_id == challenge.id,
+                ChallengeAnswer.user_id == user_id,
+            )
+        )
+    ).scalar_one() or 0
+    return int(answers) >= int(challenge.question_count or 0)
+
+
 async def submit_answer(
     challenge_id: int,
     user_id: int,
@@ -1879,43 +1951,50 @@ async def submit_answer(
     answer: str,
     db: AsyncSession,
 ) -> tuple[dict[str, Any], Optional[dict[str, Any]]]:
+    """Record one player's answer and advance *their* progress independently.
+
+    Players do not wait for each other. Correctness is not revealed until both
+    have finished (or the battle completes). Each question uses the same
+    duration (QUESTION_DURATION_SECONDS).
+    """
     challenge = await _get_participant_locked(challenge_id, user_id, db)
-    timer_events, timer_changed = await _advance_timers_locked(challenge, db)
-    timer_terminal = any(
-        event["type"] in {"question_reveal", "challenge_completed", "challenge_expired"}
-        for event in timer_events
-    )
-    if timer_changed and timer_events:
-        # A timer transition may simply have moved countdown -> active. Only a
-        # reveal/completion/expiry makes the submitted answer too late.
-        await db.commit()
-        if any(event["type"] == "challenge_completed" for event in timer_events):
-            await _post_completion_learning_effects(challenge.id, db)
-        if timer_terminal:
-            raise HTTPException(409, "The question deadline has passed or the challenge has moved on.")
+    if challenge.challenge_mode == "ai":
+        # AI opponent path still uses shared timer advancement for auto-answers.
+        timer_events, timer_changed = await _advance_timers_locked(challenge, db)
+        if timer_changed:
+            await db.commit()
 
-    if challenge.status not in {"question_active", "waiting_for_opponent"}:
-        raise HTTPException(409, "This challenge is not accepting answers right now.")
+    if challenge.status not in {"question_active", "waiting_for_opponent", "next_question"}:
+        # Allow answers while still in active quiz phases.
+        if challenge.status not in {"question_active", "waiting_for_opponent"}:
+            raise HTTPException(409, "This challenge is not accepting answers right now.")
 
-    current_question = (
-        await db.execute(
-            select(ChallengeQuestion).where(
-                ChallengeQuestion.challenge_id == challenge.id,
-                ChallengeQuestion.id == question_id,
-            )
-        )
-    ).scalar_one_or_none()
+    # Normalize status back to question_active for independent play.
+    if challenge.status == "waiting_for_opponent":
+        try:
+            _transition(challenge, "question_active")
+        except Exception:
+            challenge.status = "question_active"
+
+    player = _ensure_player_progress(challenge, user_id)
+    if player.get("finished"):
+        raise HTTPException(409, "You have already finished this challenge.")
+
+    my_qnum = int(player.get("questionNumber") or 1)
+    questions = await _question_rows(challenge.id, db)
+    current_question = next((q for q in questions if q.id == question_id), None)
     if current_question is None:
         raise HTTPException(404, "Question not found in this challenge.")
-    if current_question.question_number != challenge.current_question:
-        raise HTTPException(409, "That question is no longer active.")
-    if not challenge.current_question_started_at or not challenge.current_question_deadline_at:
-        raise HTTPException(409, "Question timing is not active.")
+    if current_question.question_number != my_qnum:
+        raise HTTPException(409, "That question is not your current question.")
+
+    deadline = _parse_iso_dt(player.get("deadlineAt"))
+    received_at = now_utc()
+    timed_out = bool(deadline and received_at >= deadline)
 
     existing = (
         await db.execute(
-            select(ChallengeAnswer)
-            .where(
+            select(ChallengeAnswer).where(
                 ChallengeAnswer.challenge_id == challenge.id,
                 ChallengeAnswer.question_id == question_id,
                 ChallengeAnswer.user_id == user_id,
@@ -1925,67 +2004,91 @@ async def submit_answer(
     if existing:
         raise HTTPException(409, "You have already submitted an answer for this question.")
 
-    received_at = now_utc()
-    if received_at >= challenge.current_question_deadline_at:
-        reveal = await _reveal_current_question_locked(challenge, db)
-        await db.commit()
-        # Caller can broadcast the reveal event; no answer was accepted.
-        return {
-            "challengeId": challenge.id,
-            "questionId": question_id,
-            "status": "waiting_for_opponent",
-            "message": "The answer window has closed.",
-        }, {"type": "question_reveal", "data": reveal}
+    normalized = (answer or "").strip().upper()
+    if not timed_out:
+        if normalized not in {"A", "B", "C", "D"}:
+            raise HTTPException(422, "answer must be one of A, B, C, or D.")
+        if normalized not in (current_question.options or {}):
+            raise HTTPException(422, "That answer option is not available for this question.")
+    else:
+        normalized = normalized if normalized in {"A", "B", "C", "D"} else None
 
-    normalized = answer.strip().upper()
-    if normalized not in {"A", "B", "C", "D"}:
-        raise HTTPException(422, "answer must be one of A, B, C, or D.")
-    if normalized not in current_question.options:
-        raise HTTPException(422, "That answer option is not available for this question.")
+    started = _parse_iso_dt(player.get("startedAt")) or challenge.current_question_started_at or received_at
+    response_time_ms = max(0, int((received_at - started).total_seconds() * 1000))
+    is_correct = bool(normalized and normalized == current_question.correct_answer)
 
-    response_time_ms = max(
-        0,
-        int((received_at - challenge.current_question_started_at).total_seconds() * 1000),
+    db.add(
+        ChallengeAnswer(
+            challenge_id=challenge.id,
+            question_id=question_id,
+            user_id=user_id,
+            answer=normalized,
+            is_correct=is_correct,
+            answered_at=received_at,
+            response_time_ms=response_time_ms,
+            timed_out=timed_out,
+            evaluation_metadata={"grading": "deferred_until_complete"},
+        )
     )
-    answer_row = ChallengeAnswer(
-        challenge_id=challenge.id,
-        question_id=question_id,
-        user_id=user_id,
-        answer=normalized,
-        is_correct=(normalized == current_question.correct_answer),
-        answered_at=received_at,
-        response_time_ms=response_time_ms,
-        timed_out=False,
-        evaluation_metadata={"grading": "server_authoritative"},
-    )
-    db.add(answer_row)
     await db.flush()
 
-    other_user_id = (
-        challenge.opponent_id
-        if user_id == challenge.challenger_id
-        else challenge.challenger_id
-    )
-    other_answer = (
-        await db.execute(
-            select(ChallengeAnswer)
-            .where(
-                ChallengeAnswer.challenge_id == challenge.id,
-                ChallengeAnswer.question_id == question_id,
-                ChallengeAnswer.user_id == other_user_id,
-            )
-        )
-    ).scalar_one_or_none()
-
-    reveal_event: Optional[dict[str, Any]] = None
-    if other_answer:
-        reveal_event = await _reveal_current_question_locked(challenge, db)
-        challenge.challenge_metadata = {
-            **(challenge.challenge_metadata or {}),
-            "revealStartedAt": now_utc().isoformat(),
+    progress = _progress_map(challenge)
+    key = str(user_id)
+    is_last = my_qnum >= int(challenge.question_count or 0)
+    if is_last:
+        progress[key] = {
+            **player,
+            "finished": True,
+            "questionNumber": my_qnum,
+            "finishedAt": _iso(received_at),
         }
     else:
-        _transition(challenge, "waiting_for_opponent")
+        next_num = my_qnum + 1
+        next_start = received_at
+        next_deadline = next_start + timedelta(seconds=QUESTION_DURATION_SECONDS)
+        progress[key] = {
+            "questionNumber": next_num,
+            "startedAt": _iso(next_start),
+            "deadlineAt": _iso(next_deadline),
+            "finished": False,
+        }
+    _save_progress(challenge, progress)
+
+    # Keep shared current_question as max progress for monitoring (not gating).
+    challenge.current_question = max(
+        int(challenge.current_question or 1),
+        int(progress[key]["questionNumber"]),
+    )
+    challenge.status = "question_active"
+
+    # Complete when every participant has finished all questions.
+    participant_ids = list(_participant_ids(challenge))
+    all_done = True
+    for pid in participant_ids:
+        p = progress.get(str(pid)) or {}
+        if not p.get("finished"):
+            # AI opponent may need auto-answers — treat missing opponent as done only for solo.
+            if challenge.challenge_mode == "ai" and pid != user_id:
+                continue
+            all_done = False
+            break
+
+    complete_event: Optional[dict[str, Any]] = None
+    if all_done:
+        _transition(challenge, "completed")
+        challenge.completed_at = received_at
+        challenge.expires_at = received_at
+        results = await _persist_results_locked(challenge, db, incomplete=False)
+        complete_event = {
+            "type": "challenge_completed",
+            "data": {
+                "challengeId": challenge.id,
+                "scores": [
+                    {"userId": r.user_id, "score": r.score, "accuracy": r.accuracy}
+                    for r in results
+                ],
+            },
+        }
 
     await db.commit()
 
@@ -1993,19 +2096,28 @@ async def submit_answer(
         "challengeId": challenge.id,
         "questionId": question_id,
         "status": "submitted",
+        "finished": bool(is_last),
+        "nextQuestionNumber": None if is_last else my_qnum + 1,
         "message": (
-            "Answer submitted. The result will be revealed when both players have answered."
+            "Final answer recorded. Calculating results…"
+            if is_last
+            else "Answer locked. Continue to the next question."
         ),
     }
-    if reveal_event:
-        logger.info("challenge_question_revealed challenge_id=%s question_id=%s", challenge.id, question_id)
-        return ack, {"type": "question_reveal", "data": reveal_event}
+    if complete_event:
+        try:
+            await _post_completion_learning_effects(challenge.id, db)
+        except Exception:
+            logger.exception("post_completion failed challenge_id=%s", challenge.id)
+        return ack, complete_event
 
     return ack, {
         "type": "answer_submitted",
         "data": {
             "challengeId": challenge.id,
-            "questionNumber": challenge.current_question,
+            "userId": user_id,
+            "questionNumber": my_qnum,
+            "finished": bool(is_last),
         },
     }
 
@@ -2073,7 +2185,7 @@ async def get_challenge_state_for_runtime(
     return {
         "status": challenge.status,
         "countdownStartedAt": _iso(challenge.countdown_started_at),
-        "questionDeadlineAt": _iso(challenge.current_question_deadline_at),
+        "questionDeadlineAt": _iso(player_deadline or challenge.current_question_deadline_at),
         "revealStartedAt": (challenge.challenge_metadata or {}).get("revealStartedAt"),
     }
 
@@ -2154,13 +2266,26 @@ async def get_challenge_state(
         include_current = challenge.status == "completed"
     score_snapshots = await _calculate_revealed_scores_locked(challenge, db, include_current=include_current)
 
+    # Per-player progress: each student advances independently; no mid-battle reveal.
+    player = None
+    player_deadline = None
+    player_started = None
+    if challenge.status in {"question_active", "waiting_for_opponent", "next_question", "question_reveal"}:
+        before = dict((_progress_map(challenge) or {}))
+        player = _ensure_player_progress(challenge, user_id)
+        player_deadline = _parse_iso_dt(player.get("deadlineAt"))
+        player_started = _parse_iso_dt(player.get("startedAt"))
+        if _progress_map(challenge) != before:
+            try:
+                await db.commit()
+            except Exception:
+                await db.rollback()
+
     current_data = None
-    if challenge.status in {"question_active", "waiting_for_opponent", "question_reveal"}:
+    if challenge.status in {"question_active", "waiting_for_opponent", "next_question", "question_reveal"} and player and not player.get("finished"):
         questions = await _question_rows(challenge.id, db)
-        question = next(
-            (q for q in questions if q.question_number == challenge.current_question),
-            None,
-        )
+        qnum = int(player.get("questionNumber") or challenge.current_question or 1)
+        question = next((q for q in questions if q.question_number == qnum), None)
         if question:
             viewer_answer = (
                 await db.execute(
@@ -2171,22 +2296,12 @@ async def get_challenge_state(
                     )
                 )
             ).scalar_one_or_none()
-            all_answers = []
-            if challenge.status == "question_reveal":
-                all_answers = (
-                    await db.execute(
-                        select(ChallengeAnswer).where(
-                            ChallengeAnswer.challenge_id == challenge.id,
-                            ChallengeAnswer.question_id == question.id,
-                            ChallengeAnswer.user_id.in_(list(_participant_ids(challenge))),
-                        )
-                    )
-                ).scalars().all()
+            # Never reveal correctness until the battle is fully complete.
             current_data = build_current_question_payload(
                 question,
                 viewer_answer,
-                reveal=challenge.status == "question_reveal",
-                reveal_answers=all_answers,
+                reveal=False,
+                reveal_answers=None,
             )
 
     waiting_reason = None
@@ -2200,8 +2315,11 @@ async def get_challenge_state(
         waiting_reason = "Both students must ready up before the battle starts."
     elif challenge.status == "countdown":
         waiting_reason = "Both students are ready. The battle is starting."
-    elif challenge.status == "waiting_for_opponent":
-        waiting_reason = "Answer submitted. Waiting for the opponent."
+    elif challenge.status in {"question_active", "waiting_for_opponent", "next_question"}:
+        if player and player.get("finished"):
+            waiting_reason = "You finished. Waiting for final results…"
+        else:
+            waiting_reason = "Answer at your own pace — same timer per question for both of you."
     elif challenge.status == "question_reveal":
         waiting_reason = "Question result revealed."
     elif challenge.status == "completed":
@@ -2221,13 +2339,13 @@ async def get_challenge_state(
         "topicName": topic.name,
         "conceptName": concept.name,
         "questionCount": challenge.question_count,
-        "currentQuestion": challenge.current_question,
+        "currentQuestion": (int(player["questionNumber"]) if player and player.get("questionNumber") else challenge.current_question),
         "createdAt": challenge.created_at.isoformat(),
         "acceptedAt": _iso(challenge.accepted_at),
         "startedAt": _iso(challenge.started_at),
         "expiresAt": _iso(challenge.expires_at),
         "countdownStartedAt": _iso(challenge.countdown_started_at),
-        "questionStartedAt": _iso(challenge.current_question_started_at),
+        "questionStartedAt": _iso(player_started or challenge.current_question_started_at),
         "questionDeadlineAt": _iso(challenge.current_question_deadline_at),
         "ready": (
             challenge.challenger_ready
