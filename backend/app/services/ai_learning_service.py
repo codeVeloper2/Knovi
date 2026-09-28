@@ -1580,6 +1580,13 @@ async def respond_to_student(
             f"{(current_teaching.explanation or '')[:600]}"
         )
 
+    # Recover the current Learning Plan task from persisted server state.
+    # Must happen before plan_context is built (previously caused UnboundLocalError).
+    current_task_index = _current_task_index_from_messages(session.messages)
+    learning_plan = _persisted_learning_plan(session.teaching)
+    current_plan_task = learning_plan[current_task_index] if 0 <= current_task_index < len(learning_plan) else None
+    future_plan_tasks = learning_plan[current_task_index + 1:] if current_task_index + 1 < len(learning_plan) else []
+
     plan_context = ""
     if not is_post_session and learning_plan:
         task_lines = []
@@ -1621,12 +1628,6 @@ POST-SESSION FOLLOW-UP RULES:
   and write a brief session_note (1-2 sentences) describing what the student needs to work on.
 - Be warm and encouraging. This is a learning platform for students.
 """
-
-    # Recover the current Learning Plan task from persisted server state.
-    current_task_index = _current_task_index_from_messages(session.messages)
-    learning_plan = _persisted_learning_plan(session.teaching)
-    current_plan_task = learning_plan[current_task_index] if 0 <= current_task_index < len(learning_plan) else None
-    future_plan_tasks = learning_plan[current_task_index + 1:] if current_task_index + 1 < len(learning_plan) else []
 
     # Count substantive exchanges so the AI can judge readiness
     teaching_exchange_count = sum(
