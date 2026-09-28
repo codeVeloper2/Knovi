@@ -336,7 +336,7 @@ class AISessionQuestion(Base):
     session_id:     Mapped[int]           = mapped_column(Integer, ForeignKey("ai_learning_sessions.id", ondelete="CASCADE"), nullable=False)
     question:       Mapped[str]           = mapped_column(Text, nullable=False)
     question_type:  Mapped[str]           = mapped_column(String(30), nullable=False, default="short_answer")
-    # For multiple_choice: [{"label": "A", "text": "..."}]
+    # For multiple_choice / multi_select: [{"label": "A", "text": "..."}]
     options:        Mapped[Optional[list]]= mapped_column(JSONB, nullable=True)
     expected_answer:Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     rubric:         Mapped[Optional[str]] = mapped_column(Text, nullable=True)   # marking guide for AI
@@ -344,6 +344,10 @@ class AISessionQuestion(Base):
     stage:          Mapped[str]           = mapped_column(String(30), nullable=False, default="independent_practice")
     skill:          Mapped[str]           = mapped_column(String(30), nullable=False, default="application")
     sequence:       Mapped[int]           = mapped_column(Integer, nullable=False, default=1)
+    # Per-question practice timer (seconds). AI assigns based on complexity.
+    time_limit_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Set when the learner first opens this question; used to resume countdown after refresh.
+    timer_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at:     Mapped[datetime]      = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
 
     # Relationships
@@ -361,6 +365,8 @@ class AISessionQuestion(Base):
             "stage": self.stage,
             "skill": self.skill,
             "sequence": self.sequence,
+            "timeLimitSeconds": self.time_limit_seconds,
+            "timerStartedAt": self.timer_started_at.isoformat() if self.timer_started_at else None,
             "createdAt": self.created_at.isoformat(),
             # NOTE: expected_answer and rubric are NOT returned to the student
         }

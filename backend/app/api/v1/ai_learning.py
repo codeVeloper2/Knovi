@@ -261,6 +261,24 @@ async def generate_questions(
     )
 
 
+@router.post("/learning/sessions/{session_id}/questions/{question_id}/timer/start", response_model=QuestionOut)
+async def start_question_timer(
+    session_id: int,
+    question_id: int,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Start (or resume) the per-question practice countdown.
+
+    Idempotent: the first call sets timer_started_at; later calls return the
+    same timestamp so a browser refresh continues from the remaining time.
+    """
+    return await svc.start_question_timer(
+        session_id=session_id, user_id=user.id, question_id=question_id, db=db,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Answer submission
 # ---------------------------------------------------------------------------

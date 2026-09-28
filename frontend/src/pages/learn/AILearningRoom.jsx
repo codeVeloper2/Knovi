@@ -207,6 +207,8 @@ export default function AILearningRoom() {
   const [questions, setQuestions] = useState([]);
   const [qIndex, setQIndex] = useState(0);
   const [answerInput, setAnswerInput] = useState("");
+  const answerInputRef = useRef("");
+  useEffect(() => { answerInputRef.current = answerInput; }, [answerInput]);
   const [checkResults, setCheckResults] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [hintOpen, setHintOpen] = useState(false);
@@ -480,6 +482,83 @@ export default function AILearningRoom() {
       window.speechSynthesis?.cancel();
     };
   }, [sessionId]);
+
+  // Strictly discourage leaving / refreshing while the learning room is active.
+  useEffect(() => {
+    const active = ["preparing", "teaching", "studying", "practice", "reteaching"].includes(phase);
+    if (!active) return undefined;
+    const onBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = "You are in an active AI Learning Room session. Leaving or refreshing may interrupt your progress.";
+      return e.returnValue;
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [phase]);
+
+  // Per-question countdown: start (or resume) timer on the server, then tick locally.
+  const [questionSecondsLeft, setQuestionSecondsLeft] = useState(null);
+  const questionTimerRef = useRef(null);
+  const autoSubmitLockRef = useRef(false);
+
+  useEffect(() => {
+    autoSubmitLockRef.current = false;
+    setQuestionSecondsLeft(null);
+    if (questionTimerRef.current) {
+      clearInterval(questionTimerRef.current);
+      questionTimerRef.current = null;
+    }
+    if (phase !== "practice" || !currentQuestion?.id || !sessionId) return undefined;
+
+    let cancelled = false;
+    const limit = Number(currentQuestion.timeLimitSeconds) || 90;
+
+    (async () => {
+      try {
+        const q = await api.startQuestionTimer(sessionId, currentQuestion.id);
+        if (cancelled) return;
+        const startedAt = q?.timerStartedAt ? new Date(q.timerStartedAt).getTime() : Date.now();
+        const elapsed = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+        const remaining = Math.max(0, (Number(q?.timeLimitSeconds) || limit) - elapsed);
+        setQuestionSecondsLeft(remaining);
+        // Keep local question object in sync so refresh path has timerStartedAt
+        setQuestions(prev => prev.map(item => item.id === currentQuestion.id
+          ? { ...item, timerStartedAt: q?.timerStartedAt || item.timerStartedAt, timeLimitSeconds: q?.timeLimitSeconds || item.timeLimitSeconds }
+          : item));
+      } catch (err) {
+        console.warn("[QuestionTimer] start failed:", err?.message);
+        if (!cancelled) setQuestionSecondsLeft(limit);
+      }
+    })();
+
+    questionTimerRef.current = setInterval(() => {
+      setQuestionSecondsLeft(prev => {
+        if (prev == null) return prev;
+        if (prev <= 1) {
+          clearInterval(questionTimerRef.current);
+          questionTimerRef.current = null;
+          if (!autoSubmitLockRef.current) {
+            autoSubmitLockRef.current = true;
+            // Defer so state flush can finish before submit
+            setTimeout(() => {
+              submitAnswer({ timedOut: true, forceEmpty: true }).catch(() => {});
+            }, 0);
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      cancelled = true;
+      if (questionTimerRef.current) {
+        clearInterval(questionTimerRef.current);
+        questionTimerRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, currentQuestion?.id, sessionId]);
 
   function scrollConversationToBottom(behavior = "smooth") {
     const el = conversationRef.current;
@@ -785,12 +864,17 @@ export default function AILearningRoom() {
     finally { setAiWorking(false); }
   }
 
-  async function submitAnswer() {
-    if (!answerInput.trim() || submitting || !currentQuestion) return;
-    const answer = answerInput.trim();
+  async function submitAnswer(opts = {}) {
+    const { timedOut = false, forceEmpty = false } = opts;
+    if (submitting || !currentQuestion) return;
+    // Prefer ref so timer auto-submit sees the latest selection even if the
+    // interval callback closed over an older render.
+    const latest = answerInputRef.current ?? answerInput;
+    const answer = forceEmpty && !timedOut ? "" : String(latest || "").trim();
+    if (!answer && !timedOut && !forceEmpty) return;
     setSubmitting(true); setError(null);
     try {
-      const evaluation = await api.submitAnswer(sessionId, currentQuestion.id, answer, null, hintUsed);
+      const evaluation = await api.submitAnswer(sessionId, currentQuestion.id, answer, null, hintUsed, timedOut);
       setCheckResults(prev => ({ ...prev, [currentQuestion.id]: { ...evaluation, questionId: currentQuestion.id, studentAnswer: answer, question: currentQuestion.question, questionType: currentQuestion.questionType, options: currentQuestion.options || null } }));
       const fresh = await api.getAISession(sessionId);
       let canonical = fresh?.messages || [];
@@ -802,7 +886,7 @@ export default function AILearningRoom() {
       setHintUsed(false);
       // If KnoAI returned an inline correction, give the student a moment to read it
       // (messages stream already contains Quick correction) before the next item.
-      if (evaluation?.correctionNote) {
+      if (evaluation?.correctionNote && !timedOut) {
         await new Promise(r => setTimeout(r, 1200));
       }
       if (next < questions.length) { setQIndex(next); return; }
@@ -1166,7 +1250,20 @@ export default function AILearningRoom() {
             {phase === "preparing" && <PreparingCard />}
             {phase === "studying" && <StudyCard seconds={timerSeconds} task={currentTask} />}
             {phase === "practice" && currentQuestion && (
-              <QuizArtifact question={currentQuestion} index={qIndex} total={questions.length} answer={answerInput} setAnswer={setAnswerInput} onSubmit={submitAnswer} submitting={submitting} results={checkResults} hintOpen={hintOpen} setHintOpen={setHintOpen} />
+              <QuizArtifact
+                question={currentQuestion}
+                index={qIndex}
+                total={questions.length}
+                answer={answerInput}
+                setAnswer={setAnswerInput}
+                onSubmit={() => submitAnswer()}
+                submitting={submitting}
+                results={checkResults}
+                hintOpen={hintOpen}
+                setHintOpen={setHintOpen}
+                setHintUsed={setHintUsed}
+                secondsLeft={questionSecondsLeft}
+              />
             )}
             <div ref={bottomRef} />
             {showScrollBottom && (
@@ -1532,22 +1629,109 @@ function PracticeBanner() {
 function PreparingCard() { return <div className="ar-preparing-card"><div className="ar-preparing-orb">✦</div><div><span className="ar-eyebrow">BUILDING YOUR LESSON</span><h3>KnoAI is assembling the right starting point</h3><p>It is combining the concept, your starting level, and the learning goal into a focused conversation.</p><div className="ar-loading-line"><i /><i /><i /></div></div></div>; }
 function StudyCard({ seconds, task }) { return <div className="ar-study-card"><div className="ar-study-orbit"><span>{formatTime(seconds)}</span><small>Focus</small></div><div className="ar-study-copy"><span className="ar-eyebrow">STUDY MODE</span><h3>{taskTitle(task) ? <InlineRich text={taskTitle(task)} /> : "Study the current idea"}</h3><p>Review what KnoAI taught, then come back to the conversation.</p></div></div>; }
 
-function QuizArtifact({ question, index, total, answer, setAnswer, onSubmit, submitting, results, hintOpen, setHintOpen }) {
+function QuizArtifact({ question, index, total, answer, setAnswer, onSubmit, submitting, results, hintOpen, setHintOpen, setHintUsed, secondsLeft }) {
   const options = Array.isArray(question.options) ? question.options : [];
-  const mc = question.questionType === "multiple_choice" && options.length;
+  const qType = question.questionType || "";
+  const qTextLower = String(question.question || "").toLowerCase();
+  const isMulti = qType === "multi_select"
+    || (qType === "multiple_choice" && (qTextLower.includes("select all that apply") || qTextLower.includes("select all that are")));
+  const mc = (qType === "multiple_choice" || qType === "multi_select") && options.length;
   const stage = question.stage === "retention" ? "RETENTION CHECK" : question.stage === "guided_practice" ? "GUIDED PRACTICE" : question.stage === "transfer" ? "TRANSFER" : "INDEPENDENT PRACTICE";
   const hint = question.hint || "Think about the method KnoAI just taught and identify the relationship you need before calculating.";
+
+  const selectedLabels = isMulti
+    ? new Set(String(answer || "").split(",").map(s => s.trim().toUpperCase()).filter(Boolean))
+    : null;
+
+  function optionLabel(opt, i) {
+    if (typeof opt === "string") return String.fromCharCode(65 + i);
+    return String(opt.label ?? opt.value ?? String.fromCharCode(65 + i)).trim();
+  }
+  function optionText(opt) {
+    return typeof opt === "string" ? opt : (opt.text ?? opt.label ?? opt.value ?? "");
+  }
+  function optionValue(opt, i) {
+    // Prefer stable label for multi-select so answers are "A,C"
+    if (isMulti) return optionLabel(opt, i);
+    return typeof opt === "string" ? opt : (opt.value ?? opt.label ?? opt.text);
+  }
+
+  function toggleMulti(label) {
+    if (submitting) return;
+    const next = new Set(selectedLabels);
+    const key = String(label).toUpperCase();
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    // Stable alphabetical order for consistent submission
+    setAnswer([...next].sort().join(","));
+  }
+
+  const hasAnswer = isMulti ? selectedLabels.size > 0 : Boolean(String(answer || "").trim());
+  const timerUrgent = secondsLeft != null && secondsLeft <= 15;
+  const timerLabel = secondsLeft == null
+    ? null
+    : `${String(Math.floor(secondsLeft / 60)).padStart(1, "0")}:${String(secondsLeft % 60).padStart(2, "0")}`;
+
   return <section className="ar-quiz-artifact ar-practice-card">
     <div className="ar-artifact-head">
-      <div><span className="ar-eyebrow">{stage} · Q{index + 1}</span><h2>{question.stage === "retention" ? "Recall something you mastered earlier" : index < 2 ? "Practice with support" : index < 4 ? "Show it independently" : "Apply it in a new situation"}</h2></div>
-      <span className="ar-quiz-count">{index + 1}/{total}</span>
+      <div>
+        <span className="ar-eyebrow">{stage} · Q{index + 1}</span>
+        <h2>{question.stage === "retention" ? "Recall something you mastered earlier" : index < 2 ? "Practice with support" : index < 4 ? "Show it independently" : "Apply it in a new situation"}</h2>
+      </div>
+      <div className="ar-quiz-head-meta">
+        {timerLabel != null && (
+          <span className={`ar-question-timer ${timerUrgent ? "urgent" : ""}`} title="Time remaining for this question" aria-live="polite">
+            {timerLabel}
+          </span>
+        )}
+        <span className="ar-quiz-count">{index + 1}/{total}</span>
+      </div>
     </div>
     <div className="ar-quiz-progress">{Array.from({ length: total }, (_, i) => <i key={i} className={i < index ? "done" : i === index ? "current" : ""} />)}</div>
     <div className="ar-quiz-question"><RichText content={question.question} onCopy={() => {}} copiedId={null} /></div>
-    <button type="button" className="ar-hint-toggle" onClick={() => { setHintOpen(v => !v); setHintUsed(true); }} disabled={submitting}>{hintOpen ? "Hide hint" : "Need a hint?"}</button>
+    {isMulti && <p className="ar-multi-hint">Select all that apply.</p>}
+    <button type="button" className="ar-hint-toggle" onClick={() => { setHintOpen(v => !v); setHintUsed?.(true); }} disabled={submitting}>{hintOpen ? "Hide hint" : "Need a hint?"}</button>
     {hintOpen && <div className="ar-practice-hint"><strong>Hint</strong><span><InlineRich text={hint} /></span></div>}
-    {mc ? <div className="ar-options">{options.map((opt, i) => { const value = typeof opt === "string" ? opt : (opt.value ?? opt.label ?? opt.text); const text = typeof opt === "string" ? opt : (opt.text ?? opt.label ?? opt.value); return <button key={`${question.id}-${i}`} className={`ar-option ${answer === value ? "selected" : ""}`} onClick={() => setAnswer(value)} disabled={submitting}><span>{String.fromCharCode(65 + i)}</span><b><InlineRich text={text} /></b></button>; })}</div> : <textarea className="ar-answer-box" rows={5} value={answer} onChange={e => setAnswer(e.target.value)} placeholder="Work it out, then give KnoAI your answer…" disabled={submitting} />}
-    <div className="ar-quiz-foot"><span>{Object.keys(results).length} response{Object.keys(results).length !== 1 ? "s" : ""} recorded.</span><button onClick={onSubmit} disabled={!answer.trim() || submitting}>{submitting ? "Evaluating…" : index + 1 === total ? "Finish mastery check" : "Submit →"}</button></div>
+    {mc ? (
+      <div className={`ar-options ${isMulti ? "ar-options-multi" : ""}`}>
+        {options.map((opt, i) => {
+          const label = optionLabel(opt, i);
+          const text = optionText(opt);
+          const value = optionValue(opt, i);
+          const selected = isMulti
+            ? selectedLabels.has(String(label).toUpperCase())
+            : answer === value || String(answer).toUpperCase() === String(label).toUpperCase();
+          return (
+            <button
+              key={`${question.id}-${i}`}
+              type="button"
+              className={`ar-option ${selected ? "selected" : ""}`}
+              onClick={() => (isMulti ? toggleMulti(label) : setAnswer(value))}
+              disabled={submitting}
+              aria-pressed={selected}
+            >
+              <span>{label}</span>
+              <b><InlineRich text={text} /></b>
+            </button>
+          );
+        })}
+      </div>
+    ) : (
+      <textarea
+        className="ar-answer-box"
+        rows={5}
+        value={answer}
+        onChange={e => setAnswer(e.target.value)}
+        placeholder="Work it out, then give KnoAI your answer…"
+        disabled={submitting}
+      />
+    )}
+    <div className="ar-quiz-foot">
+      <span>{Object.keys(results).length} response{Object.keys(results).length !== 1 ? "s" : ""} recorded.</span>
+      <button onClick={onSubmit} disabled={!hasAnswer || submitting}>
+        {submitting ? "Evaluating…" : index + 1 === total ? "Finish mastery check" : "Submit →"}
+      </button>
+    </div>
   </section>;
 }
 

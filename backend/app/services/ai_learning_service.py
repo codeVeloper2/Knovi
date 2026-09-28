@@ -871,7 +871,7 @@ async def get_session(session_id: int, user_id: int, db: AsyncSession) -> dict:
             "question": q.question,
             "questionType": q.question_type,
             "options": q.options,
-            "correctAnswer": q.expected_answer if q.question_type != "multiple_choice" else None,
+            "correctAnswer": q.expected_answer if q.question_type not in ("multiple_choice", "multi_select") else None,
             "correctOptionLabel": _correct_option_label(q),
         }
         # Restore which learning task this answer belonged to without adding
@@ -2061,18 +2061,21 @@ Return JSON:
   "questions": [
     {{
       "question": "Question text",
-      "question_type": "short_answer|multiple_choice|calculation|explanation|true_false|application",
+      "question_type": "short_answer|multiple_choice|multi_select|calculation|explanation|true_false|application",
       "options": null,
       "expected_answer": "Model answer for AI evaluation only",
       "rubric": "What to look for when marking",
       "stage": "retention|guided_practice|independent_practice|transfer",
       "skill": "understanding|application|accuracy|independence|transfer",
-      "hint": "A concise answer-neutral hint that helps the learner recall the method without revealing the answer."
+      "hint": "A concise answer-neutral hint that helps the learner recall the method without revealing the answer.",
+      "time_limit_seconds": 90
     }}
   ]
 }}
 
-For multiple_choice: options must be [{{"label":"A","text":"..."}}, ...] and expected_answer MUST be exactly the correct option label.
+For multiple_choice: options must be [{{"label":"A","text":"..."}}, ...] and expected_answer MUST be exactly the correct option label (e.g. "B").
+For multi_select (select-all-that-apply): options same format; expected_answer MUST be the correct labels comma-separated with no spaces (e.g. "A,C"). Never use multiple_choice for select-all questions.
+time_limit_seconds: integer seconds the learner should have for this question (60–180). Use shorter times for simple recall/MC, longer for calculation or multi-step work.
 """
     try:
         raw, _ = await call_with_fallback(
@@ -2190,13 +2193,14 @@ Return JSON:
   "questions": [
     {{
       "question": "Question text",
-      "question_type": "short_answer|multiple_choice|calculation|explanation|true_false|application",
+      "question_type": "short_answer|multiple_choice|multi_select|calculation|explanation|true_false|application",
       "options": null,
       "expected_answer": "Model answer for AI evaluation only",
       "rubric": "What to look for when marking",
       "stage": "guided_practice|independent_practice|transfer",
       "skill": "understanding|application|accuracy|independence|transfer",
-      "hint": "A concise answer-neutral hint."
+      "hint": "A concise answer-neutral hint.",
+      "time_limit_seconds": 90
     }}
   ]
 }}
@@ -2381,12 +2385,23 @@ and do not add unstated conditions. Return JSON only:
     )
     last_seq = seq_result.scalar_one_or_none() or 0
 
-    VALID_QTYPES = {"short_answer", "multiple_choice", "calculation", "explanation", "true_false", "application"}
+    VALID_QTYPES = {
+        "short_answer", "multiple_choice", "multi_select",
+        "calculation", "explanation", "true_false", "application",
+    }
     created = []
     for i, q in enumerate(raw_questions[:count], 1):
         qtype = q.get("question_type", "short_answer")
         if qtype not in VALID_QTYPES:
             qtype = "short_answer"
+        # If the model wrote "select all that apply" but used multiple_choice, upgrade.
+        qtext_lower = _safe_str(q.get("question"), "").lower()
+        if qtype == "multiple_choice" and (
+            "select all that apply" in qtext_lower
+            or "select all that are" in qtext_lower
+            or "which of the following" in qtext_lower and "all that apply" in qtext_lower
+        ):
+            qtype = "multi_select"
         # Stage is server-assigned so the AI cannot accidentally turn a
         # mastery run into five identical easy questions.
         if task_index > 0 and i == 1:
@@ -2398,17 +2413,35 @@ and do not add unstated conditions. Return JSON only:
         else:
             stage = "transfer"
         skill = _safe_str(q.get("skill"), "application")
+        raw_limit = q.get("time_limit_seconds")
+        try:
+            time_limit = int(raw_limit) if raw_limit is not None else None
+        except (TypeError, ValueError):
+            time_limit = None
+        if time_limit is None:
+            # Sensible defaults by type when the model omits a limit
+            time_limit = {
+                "multiple_choice": 60,
+                "multi_select": 90,
+                "true_false": 45,
+                "short_answer": 90,
+                "calculation": 120,
+                "explanation": 120,
+                "application": 150,
+            }.get(qtype, 90)
+        time_limit = max(30, min(300, time_limit))
         obj = AISessionQuestion(
             session_id=session_id,
             question=_safe_str(q.get("question"), "Question unavailable."),
             question_type=qtype,
-            options=q.get("options") if qtype == "multiple_choice" else None,
+            options=q.get("options") if qtype in ("multiple_choice", "multi_select") else None,
             expected_answer=_safe_str(q.get("expected_answer")),
             rubric=_safe_str(q.get("rubric")),
             hint=_safe_str(q.get("hint")),
             stage=stage,
             skill=skill,
             sequence=last_seq + i,
+            time_limit_seconds=time_limit,
         )
         db.add(obj)
         await db.flush()
@@ -2426,11 +2459,15 @@ and do not add unstated conditions. Return JSON only:
 
 def _correct_option_label(question: AISessionQuestion) -> Optional[str]:
     """Return the MC option label when the server-side expected answer identifies one."""
-    if question.question_type != "multiple_choice" or not question.options:
+    if question.question_type not in ("multiple_choice", "multi_select") or not question.options:
         return None
     expected = (question.expected_answer or "").strip().lower()
     if not expected:
         return None
+    if question.question_type == "multi_select":
+        # Prefer returning the normalized expected labels string
+        labels = _parse_label_set(question.expected_answer or "")
+        return ",".join(sorted(labels)) if labels else None
     for opt in question.options:
         if not isinstance(opt, dict):
             continue
@@ -2446,6 +2483,136 @@ def _correct_option_label(question: AISessionQuestion) -> Optional[str]:
         if label and expected.startswith(label.lower()) and expected[len(label):len(label)+1] in ("-", ")", ":", ".", " "):
             return label
     return None
+
+
+def _parse_label_set(raw: str) -> set[str]:
+    """Parse comma/space separated option labels into an uppercased set."""
+    if not raw:
+        return set()
+    parts = []
+    for chunk in raw.replace(";", ",").split(","):
+        token = chunk.strip().upper()
+        if not token:
+            continue
+        # Accept "A", "A)", "A.", "OPTION A"
+        if token.startswith("OPTION "):
+            token = token[7:].strip()
+        token = token.rstrip(").: ")
+        if token:
+            parts.append(token)
+    return set(parts)
+
+
+def _score_option_answer(question: AISessionQuestion, student_answer: str) -> Optional[dict]:
+    """Deterministic scoring for single and multi-select MC when possible."""
+    if question.question_type not in ("multiple_choice", "multi_select") or not question.options:
+        return None
+    expected_raw = (question.expected_answer or "").strip()
+    if not expected_raw:
+        return None
+    if question.question_type == "multiple_choice":
+        label = _correct_option_label(question)
+        if not label:
+            return None
+        student = (student_answer or "").strip().upper()
+        # Student may send label or full option text
+        matched = student == label.upper()
+        if not matched:
+            for opt in question.options:
+                if not isinstance(opt, dict):
+                    continue
+                ol = str(opt.get("label") or "").strip().upper()
+                ot = str(opt.get("text") or "").strip().upper()
+                if student == ol or student == ot or student == f"{ol} - {ot}" or student == f"{ol}) {ot}":
+                    matched = ol == label.upper()
+                    break
+        return {
+            "is_correct": matched,
+            "score": 100 if matched else 0,
+            "understanding": "strong" if matched else "weak",
+            "feedback": (
+                "Correct — you selected the right option."
+                if matched
+                else f"Not quite. The correct option was {label}."
+            ),
+            "correction_note": None if matched else f"The correct choice is {label}. Review the idea and try a similar problem next time.",
+            "misconception": None,
+            "needs_reteach": not matched,
+            "recommended_strategy": None if matched else "reteach_with_worked_example",
+        }
+    # multi_select: compare label sets
+    expected_set = _parse_label_set(expected_raw)
+    student_set = _parse_label_set(student_answer or "")
+    if not expected_set:
+        return None
+    if not student_set and not (student_answer or "").strip():
+        return {
+            "is_correct": False,
+            "score": 0,
+            "understanding": "weak",
+            "feedback": "No options were selected before time ran out.",
+            "correction_note": f"The correct selections were: {', '.join(sorted(expected_set))}.",
+            "misconception": None,
+            "needs_reteach": True,
+            "recommended_strategy": "reteach_with_worked_example",
+        }
+    exact = student_set == expected_set
+    if exact:
+        score = 100
+        understanding = "strong"
+    else:
+        overlap = len(student_set & expected_set)
+        total = len(expected_set)
+        # Partial credit: correct picks minus wrong picks, clamped
+        wrong = len(student_set - expected_set)
+        score = max(0, min(100, int(round(100 * (overlap / total) - 25 * wrong))))
+        understanding = "strong" if score >= 80 else ("partial" if score >= 40 else "weak")
+    return {
+        "is_correct": exact,
+        "score": score,
+        "understanding": understanding,
+        "feedback": (
+            "Correct — you selected all the right options."
+            if exact
+            else f"Partial or incorrect. Correct labels: {', '.join(sorted(expected_set))}."
+        ),
+        "correction_note": None if exact else f"Correct selections: {', '.join(sorted(expected_set))}.",
+        "misconception": None,
+        "needs_reteach": understanding != "strong",
+        "recommended_strategy": None if understanding == "strong" else "reteach_with_worked_example",
+    }
+
+
+async def start_question_timer(
+    session_id: int,
+    user_id: int,
+    question_id: int,
+    db: AsyncSession,
+) -> dict:
+    """Mark the first moment the learner opens a practice question (idempotent).
+
+    Persists timer_started_at so a browser refresh can resume the same countdown.
+    """
+    session = await _get_session_owned(session_id, user_id, db)
+    if session.status not in ("retrieval", "practice"):
+        raise HTTPException(409, f"Question timer can only start during practice; session is '{session.status}'.")
+
+    q_result = await db.execute(
+        select(AISessionQuestion).where(
+            AISessionQuestion.id == question_id,
+            AISessionQuestion.session_id == session_id,
+        )
+    )
+    question = q_result.scalar_one_or_none()
+    if not question:
+        raise HTTPException(404, "Question not found in this session.")
+
+    if question.timer_started_at is None:
+        question.timer_started_at = _now()
+        await db.commit()
+        await db.refresh(question)
+
+    return question.serialize()
 
 
 async def _generate_and_store_observations(
@@ -2602,6 +2769,9 @@ async def submit_answer(
     previous_attempt = prev_result.scalar_one_or_none() or 0
     attempt_number   = previous_attempt + 1
 
+    # Treat blank / timeout as an explicit empty attempt
+    student_answer = student_answer if student_answer is not None else ""
+
     answer = AISessionAnswer(
         session_id=session_id,
         question_id=question_id,
@@ -2612,12 +2782,31 @@ async def submit_answer(
     db.add(answer)
     await db.flush()
 
-    # AI evaluation
-    system_prompt = _MATH_FORMATTING_SYSTEM + "\n" + (
-        "You are an AI tutor evaluating a student's answer. "
-        "Be fair, constructive, and encouraging. Return JSON only."
-    )
-    prompt = f"""QUESTION: {question.question}
+    # Prefer deterministic scoring for MC / multi_select when expected labels exist
+    parsed = _score_option_answer(question, student_answer)
+    provider = "deterministic" if parsed else None
+
+    if parsed is None:
+        # Empty non-MC answer on timeout → weak without calling the model
+        if not student_answer.strip():
+            parsed = {
+                "is_correct": False,
+                "score": 0,
+                "understanding": "weak",
+                "feedback": "No answer was submitted before the time limit.",
+                "correction_note": "Time ran out. Review the method and try a similar problem.",
+                "misconception": None,
+                "needs_reteach": True,
+                "recommended_strategy": "reteach_with_worked_example",
+            }
+            provider = "timeout"
+        else:
+            # AI evaluation
+            system_prompt = _MATH_FORMATTING_SYSTEM + "\n" + (
+                "You are an AI tutor evaluating a student's answer. "
+                "Be fair, constructive, and encouraging. Return JSON only."
+            )
+            prompt = f"""QUESTION: {question.question}
 QUESTION TYPE: {question.question_type}
 EXPECTED ANSWER: {question.expected_answer or '(use your knowledge to assess)'}
 MARKING RUBRIC: {question.rubric or '(assess understanding and accuracy)'}
@@ -2642,20 +2831,20 @@ Scoring guide:
   partial (50-79): some understanding but gaps — targeted practice helpful
   weak    (<  50): significant gaps — reteach with a different approach
 """
-    try:
-        raw, provider = await call_with_fallback(
-            prompt, system=system_prompt, temperature=0.4, json_mode=True
-        )
-        parsed = parse_json(raw)
-    except Exception as exc:
-        logger.error("Answer evaluation failed: %s", exc)
-        parsed = {
-            "is_correct": None, "score": None,
-            "understanding": "partial",
-            "feedback": "Evaluation temporarily unavailable. Your answer has been recorded.",
-            "misconception": None, "needs_reteach": False, "recommended_strategy": None,
-        }
-        provider = "none"
+            try:
+                raw, provider = await call_with_fallback(
+                    prompt, system=system_prompt, temperature=0.4, json_mode=True
+                )
+                parsed = parse_json(raw)
+            except Exception as exc:
+                logger.error("Answer evaluation failed: %s", exc)
+                parsed = {
+                    "is_correct": None, "score": None,
+                    "understanding": "partial",
+                    "feedback": "Evaluation temporarily unavailable. Your answer has been recorded.",
+                    "misconception": None, "needs_reteach": False, "recommended_strategy": None,
+                }
+                provider = "none"
 
     # Clamp and validate AI output
     raw_score   = parsed.get("score")
@@ -2846,7 +3035,7 @@ Scoring guide:
         "question":            question.question,
         "questionType":        question.question_type,
         "options":             question.options,
-        "correctAnswer":       question.expected_answer if question.question_type != "multiple_choice" else None,
+        "correctAnswer":       question.expected_answer if question.question_type not in ("multiple_choice", "multi_select") else None,
         "correctOptionLabel":  _correct_option_label(question),
         "taskIndex":           task_index,
         "correctionNote":      correction_note,
