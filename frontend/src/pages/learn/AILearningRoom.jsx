@@ -2235,6 +2235,17 @@ function normalizeMathSource(text) {
     }
   );
 
+  // If a long formula was glued to following prose with a single trailing $,
+  // cut the math off before English so we do not feed "Remember that..." to KaTeX.
+  // e.g. (d_n \times b^n)+...+(d_0 \times b^0)$ Remember that...
+  s = s.replace(
+    /((?:\$?\([^()\n]{0,60}\\(?:times|cdot|div)[^()\n]{0,40}\)\$?(?:\s*[+\u2212\-]\s*)?)+(?:\s*\.{2,3}\s*)?(?:\$?\([^()\n]{0,60}\\(?:times|cdot|div)[^()\n]{0,40}\)\$?)+)\$(?=\s+[A-Z])/g,
+    (_, formula) => {
+      const body = formula.replace(/\$/g, "").trim();
+      return `$${body}$ `;
+    }
+  );
+
   // Protect fenced code AND already-delimited mathematics before applying any
   // prose-level normalization. Otherwise a TeX command such as \times or an
   // exponent can be modified while we are still parsing ordinary text.
@@ -2283,7 +2294,11 @@ function normalizeMathSource(text) {
   // Parenthesized equations sometimes arrive without math delimiters. Convert
   // only parentheses containing an unmistakable math operator.
   // Keep the outer parentheses inside the math span so structure is preserved.
-  s = s.replace(/\(([^()\n]*(?:[=<>^_]|\\[A-Za-z]+)[^()\n]*)\)/g, (full) => `$${full}$`);
+  // Skip spans that already contain $ to avoid nested delimiters (KaTeX red errors).
+  s = s.replace(/\(([^()\n]*(?:[=<>^_]|\\[A-Za-z]+)[^()\n]*)\)/g, (full) => {
+    if (full.includes("$")) return full;
+    return `$${full}$`;
+  });
 
   // Bare LaTeX macros commonly emitted without delimiters
   const bareMacros = [
@@ -2382,6 +2397,9 @@ function renderMath(latex, displayMode = false) {
     // Strip leftover outer $ if any
     if (src.startsWith("$$") && src.endsWith("$$")) src = src.slice(2, -2).trim();
     if (src.startsWith("$") && src.endsWith("$")) src = src.slice(1, -1).trim();
+    // Nested/stray $ inside the span causes: "Can't use function '$' in math mode"
+    src = src.replace(/\$/g, "");
+    if (!src.trim()) return null;
     return (
       <span
         className={displayMode ? "ar-math ar-math-display" : "ar-math"}
