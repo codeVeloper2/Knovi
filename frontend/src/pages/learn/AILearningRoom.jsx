@@ -2227,13 +2227,7 @@ function normalizeMathSource(text) {
   // Recover formulas that only have a closing $ at end of a line (opening $ lost).
   // Only at line start — matching after "." would corrupt ellipses like "...".
   s = s.replace(
-    /^([^
-$]*(?:\([^()
-]*\[A-Za-z]+[^()
-]*\)|\([^()
-]*[_^][^()
-]*\))[^
-$]*)\$(?=\s*$)/gm,
+    new RegExp("^([^\\n$]*(?:\\([^()\\n]*\\\\[A-Za-z]+[^()\\n]*\\)|\\([^()\\n]*[_^][^()\\n]*\\))[^\\n$]*)\\$(?=\\s*$)", "gm"),
     (_, body) => {
       const cleaned = body.trim();
       if (!cleaned || cleaned.includes("$")) return `${body}$`;
