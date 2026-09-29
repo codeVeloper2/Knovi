@@ -2726,6 +2726,69 @@
   font-size: 13px;
 }
 
+
+/* HARD medium/desktop fill — prevents blank room when plan is collapsed or
+   when max-width:900 switches the grid to display:block without a height. */
+.ar-room {
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+.ar-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  width: 100%;
+}
+.ar-layout.ar-left-collapsed.ar-right-collapsed,
+.ar-layout.ar-left-collapsed.ar-right-open {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+.ar-layout.ar-left-collapsed > .ar-main {
+  grid-column: 1 / -1 !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+.ar-main {
+  display: flex !important;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.ar-conversation {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+.ar-composer-wrap {
+  flex: 0 0 auto;
+  width: 100%;
+}
+
+@media (min-width: 761px) and (max-width: 1180px) {
+  /* Medium screens: always single-column workspace so content is never
+     trapped in a 285px plan column while the rest of the room looks blank. */
+  .ar-layout,
+  .ar-layout.ar-left-open.ar-right-collapsed,
+  .ar-layout.ar-left-collapsed.ar-right-collapsed {
+    display: flex !important;
+    flex-direction: column;
+    grid-template-columns: none !important;
+  }
+  .ar-plan-sidebar {
+    display: none !important;
+  }
+  .ar-main {
+    flex: 1 1 auto;
+    width: 100% !important;
+    height: 100% !important;
+  }
+}
+
 /* Legacy two-column overrides removed — layout is driven by
    .ar-left-open / .ar-left-collapsed + .ar-right-collapsed classes above. */
 .ar-learning-room-context { display: none !important; }

@@ -249,8 +249,23 @@ export default function AILearningRoom() {
   const [planOpen, setPlanOpen] = useState(false);
   const [motivationIndex, setMotivationIndex] = useState(0);
   const [leftOpen, setLeftOpen] = useState(() => {
-    try { return localStorage.getItem("knovi.learningRoom.leftOpen") !== "false"; } catch { return true; }
+    try {
+      if (typeof window !== "undefined" && window.innerWidth <= 1180) return false;
+      return localStorage.getItem("knovi.learningRoom.leftOpen") !== "false";
+    } catch { return true; }
   });
+  // Medium screens: keep the plan in the header dropdown so the chat column
+  // always has full width (avoids a blank-looking room).
+  useEffect(() => {
+    function syncPlanForViewport() {
+      if (window.innerWidth <= 1180) {
+        setLeftOpen(false);
+      }
+    }
+    syncPlanForViewport();
+    window.addEventListener("resize", syncPlanForViewport);
+    return () => window.removeEventListener("resize", syncPlanForViewport);
+  }, []);
   const [rightOpen, setRightOpen] = useState(() => {
     try { return localStorage.getItem("knovi.learningRoom.rightOpen") !== "false"; } catch { return true; }
   });
@@ -1868,7 +1883,12 @@ function QuizArtifact({ question, index, total, answer, setAnswer, onSubmit, sub
 function RichText({ content, onCopy, copiedId }) {
   if (!content) return null;
   // Normalize AI math into KaTeX-friendly delimiters before block parsing.
-  const normalized = normalizeMathSource(String(content));
+  let normalized;
+  try {
+    normalized = normalizeMathSource(String(content));
+  } catch {
+    normalized = String(content);
+  }
   const lines = normalized.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
   const blocks = [];
   let i = 0;
@@ -2457,8 +2477,12 @@ function formatIntent(v) { return ({ teach_me: "learn the concept", explain_simp
 /** Short text (plan items, options, hints) with KaTeX + light markdown. */
 function InlineRich({ text, as: Tag = "span", className }) {
   if (text == null || text === "") return null;
-  const nodes = inlineMarkdown(normalizeMathSource(String(text)));
-  return <Tag className={className}>{nodes}</Tag>;
+  try {
+    const nodes = inlineMarkdown(normalizeMathSource(String(text)));
+    return <Tag className={className}>{nodes}</Tag>;
+  } catch {
+    return <Tag className={className}>{String(text)}</Tag>;
+  }
 }
 
 function taskTitle(task) { return task?.title || task?.name || task?.concept || task?.task || "Learning step"; }
