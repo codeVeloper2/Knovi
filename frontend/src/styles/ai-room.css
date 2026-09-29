@@ -595,25 +595,42 @@
   border-radius: 99px;
 }
 .ar-calculation-step {
-  min-height: 25px;
+  min-height: 28px;
   display: block;
   color: #d9ecff;
-  font-size: 13px;
-  line-height: 1.75;
+  font-size: 14px;
+  line-height: 1.85;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   white-space: normal;
   overflow-wrap: anywhere;
   word-break: break-word;
+  padding: 2px 0;
 }
-.ar-calculation-step + .ar-calculation-step { margin-top: 2px; }
-.ar-calculation-step:last-child {
-  margin-top: 8px;
-  padding-top: 8px;
+.ar-calculation-step + .ar-calculation-step { margin-top: 4px; }
+.ar-calculation-step:last-child,
+.ar-calculation-step.is-answer {
+  margin-top: 10px;
+  padding-top: 10px;
   border-top: 1px solid rgba(123,168,224,.12);
   color: #f7fbff;
-  font-weight: 800;
+  font-weight: 700;
 }
-.ar-calculation-step .ar-math { font-family: inherit; }
+.ar-calculation-step .ar-math {
+  font-family: KaTeX_Main, "Times New Roman", serif;
+  font-size: 1.05em;
+}
+.ar-calculation-step .ar-math .katex { font-size: 1.08em; }
+.ar-calculation-step .ar-rich-highlight {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  color: #bbf7d0;
+  font-weight: 700;
+}
 
 .ar-table-wrap { overflow-x: auto; margin: 12px 0; }
 .ar-rich table { width: 100%; border-collapse: collapse; font-size: 11px; }

@@ -1917,7 +1917,9 @@ function RichText({ content, onCopy, copiedId }) {
             </div>
             <div className="ar-calculation-body">
               {codeLines.filter(line => line.trim()).map((line, j) => (
-                <div className="ar-calculation-step" key={j}>{inlineMarkdown(normalizeMathSource(normalizeBaseNotation(line.trim())))}</div>
+                <div className={`ar-calculation-step${/==\s*Answer/i.test(line) ? " is-answer" : ""}`} key={j}>
+                  {inlineMarkdown(normalizeCalculationLine(line))}
+                </div>
               ))}
             </div>
           </div>
@@ -2093,6 +2095,75 @@ function splitTableRow(line) {
   return value.split("|").map(cell => cell.trim());
 }
 
+
+/**
+ * Clean one line from a fenced ```calculation block before KaTeX render.
+ * Models often emit: orphan trailing $, "Answer :" with spaces, unicode ×,
+ * and bare base notation like (229)_{10} without math delimiters.
+ */
+function normalizeCalculationLine(raw) {
+  let s = String(raw || "").trim();
+  if (!s) return s;
+
+  // Normalize answer markers: "== Answer : ..." / "==answer:..." → "==Answer: ..."
+  s = s.replace(/^==\s*Answer\s*:\s*/i, "==Answer: ");
+  s = s.replace(/\s*==\s*$/i, "==");
+
+  // Unicode operators → TeX-friendly (still fine inside $...$)
+  s = s
+    .replace(/×/g, "\\times ")
+    .replace(/÷/g, "\\div ")
+    .replace(/−/g, "-")
+    .replace(/·/g, "\\cdot ");
+
+  // Drop orphan/unmatched $ so we can re-wrap cleanly
+  const dollarCount = (s.match(/\$/g) || []).length;
+  if (dollarCount % 2 === 1) {
+    // Prefer stripping a lone trailing or leading $
+    if (s.endsWith("$") && !s.startsWith("$")) s = s.slice(0, -1).trim();
+    else if (s.startsWith("$") && !s.endsWith("$")) s = s.slice(1).trim();
+    else s = s.replace(/\$/g, "");
+  }
+  // Collapse empty $$ pairs left behind
+  s = s.replace(/\$\s*\$/g, "");
+
+  // Split answer prefix from the math body so highlight + math both work
+  let answerPrefix = "";
+  const answerMatch = s.match(/^(==Answer:\s*)(.*?)(==)?$/i);
+  if (answerMatch) {
+    answerPrefix = "==Answer: ";
+    s = (answerMatch[2] || "").trim();
+    // strip trailing == if still present on body
+    s = s.replace(/==\s*$/, "").trim();
+  }
+
+  // Base notation before wrapping
+  s = normalizeBaseNotation(s);
+
+  // If the line is still plain (no $) but looks like math/equation, wrap it
+  if (!/\$/.test(s)) {
+    const looksLikeMath =
+      /\d/.test(s) &&
+      (/=|\\times|\\div|\\cdot|\^|_\{|[+\-*/]/.test(s) || /\(\d+\)_\{?\d/.test(s));
+    if (looksLikeMath) {
+      s = `$${s}$`;
+    }
+  }
+
+  // Run general math repairs (LaTeX macros, base wrap, etc.)
+  s = normalizeMathSource(s);
+
+  // Ensure answer body is math-wrapped even after repairs
+  if (answerPrefix) {
+    const body = s.trim();
+    if (body && !body.startsWith("$")) {
+      s = `$${body.replace(/^\$|\$$/g, "")}$`;
+    }
+    return `${answerPrefix}${s}==`;
+  }
+
+  return s;
+}
 
 /** Fix common LLM number-base notation into KaTeX-friendly form.
  *  e.g. 10_base5, 10_{base5}, 2{base10}, 10_5 → 10_{5} / (10)_{5}

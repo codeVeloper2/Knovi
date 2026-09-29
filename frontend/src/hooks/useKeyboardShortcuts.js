@@ -55,6 +55,16 @@ export function useKeyboardShortcuts(shortcuts) {
     activePrefix: null,
   });
 
+  // When callers pass [] (e.g. AI Learning Room), drop any armed leader so
+  // Shift+K can't stay "live" after entering a no-shortcut screen.
+  const shortcutsEnabled = Array.isArray(shortcuts) && shortcuts.length > 0;
+  useEffect(() => {
+    if (!shortcutsEnabled) {
+      seqRef.current.activePrefix = null;
+      document.body.classList.remove("knovi-leader-active");
+    }
+  }, [shortcutsEnabled]);
+
   useEffect(() => {
     function clearSequence() {
       seqRef.current.activePrefix = null;

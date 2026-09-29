@@ -203,13 +203,19 @@ export default function DashboardLayout() {
     setLogoutOpen(true);
   }
 
-  useKeyboardShortcuts([
-    ...Object.entries(NAV_SHORTCUTS).map(([to, s]) => ({ combo: s.combo, run: () => goTo(to) })),
-    ...Object.entries(SETTINGS_SHORTCUTS).map(([to, s]) => ({ combo: s.combo, run: () => goTo(to) })),
-    { combo: BACK_SHORTCUT.combo, run: () => goTo("/app") },
-    { combo: "mod+b", run: () => toggle() },
-    { combo: "?",     run: () => setScOpen(true), allowInInputs: false },
-  ]);
+  // While the AI Learning Room is open, disable every global keyboard shortcut
+  // so Shift+K nav, ?, Ctrl/Cmd+B, etc. cannot steal focus or trigger leave flows.
+  useKeyboardShortcuts(
+    isAISessionRoom
+      ? []
+      : [
+          ...Object.entries(NAV_SHORTCUTS).map(([to, s]) => ({ combo: s.combo, run: () => goTo(to) })),
+          ...Object.entries(SETTINGS_SHORTCUTS).map(([to, s]) => ({ combo: s.combo, run: () => goTo(to) })),
+          { combo: BACK_SHORTCUT.combo, run: () => goTo("/app") },
+          { combo: "mod+b", run: () => toggle() },
+          { combo: "?",     run: () => setScOpen(true), allowInInputs: false },
+        ]
+  );
 
   const name = profile?.displayName || user?.displayName || "peer";
 
