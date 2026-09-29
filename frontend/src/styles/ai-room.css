@@ -882,7 +882,8 @@
   .ar-header-right .ar-voice { display:grid; }
   .ar-end { display:none; }
   .ar-header-rebuilt .ar-end { display: inline-flex !important; align-items: center; justify-content: center; }
-  .ar-header
+}
+
 /* Header center: motivation quote + breadcrumb between title and actions */
 .ar-hdr-top {
   display: grid;
@@ -916,8 +917,9 @@
 
 .ar-header-rebuilt .ar-tools-trigger { display: none !important; }
 
-
-/* Right workspace panel removed — always single main column with optional left plan */
+/* Right workspace panel removed — always single main column with optional left plan.
+   These MUST be global (not inside max-width:760) or medium screens leave the main
+   column stuck at the plan width (~285px) and the rest of the room looks blank. */
 .ar-layout.ar-right-collapsed,
 .ar-layout.ar-left-open.ar-right-collapsed {
   grid-template-columns: 285px minmax(0, 1fr);
@@ -956,11 +958,13 @@
 }
 
 .ar-header-rebuilt {
-    height: auto !important;
-    flex-basis: auto !important;
-    padding: 10px 12px 12px !important;
-    grid-template-columns: unset !important;
-  }
+  height: auto !important;
+  flex-basis: auto !important;
+  padding: 10px 12px 12px !important;
+  grid-template-columns: unset !important;
+}
+
+@media (max-width: 760px) {
   .ar-layout { display:block;position:relative; }
   .ar-sidebar {
     display:block;
