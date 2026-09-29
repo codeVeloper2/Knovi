@@ -2224,15 +2224,20 @@ function normalizeMathSource(text) {
   s = s.replace(/(\$[^$\n]+\$)\s*[`$]+/g, "$1");
   s = s.replace(/==\s*[`$]+/g, "==");
 
-  // Recover formulas that only have a closing $ (opening $ lost in JSON/model output).
-  // Example: (d_n \\times b^n) + ... + (d_0 \\times b^0)$ Remember that...
+  // Recover formulas that only have a closing $ at end of a line (opening $ lost).
+  // Only at line start — matching after "." would corrupt ellipses like "...".
   s = s.replace(
-    /(?:^|[\n.!]\s*)([^\n$]{0,20}?(?:\([^\n$]*\\[A-Za-z]+[^\n$]*\)|\([^\n$]*[_^][^\n$]*\))[^\n$]{0,400}?)\$(?=[\s.,;:!?]|$)/gm,
-    (m, body, offset, full) => {
+    /^([^
+$]*(?:\([^()
+]*\[A-Za-z]+[^()
+]*\)|\([^()
+]*[_^][^()
+]*\))[^
+$]*)\$(?=\s*$)/gm,
+    (_, body) => {
       const cleaned = body.trim();
-      if (!cleaned || cleaned.startsWith("$")) return m;
-      const prefix = m.slice(0, m.indexOf(body));
-      return `${prefix}$${cleaned}$`;
+      if (!cleaned || cleaned.includes("$")) return `${body}$`;
+      return `$${cleaned}$`;
     }
   );
 
@@ -2283,7 +2288,8 @@ function normalizeMathSource(text) {
 
   // Parenthesized equations sometimes arrive without math delimiters. Convert
   // only parentheses containing an unmistakable math operator.
-  s = s.replace(/\(([^()\n]*(?:[=<>^_]|\\[A-Za-z]+)[^()\n]*)\)/g, (_, expr) => `$${expr}$`);
+  // Keep the outer parentheses inside the math span so structure is preserved.
+  s = s.replace(/\(([^()\n]*(?:[=<>^_]|\\[A-Za-z]+)[^()\n]*)\)/g, (full) => `$${full}$`);
 
   // Bare LaTeX macros commonly emitted without delimiters
   const bareMacros = [
@@ -2302,9 +2308,6 @@ function normalizeMathSource(text) {
     /\\infty/g,
     /\\pm/g,
     /\\mp/g,
-    /\\times/g,
-    /\\cdot/g,
-    /\\div/g,
     /\\leq?|\\geq?|\\neq?|\\ne|\\approx|\\equiv|\\sim|\\propto|\\ll|\\gg/g,
     /\\in\b|\\notin|\\subset|\\subseteq|\\supset|\\supseteq|\\cup|\\cap|\\emptyset|\\varnothing/g,
     /\\forall|\\exists|\\land|\\lor|\\neg|\\lnot|\\implies|\\Rightarrow|\\iff|\\Leftrightarrow/g,
@@ -2322,6 +2325,21 @@ function normalizeMathSource(text) {
   for (const re of bareMacros) {
     s = s.replace(re, (m) => `$${m}$`);
   }
+
+  // Wrap whole multiplication / product expressions as ONE math span.
+  // Never wrap \times alone — that splits "d_n \times b^n" into red KaTeX errors.
+  // Match chains like: (d_n \times b^n) + ... + (d_0 \times b^0)
+  s = s.replace(
+    /(?<!\$)(?:\([^()\n]{1,80}\)|\b[A-Za-z0-9]+(?:[_^]\{?[A-Za-z0-9]+\}?)?)\s*(?:\\times|\\cdot|\\div|×|·|÷)\s*(?:\([^()\n]{1,80}\)|\b[A-Za-z0-9]+(?:[_^]\{?[A-Za-z0-9]+\}?)?)(?:\s*(?:\+|−|-)\s*(?:\([^()\n]{1,80}\)|\b[A-Za-z0-9]+(?:[_^]\{?[A-Za-z0-9]+\}?)?)\s*(?:\\times|\\cdot|\\div|×|·|÷)\s*(?:\([^()\n]{1,80}\)|\b[A-Za-z0-9]+(?:[_^]\{?[A-Za-z0-9]+\}?)?))*/g,
+    (m) => {
+      if (m.includes("$")) return m;
+      const cleaned = m
+        .replace(/×/g, "\\times ")
+        .replace(/·/g, "\\cdot ")
+        .replace(/÷/g, "\\div ");
+      return `$${cleaned}$`;
+    }
+  );
 
   // Number-base notation is common in multiple-choice options, e.g. (789)_{9}.
   // Wrap it as a math span even when the model omitted $...$ delimiters.
