@@ -74,6 +74,106 @@
 .pu-user-info span:not(.pu-verified) { color:var(--pu-dim); font-size:12px; }
 .pu-user-info span.online { color:var(--pu-teal); }
 
+/* Aim / session goal bar under the conversation header */
+.pu-goal-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 8px 14px;
+  min-height: 38px;
+  background: rgba(52, 211, 153, 0.07);
+  border-bottom: 1px solid rgba(52, 211, 153, 0.15);
+  color: var(--pu-teal, #34d399);
+  font-size: 0.82rem;
+  z-index: 12;
+}
+.pu-goal-bar.no-goal {
+  background: rgba(148, 163, 184, 0.06);
+  border-bottom-color: var(--pu-border, rgba(148, 163, 184, 0.18));
+  color: var(--pu-dim, #94a3b8);
+}
+.pu-goal-label {
+  flex: 0 0 auto;
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+.pu-goal-text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--pu-soft, #cbd5e1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.35;
+}
+.pu-goal-text strong {
+  color: var(--pu-teal, #34d399);
+  font-weight: 600;
+}
+.pu-goal-empty {
+  font-style: italic;
+  color: var(--pu-dim, #94a3b8);
+}
+.pu-goal-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--pu-input, rgba(15, 23, 42, 0.55));
+  border: 1px solid var(--pu-border, rgba(148, 163, 184, 0.25));
+  border-radius: 7px;
+  padding: 5px 10px;
+  color: var(--pu-text, #e2e8f0);
+  font-size: 0.82rem;
+  outline: none;
+}
+.pu-goal-input:focus {
+  border-color: var(--pu-teal, #34d399);
+}
+.pu-goal-input:disabled {
+  opacity: 0.7;
+}
+.pu-goal-edit,
+.pu-goal-save,
+.pu-goal-cancel {
+  flex: 0 0 auto;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border-radius: 6px;
+  padding: 4px 8px;
+  transition: background 0.12s;
+}
+.pu-goal-edit {
+  color: var(--pu-teal, #34d399);
+}
+.pu-goal-edit:hover {
+  background: rgba(52, 211, 153, 0.12);
+}
+.pu-goal-save {
+  color: var(--pu-teal, #34d399);
+  border: 1px solid var(--pu-teal, #34d399);
+}
+.pu-goal-save:hover:not(:disabled) {
+  background: rgba(52, 211, 153, 0.12);
+}
+.pu-goal-save:disabled,
+.pu-goal-cancel:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.pu-goal-cancel {
+  color: var(--pu-dim, #94a3b8);
+}
+.pu-goal-cancel:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+}
+
 .pu-messages { flex:1; min-height:0; overflow:auto; padding:12px 12px 8px; display:flex; flex-direction:column; gap:2px; -webkit-overflow-scrolling:touch; }
 
 /* Scrollable areas: keep overflow, hide the light/default track */

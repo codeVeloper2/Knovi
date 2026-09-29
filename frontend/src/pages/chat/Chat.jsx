@@ -77,6 +77,7 @@ function mapChat(raw) {
     muted: false,
     partnerId: raw.partnerId,
     subject: raw.subject || "",
+    sessionGoal: raw.sessionGoal || raw.session_goal || "",
   };
 }
 /** Backend user serialize uses `uid` (string of numeric id). Accept both. */
@@ -364,9 +365,13 @@ export default function Chat() {
   const [loading, setLoading] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [editingGoal, setEditingGoal] = useState(false);
+  const [goalDraft, setGoalDraft] = useState("");
+  const [goalSaving, setGoalSaving] = useState(false);
   const imageInput = useRef(null);
   const fileInput = useRef(null);
   const messagesRef = useRef(null);
+  const goalInputRef = useRef(null);
 
   const scrollToMsg = (msgId) => {
     if (!msgId || !messagesRef.current) return;
@@ -476,10 +481,42 @@ export default function Chat() {
     setScreen(String(id));
     navigate(`/app/chat/${id}`, { replace: true });
     setReplyTo(null); setPending(null); setModal(null);
+    setEditingGoal(false); setGoalDraft(""); setGoalSaving(false);
   };
   const closeChat = () => {
     setScreen(null); navigate("/app/chat", { replace: true });
     setReplyTo(null); setPending(null); setModal(null);
+    setEditingGoal(false); setGoalDraft(""); setGoalSaving(false);
+  };
+
+  const startEditGoal = () => {
+    setGoalDraft(currentChat?.sessionGoal || "");
+    setEditingGoal(true);
+    requestAnimationFrame(() => goalInputRef.current?.focus());
+  };
+  const cancelEditGoal = () => {
+    setEditingGoal(false);
+    setGoalDraft("");
+  };
+  const saveGoal = async () => {
+    if (!screen || goalSaving) return;
+    const next = (goalDraft || "").trim();
+    setGoalSaving(true);
+    try {
+      const res = await api.setGoal(screen, next);
+      const saved = (res?.sessionGoal ?? next) || "";
+      setChats((prev) =>
+        prev.map((c) =>
+          c.id === String(screen) ? { ...c, sessionGoal: saved } : c
+        )
+      );
+      setEditingGoal(false);
+      setGoalDraft("");
+    } catch (err) {
+      setLoadError(err.message || "Couldn't save the chat aim.");
+    } finally {
+      setGoalSaving(false);
+    }
   };
 
   const send = async () => {
@@ -726,6 +763,45 @@ export default function Chat() {
                 <div className="pu-user-info"><div><strong>{currentChat?.name}</strong>{currentChat?.verified && <span className="pu-verified">✓</span>}</div><span className={currentChat?.online ? "online" : ""}>{currentChat?.online ? "Online" : "Last seen recently"}</span></div>
                 <div className="pu-user-actions"><button className="pu-icon-btn"><Phone size={18} /></button><button className="pu-icon-btn"><Video size={18} /></button><button className="pu-icon-btn"><Info size={18} /></button></div>
               </header>
+              <div className={`pu-goal-bar ${editingGoal ? "editing" : ""} ${currentChat?.sessionGoal ? "has-goal" : "no-goal"}`}>
+                {editingGoal ? (
+                  <>
+                    <span className="pu-goal-label">Aim</span>
+                    <input
+                      ref={goalInputRef}
+                      className="pu-goal-input"
+                      value={goalDraft}
+                      onChange={(e) => setGoalDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") { e.preventDefault(); saveGoal(); }
+                        if (e.key === "Escape") cancelEditGoal();
+                      }}
+                      placeholder="What are you working on together?"
+                      maxLength={200}
+                      disabled={goalSaving}
+                      aria-label="Aim of this chat"
+                    />
+                    <button type="button" className="pu-goal-save" onClick={saveGoal} disabled={goalSaving}>
+                      {goalSaving ? "Saving…" : "Save"}
+                    </button>
+                    <button type="button" className="pu-goal-cancel" onClick={cancelEditGoal} disabled={goalSaving}>
+                      Cancel
+                    </button>
+                  </>
+                ) : currentChat?.sessionGoal ? (
+                  <>
+                    <span className="pu-goal-label">Aim</span>
+                    <p className="pu-goal-text"><strong>{currentChat.sessionGoal}</strong></p>
+                    <button type="button" className="pu-goal-edit" onClick={startEditGoal}>Edit</button>
+                  </>
+                ) : (
+                  <>
+                    <span className="pu-goal-label">Aim</span>
+                    <p className="pu-goal-text pu-goal-empty">No aim set for this chat</p>
+                    <button type="button" className="pu-goal-edit" onClick={startEditGoal}>Set aim</button>
+                  </>
+                )}
+              </div>
               <div className="pu-messages" ref={messagesRef}>
                 {messagesLoading ? <MessageListSkeleton /> : <>
                   <div className="pu-day-divider">Today</div>
