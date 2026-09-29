@@ -2319,7 +2319,7 @@ Return JSON:
   "questions": [
     {{
       "question": "Question text",
-      "question_type": "short_answer|multiple_choice|multi_select|calculation|explanation|true_false|application",
+      "question_type": "short_answer|multiple_choice|calculation|explanation|true_false|application",
       "options": null,
       "expected_answer": "Model answer for AI evaluation only",
       "rubric": "What to look for when marking",
@@ -2332,7 +2332,7 @@ Return JSON:
 }}
 
 For multiple_choice: options must be [{{"label":"A","text":"..."}}, ...] and expected_answer MUST be exactly the correct option label (e.g. "B").
-For multi_select (select-all-that-apply): options same format; expected_answer MUST be the correct labels comma-separated with no spaces (e.g. "A,C"). Never use multiple_choice for select-all questions.
+Do NOT use multi_select or select-all-that-apply. For multiple_choice, expected_answer MUST be exactly one option label (A/B/C/D). Prefer short_answer or calculation when more than one correct choice is needed.
 time_limit_seconds: integer seconds the learner should have for this question (60–180). Use shorter times for simple recall/MC, longer for calculation or multi-step work.
 """
     try:
@@ -2451,7 +2451,7 @@ Return JSON:
   "questions": [
     {{
       "question": "Question text",
-      "question_type": "short_answer|multiple_choice|multi_select|calculation|explanation|true_false|application",
+      "question_type": "short_answer|multiple_choice|calculation|explanation|true_false|application",
       "options": null,
       "expected_answer": "Model answer for AI evaluation only",
       "rubric": "What to look for when marking",
@@ -2643,23 +2643,31 @@ and do not add unstated conditions. Return JSON only:
     )
     last_seq = seq_result.scalar_one_or_none() or 0
 
+    # Must match DB check constraint ai_session_questions_question_type_check
+    # and AI_QUESTION_TYPES in models/ai_learning.py. multi_select is NOT allowed.
     VALID_QTYPES = {
-        "short_answer", "multiple_choice", "multi_select",
+        "short_answer", "multiple_choice",
         "calculation", "explanation", "true_false", "application",
     }
     created = []
     for i, q in enumerate(raw_questions[:count], 1):
         qtype = q.get("question_type", "short_answer")
+        # Coerce unsupported types (e.g. multi_select from the model) before insert
+        # so we never hit CheckViolation on ai_session_questions_question_type_check.
+        if qtype == "multi_select":
+            label_count = len(_parse_label_set(_safe_str(q.get("expected_answer"))))
+            if label_count == 1:
+                qtype = "multiple_choice"
+            else:
+                # Select-all-that-apply is not in the DB enum — demote to short_answer
+                # with the label list as the expected answer text.
+                qtype = "short_answer"
+                logger.warning(
+                    "Coercing multi_select → short_answer (session=%s) — type not allowed by DB",
+                    session_id,
+                )
         if qtype not in VALID_QTYPES:
             qtype = "short_answer"
-        # If the model wrote "select all that apply" but used multiple_choice, upgrade.
-        qtext_lower = _safe_str(q.get("question"), "").lower()
-        if qtype == "multiple_choice" and (
-            "select all that apply" in qtext_lower
-            or "select all that are" in qtext_lower
-            or "which of the following" in qtext_lower and "all that apply" in qtext_lower
-        ):
-            qtype = "multi_select"
         # Stage is server-assigned so the AI cannot accidentally turn a
         # mastery run into five identical easy questions.
         if task_index > 0 and i == 1:
@@ -2673,17 +2681,19 @@ and do not add unstated conditions. Return JSON only:
         skill = _safe_str(q.get("skill"), "application")
         options_norm = None
         expected_norm = _safe_str(q.get("expected_answer"))
-        if qtype in ("multiple_choice", "multi_select"):
+        if qtype == "multiple_choice":
             options_norm = _normalize_mc_options(q.get("options"))
-            # Upgrade single-label multi or multi-label single when shape mismatches
             label_count = len(_parse_label_set(expected_norm))
-            if qtype == "multiple_choice" and label_count > 1:
-                qtype = "multi_select"
-            if qtype == "multi_select" and len(options_norm) < 2:
-                # Cannot be a valid select-all item — fall back to short answer
-                qtype = "short_answer"
-                options_norm = None
-            elif options_norm:
+            # Multiple correct labels cannot be stored as multi_select (DB rejects it).
+            # Keep a single primary label as MC, or fall back to short_answer.
+            if label_count > 1:
+                labels = sorted(_parse_label_set(expected_norm))
+                expected_norm = labels[0] if labels else expected_norm
+                logger.warning(
+                    "Collapsing multi-label expected answer to single MC key (session=%s): %r → %r",
+                    session_id, q.get("expected_answer"), expected_norm,
+                )
+            if options_norm:
                 validated = _validate_mc_expected(qtype, options_norm, expected_norm)
                 if not validated:
                     # Invalid key → demote to short_answer so we never ship a broken MC item
@@ -2708,7 +2718,6 @@ and do not add unstated conditions. Return JSON only:
         if time_limit is None:
             time_limit = {
                 "multiple_choice": 75,
-                "multi_select": 120,
                 "true_false": 45,
                 "short_answer": 120,
                 "calculation": 180,
