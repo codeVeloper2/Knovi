@@ -2130,11 +2130,26 @@ function normalizeCalculationLine(raw) {
   s = s.replace(/\s*==\s*$/i, "==");
 
   // Unicode operators → TeX-friendly (still fine inside $...$)
+  // Keep a single space after \times so "1\times2" and "1 × 2" both become clean.
   s = s
-    .replace(/×/g, "\\times ")
-    .replace(/÷/g, "\\div ")
+    .replace(/×/g, " \\times ")
+    .replace(/÷/g, " \\div ")
     .replace(/−/g, "-")
-    .replace(/·/g, "\\cdot ");
+    .replace(/·/g, " \\cdot ");
+  // Also normalize already-present \times / \cdot that may be jammed
+  s = s.replace(/\\times(?=\S)/g, "\\times ");
+  s = s.replace(/\\cdot(?=\S)/g, "\\cdot ");
+  s = s.replace(/\s+/g, " ").trim();
+
+  // Fix bracket-style exponents early: 2^[3] → 2^{3}
+  s = s.replace(/\^\[([^\]]+)\]/g, "^{$1}");
+
+  // Unicode superscripts → TeX (e.g. 2³ → 2^{3}) so later regexes see consistent form
+  const uniSup = { "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9" };
+  s = s.replace(/([A-Za-z0-9)])([⁰¹²³⁴⁵⁶⁷⁸⁹]+)/g, (_, base, sups) => {
+    const digits = [...sups].map((c) => uniSup[c] ?? c).join("");
+    return `${base}^{${digits}}`;
+  });
 
   // Drop orphan/unmatched $ so we can re-wrap cleanly
   const dollarCount = (s.match(/\$/g) || []).length;
@@ -2146,6 +2161,24 @@ function normalizeCalculationLine(raw) {
   }
   // Collapse empty $$ pairs left behind
   s = s.replace(/\$\s*\$/g, "");
+  // Strip any remaining stray $ that sit mid-term (e.g. 0\times2^{2}$1)
+  s = s.replace(/\$/g, "");
+
+  // Place-value / product expansions often arrive jammed on one line without + :
+  //   "1 \times 2^{3} 0 \times 2^{2} 1 \times 2^{1} 1 \times 2^{0}"
+  //   "1 \times 2^{3} = 8 0 \times 2^{2} = 0"
+  // Insert " + " between consecutive digit×power terms (and before a following term after = value).
+  const prodTerm = String.raw`\d+\s*(?:\\times|×|\*)\s*\d+\s*\^\s*\{?\s*\d+\s*\}?`;
+  // First: split "value TERM" patterns after an equals (e.g. "= 8 0 \times 2^{2}")
+  s = s.replace(
+    new RegExp(String.raw`(=\s*\d+)\s+(?=${prodTerm})`, "g"),
+    "$1 + "
+  );
+  // Then: insert + between adjacent product terms that lack an operator
+  s = s.replace(
+    new RegExp(String.raw`(${prodTerm})\s+(?=${prodTerm})`, "g"),
+    "$1 + "
+  );
 
   // Split answer prefix from the math body so highlight + math both work
   let answerPrefix = "";
@@ -2381,6 +2414,32 @@ function normalizeMathSource(text) {
     return `$${m}$`;
   });
 
+  // Fix bracket-style exponents anywhere: 2^[3] → 2^{3}
+  s = s.replace(/\^\[([^\]]+)\]/g, "^{$1}");
+
+  // Unicode superscripts → TeX exponents (place-value lines often use 2³, 2¹, …)
+  const uniSupMap = { "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9" };
+  s = s.replace(/([A-Za-z0-9)])([⁰¹²³⁴⁵⁶⁷⁸⁹]+)/g, (_, base, sups) => {
+    const digits = [...sups].map((c) => uniSupMap[c] ?? c).join("");
+    return `${base}^{${digits}}`;
+  });
+
+  // Normalize spacing around \times / \cdot so term detection is reliable
+  s = s.replace(/\\times(?=\S)/g, "\\times ");
+  s = s.replace(/\\cdot(?=\S)/g, "\\cdot ");
+
+  // Place-value expansions: insert + between jammed digit×base^power terms
+  // e.g. "1 \times 2^{3} 0 \times 2^{2}" → "1 \times 2^{3} + 0 \times 2^{2}"
+  const prodTerm = String.raw`\d+\s*(?:\\times|×|\*)\s*\d+\s*\^\s*\{?\s*\d+\s*\}?`;
+  s = s.replace(
+    new RegExp(String.raw`(=\s*\d+)\s+(?=${prodTerm})`, "g"),
+    "$1 + "
+  );
+  s = s.replace(
+    new RegExp(String.raw`(${prodTerm})\s+(?=${prodTerm})`, "g"),
+    "$1 + "
+  );
+
   // Restore protected
   s = s.replace(/\u0000(?:CODE|MATH)(\d+)\u0000/g, (_, n) => protectedBlocks[Number(n)]);
   // Collapse accidental $$ $$ from double wrapping
@@ -2406,6 +2465,16 @@ function normalizeLatexSource(latex) {
   });
   // Normalize accidental spaces around exponent markers: b ^ n -> b^n.
   src = src.replace(/([A-Za-z0-9)\]}])\s*\^\s*([A-Za-z0-9(])/g, "$1^$2");
+  // Fix bracket-style exponents the model sometimes emits: 2^[3] → 2^{3}, x^[n] → x^{n}
+  src = src.replace(/\^\[([^\]]+)\]/g, "^{$1}");
+  // Unicode superscripts → TeX exponents (common in place-value expansions)
+  const uniSup = { "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9" };
+  src = src.replace(/([A-Za-z0-9)])([⁰¹²³⁴⁵⁶⁷⁸⁹]+)/g, (_, base, sups) => {
+    const digits = [...sups].map((c) => uniSup[c] ?? c).join("");
+    return `${base}^{${digits}}`;
+  });
+  // Unicode × / · / ÷ → TeX (in case they survived earlier passes)
+  src = src.replace(/×/g, "\\times ").replace(/·/g, "\\cdot ").replace(/÷/g, "\\div ");
   // Collapse JSON-style double escaping that can leak into rendered math.
   src = src.replace(/\\\\(?=[A-Za-z])/g, "\\");
   return src;

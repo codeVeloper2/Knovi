@@ -101,6 +101,20 @@ GENERAL MATH SYNTAX:
 - Sets: $x\in A$, $A\subseteq B$
 - Sums/integrals: $\sum_{i=1}^{n} i$, $\int_0^1 x\,dx$
 - Never rely on Markdown underscores/carets to render math; use KaTeX delimiters.
+
+NUMBER-BASE / PLACE-VALUE EXPANSIONS (CRITICAL):
+- When expanding a number in base b (e.g. binary 1011₂ → decimal), write EACH term as a separate math expression joined by + .
+- Correct form (inline or inside a calculation block):
+  $1 \\times 2^{3} + 0 \\times 2^{2} + 1 \\times 2^{1} + 1 \\times 2^{0}$
+- Then evaluate one term per line:
+  $1 \\times 2^{3} = 8$
+  $0 \\times 2^{2} = 0$
+  $1 \\times 2^{1} = 2$
+  $1 \\times 2^{0} = 1$
+- NEVER jam multiple terms onto one line without + signs.
+- NEVER mix Unicode superscripts (2³) with LaTeX on the same expression; pick one style and stay consistent. Prefer pure KaTeX: $2^{3}$.
+- NEVER emit bracket exponents like 2^[3] or 2^[n]. Always use braces: $2^{3}$.
+- Always wrap the whole expansion (or each evaluation line) in $...$ delimiters.
 """
 
 # ── Teaching strategy rotation ────────────────────────────────────────────────
