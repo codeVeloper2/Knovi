@@ -1967,12 +1967,15 @@
 
 .ar-msg-student-bubble {
   position: relative;
-  max-width: min(72%, 580px);
+  max-width: min(78%, 640px);
   padding: 12px 15px;
   border-radius: 16px 16px 0 16px;
-  background: #3d6bff;
-  color: #fff;
-  box-shadow: 0 8px 22px rgba(61, 107, 255, .28);
+  /* Dark card so tables, KaTeX, and code stay readable (not solid bright blue) */
+  background: #0f1c30;
+  color: #e8eef8;
+  border: 1px solid rgba(123, 168, 224, 0.22);
+  border-right: 3px solid #5b8cff;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .ar-msg-student-bubble::after {
@@ -1984,7 +1987,7 @@
   height: 14px;
   background: transparent;
   border-bottom-left-radius: 12px;
-  box-shadow: -5px 0 0 0 #3d6bff;
+  box-shadow: -5px 0 0 0 #0f1c30;
   pointer-events: none;
 }
 
@@ -2072,8 +2075,39 @@
 
 .ar-msg-student-bubble .ar-rich {
   font-size: 14px;
-  line-height: 1.6;
-  color: #fff;
+  line-height: 1.65;
+  color: #e8eef8;
+}
+.ar-msg-student-bubble .ar-rich table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin: 8px 0;
+  background: rgba(6, 16, 30, 0.55);
+}
+.ar-msg-student-bubble .ar-rich th,
+.ar-msg-student-bubble .ar-rich td {
+  padding: 7px 9px;
+  border: 1px solid rgba(123, 168, 224, 0.22);
+  text-align: left;
+  color: #d9ecff;
+}
+.ar-msg-student-bubble .ar-rich th {
+  background: rgba(91, 111, 246, 0.14);
+  color: #cbd8ee;
+  font-weight: 700;
+}
+.ar-msg-student-bubble .ar-math,
+.ar-msg-student-bubble .katex {
+  color: #f0f6ff;
+}
+.ar-msg-student-bubble .ar-code-wrap,
+.ar-msg-student-bubble .ar-calculation-wrap {
+  background: #06101e;
+  border-color: rgba(123, 168, 224, 0.2);
+}
+.ar-msg-student-bubble a {
+  color: #9db8ff;
 }
 
 .ar-msg-time-right {
