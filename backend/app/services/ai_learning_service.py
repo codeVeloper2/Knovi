@@ -1251,7 +1251,10 @@ async def teach_concept(session_id: int, user_id: int, db: AsyncSession, task_in
     for existing in session.teaching:
         raw = existing.raw_content or ""
         try:
-            candidate = parse_json(raw).get("learning_tasks")
+            loaded = parse_json(raw)
+            if not isinstance(loaded, dict):
+                loaded = _coerce_json_object(loaded, preferred_keys=("learning_tasks", "explanation"))
+            candidate = loaded.get("learning_tasks") if isinstance(loaded, dict) else None
             if isinstance(candidate, list) and candidate:
                 current_plan = candidate
                 break
@@ -1413,6 +1416,26 @@ Return JSON (all fields required; arrays may be empty []):
     except Exception as exc:
         logger.error("AI teaching generation failed: %s", exc)
         raise HTTPException(502, f"AI service error: {exc}")
+
+    # Models sometimes return a bare list (tasks) or nested wrapper instead of a
+    # dict — that used to crash task transitions with:
+    # TypeError: list indices must be integers or slices, not str
+    if isinstance(parsed, list):
+        if parsed and all(isinstance(x, dict) and ("title" in x or "description" in x or "focus" in x) for x in parsed):
+            parsed = {
+                "explanation": "Let's continue with the next focused task.",
+                "learning_tasks": parsed,
+                "key_points": [],
+                "examples": [],
+                "summary": "",
+                "study_prompt": "Read the next task carefully, then try a similar example.",
+            }
+        else:
+            parsed = _coerce_json_object(parsed, preferred_keys=("explanation", "learning_tasks", "summary"))
+    elif not isinstance(parsed, dict):
+        parsed = _coerce_json_object(parsed, preferred_keys=("explanation", "learning_tasks", "summary"))
+    if not isinstance(parsed, dict):
+        parsed = {}
 
     if current_plan:
         parsed["learning_tasks"] = current_plan
@@ -1807,6 +1830,11 @@ Rules:
     except Exception as exc:
         logger.error("AI respond failed: %s", exc)
         raise HTTPException(502, f"AI service error: {exc}")
+
+    if not isinstance(parsed, dict):
+        parsed = _coerce_json_object(parsed, preferred_keys=("response", "action"))
+        if not isinstance(parsed, dict):
+            parsed = {}
 
     response_text = _safe_str(parsed.get("response"), "I'm sorry, I couldn't generate a response right now.")
     suggest_new_session = bool(parsed.get("suggest_new_session", False))
