@@ -78,7 +78,7 @@ function _cleanForTTS(text) {
     .replace(/\$\$[\s\S]*?\$\$/g, " ")
     .replace(/\\\[[\s\S]*?\\\]/g, " ")
     .replace(/\\\([\s\S]*?\\\)/g, " ")
-    .replace(/\$(?=[^$\n]{1,120}\$)[^$\n]{1,120}\$/g, " ")
+    .replace(/\$(?=[^$\n]{1,500}\$)[^$\n]{1,500}\$/g, " ")
     .replace(/\\(?:[A-Za-z]+|[^A-Za-z\s])/g, " ")
     .replace(/#{1,6}\s+/g, "")
     .replace(/[*_`~>]+/g, "")
@@ -2224,6 +2224,18 @@ function normalizeMathSource(text) {
   s = s.replace(/(\$[^$\n]+\$)\s*[`$]+/g, "$1");
   s = s.replace(/==\s*[`$]+/g, "==");
 
+  // Recover formulas that only have a closing $ (opening $ lost in JSON/model output).
+  // Example: (d_n \\times b^n) + ... + (d_0 \\times b^0)$ Remember that...
+  s = s.replace(
+    /(?:^|[\n.!]\s*)([^\n$]{0,20}?(?:\([^\n$]*\\[A-Za-z]+[^\n$]*\)|\([^\n$]*[_^][^\n$]*\))[^\n$]{0,400}?)\$(?=[\s.,;:!?]|$)/gm,
+    (m, body, offset, full) => {
+      const cleaned = body.trim();
+      if (!cleaned || cleaned.startsWith("$")) return m;
+      const prefix = m.slice(0, m.indexOf(body));
+      return `${prefix}$${cleaned}$`;
+    }
+  );
+
   // Protect fenced code AND already-delimited mathematics before applying any
   // prose-level normalization. Otherwise a TeX command such as \times or an
   // exponent can be modified while we are still parsing ordinary text.
@@ -2232,7 +2244,7 @@ function normalizeMathSource(text) {
     protectedBlocks.push(m);
     return `\u0000CODE${protectedBlocks.length - 1}\u0000`;
   });
-  s = s.replace(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$(?=[^$\n]{1,120}\$)[^$\n]{1,120}\$)/g, (m) => {
+  s = s.replace(/(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\$(?=[^$\n]{1,500}\$)[^$\n]{1,500}\$)/g, (m) => {
     protectedBlocks.push(m);
     return `\u0000MATH${protectedBlocks.length - 1}\u0000`;
   });
@@ -2393,7 +2405,7 @@ function CopySvg({ active = false }) {
 function inlineMarkdown(text) {
   const source = String(text);
   // Parse LaTeX delimiters before Markdown emphasis so math is not broken by * _
-  const tokens = source.split(/(\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$|\\\([\s\S]*?\\\)|\$(?=[^$\n]{1,48}\$)(?=[^$\n]*(?:\\[A-Za-z]+|[0-9]|[=<>^_{}]|[A-Za-z]))[^$\n]{1,48}\$|==[^=\n]+==|\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\n]+\*|_[^_\n]+_|~~[^~]+~~)/g);
+  const tokens = source.split(/(\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$|\\\([\s\S]*?\\\)|\$(?=[^$\n]{1,500}\$)(?=[^$\n]*(?:\\[A-Za-z]+|[0-9]|[=<>^_{}]|[A-Za-z]))[^$\n]{1,500}\$|==[^=\n]+==|\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*\n]+\*|_[^_\n]+_|~~[^~]+~~)/g);
   return tokens.map((p, i) => {
     if (!p) return null;
     if (p.startsWith("\\[") && p.endsWith("\\]")) return <span key={i}>{renderMath(p.slice(2, -2), true)}</span>;
