@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import Logo from "../../components/Logo";
+import { LogoMark } from "../../components/Logo";
 import { GRADES } from "../../subjects";
 import * as api from "../../api";
 
@@ -147,7 +147,10 @@ export default function Onboarding() {
     <div className="wizard">
       {/* ── Sidebar stepper ── */}
       <aside className="wizard-side">
-        <Logo size={32} />
+        <div className="logo">
+          <LogoMark size={28} />
+          <span className="logo-text">Kno<span className="logo-accent">vi</span></span>
+        </div>
         <ul className="stepper">
           {STEPS.map((s, i) => (
             <li

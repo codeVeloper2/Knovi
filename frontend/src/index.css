@@ -745,18 +745,34 @@ body:has(.dash-page) {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0;
+  position: relative;
 }
 .step {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
-  border-radius: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
   color: var(--text-soft);
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   transition: all 0.15s;
+  position: relative;
+}
+/* Connecting line between steps */
+.step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 29px; /* centers on the 28px dot (16px pad + 14px radius) */
+  top: calc(12px + 28px);
+  width: 2px;
+  bottom: 0;
+  background: var(--navy-line);
+  z-index: 0;
+}
+.step.done:not(:last-child)::after {
+  background: rgba(52, 211, 153, 0.45);
 }
 .step.active {
   background: rgba(91,110,245,0.14);
@@ -768,12 +784,14 @@ body:has(.dash-page) {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 800;
   background: var(--navy-input);
   border: 1.5px solid var(--navy-line);
   color: var(--text-soft);
   flex-shrink: 0;
+  position: relative;
+  z-index: 1;
 }
 .step.active .step-dot {
   background: linear-gradient(135deg, var(--blue), var(--blue-bright));
@@ -852,6 +870,7 @@ body:has(.dash-page) {
   .wizard-side > .logo { display: none; }
   .stepper { flex-direction: row; gap: 4px; }
   .step-label { display: none; }
+  .step:not(:last-child)::after { display: none; }
   .wizard-hint { display: none; }
   .wizard-main { padding: 28px 18px; }
 }
@@ -20562,17 +20581,23 @@ kbd {
     linear-gradient(160deg,#0d1b33,#081321);
   border-right:1px solid rgba(255,255,255,.07);
 }
-.wizard-side .logo { font-size:1.5rem; }
-.stepper { gap:8px; margin-top:8px; }
-.step {
-  position:relative;
-  padding:14px;
-  border:1px solid transparent;
-  border-radius:14px;
+.wizard-side .logo {
+  font-size: 1.35rem;
+  gap: 10px;
+  margin-bottom: 4px;
 }
-.step.active { background:rgba(91,110,245,.12); border-color:rgba(91,110,245,.2); }
-.step-dot { width:32px; height:32px; }
-.step-label { font-size:.9rem; }
+.wizard-side .logo-text { color: #fff; }
+.stepper { gap: 0; margin-top: 8px; }
+.step {
+  position: relative;
+  padding: 12px 16px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font-size: 0.85rem;
+}
+.step.active { background: rgba(91,110,245,.12); border-color: rgba(91,110,245,.2); }
+.step-dot { width: 28px; height: 28px; font-size: 0.8rem; }
+.step-label { font-size: 0.85rem; }
 .wizard-main {
   min-width:0;
   padding:clamp(28px,5vw,64px);
@@ -20630,10 +20655,11 @@ kbd {
     border-bottom:1px solid rgba(255,255,255,.07);
   }
   .wizard-side > .logo { display:none; }
-  .stepper { width:100%; justify-content:space-between; }
-  .step { flex:1; justify-content:center; padding:8px; }
+  .stepper { width:100%; justify-content:space-between; flex-direction: row; }
+  .step { flex:1; justify-content:center; padding:8px; flex-direction: column; gap: 6px; }
   .step-label { display:block; font-size:.72rem; text-align:center; }
   .step-dot { width:28px; height:28px; }
+  .step:not(:last-child)::after { display: none; }
   .wizard-hint { display:none; }
   .wizard-main { padding:20px 14px 48px; }
   .wizard-card { width:100%; padding:24px 18px; border-radius:20px; }
