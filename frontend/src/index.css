@@ -634,16 +634,62 @@ body:has(.dash-page) {
   font-weight: 600;
 }
 
-.photo-row { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+.photo-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.avatar-upload {
+  position: relative;
+  display: inline-flex;
+  cursor: pointer;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+.avatar-upload:hover .avatar,
+.avatar-upload:hover .avatar--camera {
+  filter: brightness(1.08);
+}
+.avatar-upload:focus-within {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
 .avatar {
-  width: 80px; height: 80px;
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
   object-fit: cover;
   background: linear-gradient(135deg, #1e3a8a, #0ea5e9);
-  display: grid; place-items: center;
-  font-size: 1.6rem; font-weight: 700;
+  display: grid;
+  place-items: center;
+  font-size: 1.6rem;
+  font-weight: 700;
   color: #fff;
   flex-shrink: 0;
+}
+.avatar--camera {
+  color: rgba(255, 255, 255, 0.92);
+}
+.avatar--camera svg {
+  display: block;
+}
+.avatar-camera-badge {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--blue), var(--blue-bright));
+  border: 2px solid var(--navy-panel, #0d182a);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+.avatar-camera-badge svg {
+  display: block;
 }
 
 .agreement {

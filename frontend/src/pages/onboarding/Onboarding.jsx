@@ -176,19 +176,29 @@ export default function Onboarding() {
               <p className="card-subtitle">Tell us a bit about yourself so Knovi can personalise your learning experience.</p>
 
               <div className="photo-row">
-                {preview ? (
-                  <img className="avatar" src={preview} alt="Profile preview" />
-                ) : (
-                  <div className="avatar">{(displayName || "P").slice(0, 1).toUpperCase()}</div>
-                )}
-                <div>
-                  <label htmlFor="photo" className="btn-social" style={{ width: "auto", display: "inline-flex" }}>
-                    Upload photo
-                  </label>
-                  <input id="photo" type="file" accept="image/*" hidden
-                    onChange={(e) => setPhotoFile(e.target.files?.[0] || null)} />
-                  <p className="hint" style={{ marginTop: 8 }}>A clear face photo works best. Optional.</p>
-                </div>
+                <label htmlFor="photo" className="avatar-upload" title="Upload photo">
+                  {preview ? (
+                    <img className="avatar" src={preview} alt="Profile preview" />
+                  ) : (
+                    <span className="avatar avatar--camera">
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M9 7l1.2-2.4A1 1 0 0 1 11.1 4h1.8a1 1 0 0 1 .9.6L15 7h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h3z" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round"/>
+                        <circle cx="12" cy="13" r="3.25" stroke="currentColor" strokeWidth="1.75"/>
+                      </svg>
+                    </span>
+                  )}
+                  {preview && (
+                    <span className="avatar-camera-badge" aria-hidden="true">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                        <path d="M9 7l1.2-2.4A1 1 0 0 1 11.1 4h1.8a1 1 0 0 1 .9.6L15 7h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h3z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
+                        <circle cx="12" cy="13" r="3.25" stroke="currentColor" strokeWidth="2"/>
+                      </svg>
+                    </span>
+                  )}
+                </label>
+                <input id="photo" type="file" accept="image/*" hidden
+                  onChange={(e) => setPhotoFile(e.target.files?.[0] || null)} />
+                <p className="hint">A clear face photo works best. Optional.</p>
               </div>
 
               <div className="field">
