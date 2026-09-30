@@ -402,7 +402,7 @@ Misconceptions:
 What the AI taught:
 {context_b.teaching_text}
 
-MATHEMATICS NOTATION: Wrap all formulas in $...$ or $$...$$ KaTeX delimiters (e.g. $-3x > 12$, $\frac{a}{b}$). Never leave raw \frac without delimiters.
+MATHEMATICS NOTATION: Wrap all formulas in $...$ or $$...$$ KaTeX delimiters (e.g. $-3x > 12$, $\\frac{{a}}{{b}}$). Never leave raw \\frac without delimiters.
 
 GENERATION RULES
 1. Generate exactly {blueprint.questionCount} questions.

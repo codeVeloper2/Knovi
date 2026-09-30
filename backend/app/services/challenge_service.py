@@ -233,14 +233,8 @@ async def create_challenge(
             f"question_count must be between {MIN_QUESTION_COUNT} and {MAX_QUESTION_COUNT}.",
         )
 
-    if not await _is_connected(challenger_id, opponent_id, db):
-        # This repository currently has no dedicated friendship table. Its live
-        # peer connection primitive is the 1-to-1 Conversation, so challenge
-        # eligibility is intentionally bound to an existing conversation.
-        raise HTTPException(
-            403,
-            "AI Quiz Battle is available only between students who are already connected in Knovi.",
-        )
+    # Challenges are allowed between any students on the platform.
+    # Prior conversation / "connected" status is not required.
 
     users = await _load_users({challenger_id, opponent_id}, db)
     challenger = users.get(challenger_id)
