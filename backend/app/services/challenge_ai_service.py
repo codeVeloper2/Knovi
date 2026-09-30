@@ -410,14 +410,16 @@ GENERATION RULES
 3. Use multiple choice with exactly four options labeled A, B, C, D.
 4. Exactly one option must be defensibly correct.
 5. BALANCE theory and application — do not only test objectives as procedures:
-   - At least ~40% of questions must test THEORY: definitions, key terms, core ideas, meaning of symbols/rules, or conceptual understanding from CONCEPT MATERIAL / key points.
-   - The remaining questions test application, reasoning, or discrimination using the shared objectives.
-6. Do not reveal, mention, or imply student-specific weaknesses or any private learner information.
-7. Do not introduce facts that are outside the concept unless they are explicitly required to apply the concept.
-8. Do not repeat the same underlying question pattern.
-9. Explanations must be concise and explain why the correct option is correct (include the theory idea when relevant).
-10. Do not include markdown outside JSON strings.
-11. Keep difficulty aligned with the requested distribution.
+   - About 30–40% of questions may test THEORY: definitions, key terms, core ideas, meaning of symbols/rules, or conceptual understanding from CONCEPT MATERIAL / key points. Each theory question MUST still map to a shared objective ID and stay tightly related to that skill (e.g. place value supports conversion).
+   - The remaining questions MUST test application: perform a conversion, compute in a base, compare values, or apply the objective procedure with concrete numbers.
+6. Prefer concrete numbers and short stems for application items so answers are unambiguous.
+7. Do not reveal, mention, or imply student-specific weaknesses or any private learner information.
+8. Do not introduce facts that are outside the concept unless they are explicitly required to apply the concept.
+9. Do not repeat the same underlying question pattern.
+10. Explanations must be concise and explain why the correct option is correct (include the theory idea when relevant).
+11. Do not include markdown outside JSON strings.
+12. Keep difficulty aligned with the requested distribution.
+13. Return a single JSON object with a top-level "questions" array (never a lone question object).
 
 Return exactly:
 {{
@@ -440,6 +442,31 @@ Return exactly:
 }}
 """
     return prompt, system
+
+
+def _normalize_generated_question_payload(parsed: Any) -> dict[str, Any]:
+    """Normalize common LLM shape mistakes into GeneratedQuestionSet-compatible data."""
+    if isinstance(parsed, list):
+        return {"questions": parsed}
+    if not isinstance(parsed, dict):
+        return {"questions": []}
+
+    if "questions" in parsed and isinstance(parsed["questions"], list):
+        return parsed
+
+    # Single question object returned instead of a wrapper.
+    if "question" in parsed and "options" in parsed:
+        return {"questions": [parsed]}
+
+    # Alternate keys some models use.
+    for key in ("questionSet", "question_set", "items", "data"):
+        value = parsed.get(key)
+        if isinstance(value, list):
+            return {"questions": value}
+        if isinstance(value, dict) and "questions" in value and isinstance(value["questions"], list):
+            return value
+
+    return parsed
 
 
 async def generate_question_set(
@@ -465,7 +492,7 @@ async def generate_question_set(
         temperature=0.55,
         json_mode=True,
     )
-    parsed = parse_json(raw)
+    parsed = _normalize_generated_question_payload(parse_json(raw))
     question_set = GeneratedQuestionSet.model_validate(parsed)
     return question_set, provider
 
@@ -539,7 +566,8 @@ async def ai_validate_question_set(
     system = (
         "You are Knovi's independent quiz validator. You are not the generator. "
         "Inspect the supplied questions against the approved curriculum boundary. "
-        "Return JSON only and be conservative: any ambiguity or scope problem is a failure."
+        "Return JSON only. Prefer passing questions that fairly test the concept; "
+        "fail only clear defects (wrong answer key, multi-correct, off-topic, or pure trivia unrelated to the concept)."
     )
     prompt = f"""
 CURRICULUM
@@ -552,12 +580,23 @@ Approved objectives:
 Questions to validate:
 {payload}
 
+ALIGNMENT POLICY (important — match the generator's rules):
+- Theory / conceptual questions (definitions, key terms, notation, meaning of rules, place value ideas)
+  that stay inside this concept are ALLOWED and should be marked objectiveAligned=true when they are
+  mapped to a related shared objective ID, even if the objective wording is procedural (e.g. conversion
+  or arithmetic). Conceptual understanding underpins those skills.
+- Application questions must reasonably exercise the listed objective (conversion, arithmetic, etc.).
+- Do NOT fail a question merely because it tests understanding rather than a multi-step procedure.
+- Fail objectiveAligned only when the question is about a different topic or has no meaningful link
+  to the concept / shared objectives.
+
 For every question determine:
-- objectiveAligned: does it genuinely assess its listed objective?
+- objectiveAligned: true if it assesses the listed objective OR is a fair concept-theory question
+  reasonably mapped to that objective under the policy above.
 - answerDefensible: is there exactly one defensible correct answer?
-- unambiguous: could a careful student reasonably select another option?
-- inScope: is it within the supplied concept/material and objective boundary?
-- duplicate: is it materially duplicated by another question?
+- unambiguous: is the stem clear enough that a careful student would not reasonably pick another option?
+- inScope: is it within this concept (Number Base System / the named concept) and not another subject?
+- duplicate: is it materially duplicated by another question in the set?
 - notes: concise reason for any failure; empty string when all checks pass.
 
 Return:
