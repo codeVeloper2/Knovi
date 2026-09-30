@@ -731,10 +731,10 @@ body:has(.dash-page) {
 /* ── Sidebar ── */
 .wizard-side {
   position: relative;
-  padding: 40px 32px;
+  padding: 32px 24px;
   display: flex;
   flex-direction: column;
-  gap: 40px;
+  gap: 28px;
   background:
     radial-gradient(600px 400px at 0% 0%, rgba(37,99,235,0.16), transparent 60%),
     linear-gradient(160deg, #0e1b34, #0a1428);
@@ -747,40 +747,46 @@ body:has(.dash-page) {
   flex-direction: column;
   gap: 0;
   position: relative;
+  padding: 0;
+  margin: 0;
 }
 .step {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
-  border-radius: 10px;
+  padding: 0;
+  min-height: 0;
+  border-radius: 0;
   color: var(--text-soft);
   font-weight: 600;
   font-size: 0.85rem;
-  transition: all 0.15s;
+  transition: color 0.15s;
   position: relative;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 /* Connecting line between steps */
 .step:not(:last-child)::after {
   content: "";
   position: absolute;
-  left: 29px; /* centers on the 28px dot (16px pad + 14px radius) */
-  top: calc(12px + 28px);
+  left: 13px; /* center of 28px dot */
+  top: 28px;
   width: 2px;
-  bottom: 0;
-  background: var(--navy-line);
+  height: 20px;
+  background: rgba(255, 255, 255, 0.12);
   z-index: 0;
 }
 .step.done:not(:last-child)::after {
-  background: rgba(52, 211, 153, 0.45);
+  background: rgba(52, 211, 153, 0.5);
 }
 .step.active {
-  background: rgba(91,110,245,0.14);
   color: #fff;
 }
 .step.done { color: var(--text); }
 .step-dot {
-  width: 28px; height: 28px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -799,9 +805,17 @@ body:has(.dash-page) {
   color: #fff;
 }
 .step.done .step-dot {
-  background: rgba(52,211,153,0.2);
-  border-color: rgba(52,211,153,0.5);
+  background: rgba(52, 211, 153, 0.2);
+  border-color: rgba(52, 211, 153, 0.5);
   color: #6ee7b7;
+}
+.step-label {
+  line-height: 28px; /* align with dot height */
+  padding: 4px 0;
+}
+/* spacer so line has room between dots */
+.step:not(:last-child) {
+  padding-bottom: 20px;
 }
 
 .wizard-hint {
@@ -869,6 +883,7 @@ body:has(.dash-page) {
   }
   .wizard-side > .logo { display: none; }
   .stepper { flex-direction: row; gap: 4px; }
+  .step { padding-bottom: 0 !important; }
   .step-label { display: none; }
   .step:not(:last-child)::after { display: none; }
   .wizard-hint { display: none; }
@@ -20572,14 +20587,15 @@ kbd {
   background:#07101e;
 }
 .wizard-side {
-  position:sticky;
-  top:0;
-  height:100svh;
-  padding:34px 28px;
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  padding: 28px 24px;
+  gap: 24px;
   background:
-    radial-gradient(500px 400px at 0 0,rgba(91,110,245,.16),transparent 65%),
-    linear-gradient(160deg,#0d1b33,#081321);
-  border-right:1px solid rgba(255,255,255,.07);
+    radial-gradient(500px 400px at 0 0, rgba(91,110,245,.16), transparent 65%),
+    linear-gradient(160deg, #0d1b33, #081321);
+  border-right: 1px solid rgba(255, 255, 255, .07);
 }
 .wizard-side .logo {
   font-size: 1.35rem;
@@ -20590,14 +20606,21 @@ kbd {
 .stepper { gap: 0; margin-top: 8px; }
 .step {
   position: relative;
-  padding: 12px 16px;
-  border: 1px solid transparent;
-  border-radius: 10px;
+  padding: 0;
+  border: none !important;
+  border-radius: 0;
   font-size: 0.85rem;
+  background: transparent !important;
+  box-shadow: none !important;
 }
-.step.active { background: rgba(91,110,245,.12); border-color: rgba(91,110,245,.2); }
+.step:not(:last-child) { padding-bottom: 20px; }
+.step.active {
+  background: transparent !important;
+  border: none !important;
+  color: #fff;
+}
 .step-dot { width: 28px; height: 28px; font-size: 0.8rem; }
-.step-label { font-size: 0.85rem; }
+.step-label { font-size: 0.85rem; line-height: 28px; padding: 0; }
 .wizard-main {
   min-width:0;
   padding:clamp(28px,5vw,64px);
@@ -20654,15 +20677,23 @@ kbd {
     border-right:0;
     border-bottom:1px solid rgba(255,255,255,.07);
   }
-  .wizard-side > .logo { display:none; }
-  .stepper { width:100%; justify-content:space-between; flex-direction: row; }
-  .step { flex:1; justify-content:center; padding:8px; flex-direction: column; gap: 6px; }
-  .step-label { display:block; font-size:.72rem; text-align:center; }
-  .step-dot { width:28px; height:28px; }
+  .wizard-side > .logo { display: none; }
+  .stepper { width: 100%; justify-content: space-between; flex-direction: row; }
+  .step {
+    flex: 1;
+    justify-content: center;
+    padding: 6px 4px !important;
+    padding-bottom: 6px !important;
+    flex-direction: column;
+    gap: 4px;
+    background: transparent !important;
+  }
+  .step-label { display: block; font-size: .72rem; text-align: center; line-height: 1.2; padding: 0; }
+  .step-dot { width: 28px; height: 28px; }
   .step:not(:last-child)::after { display: none; }
-  .wizard-hint { display:none; }
-  .wizard-main { padding:20px 14px 48px; }
-  .wizard-card { width:100%; padding:24px 18px; border-radius:20px; }
+  .wizard-hint { display: none; }
+  .wizard-main { padding: 20px 14px 48px; }
+  .wizard-card { width: 100%; padding: 24px 18px; border-radius: 20px; }
 }
 
 @media (max-width: 560px) {
