@@ -2176,10 +2176,12 @@ async def get_challenge_state_for_runtime(
     ).scalar_one_or_none()
     if not challenge:
         return None
+    # Shared deadline is only used for legacy timer advancement / AI mode.
+    # Peer battles advance per-player via playerProgress; do not require a viewer.
     return {
         "status": challenge.status,
         "countdownStartedAt": _iso(challenge.countdown_started_at),
-        "questionDeadlineAt": _iso(player_deadline or challenge.current_question_deadline_at),
+        "questionDeadlineAt": _iso(challenge.current_question_deadline_at),
         "revealStartedAt": (challenge.challenge_metadata or {}).get("revealStartedAt"),
     }
 
@@ -2340,7 +2342,9 @@ async def get_challenge_state(
         "expiresAt": _iso(challenge.expires_at),
         "countdownStartedAt": _iso(challenge.countdown_started_at),
         "questionStartedAt": _iso(player_started or challenge.current_question_started_at),
-        "questionDeadlineAt": _iso(challenge.current_question_deadline_at),
+        # Per-player deadline so each student has their own timer and never waits on the other.
+        "questionDeadlineAt": _iso(player_deadline or challenge.current_question_deadline_at),
+        "playerFinished": bool(player and player.get("finished")),
         "ready": (
             challenge.challenger_ready
             if role == "challenger"

@@ -350,6 +350,7 @@ async def challenge_websocket(
 
                 if event_type == "answer":
                     answer_event = ChallengeWSAnswerEvent.model_validate(payload)
+                    runtime_state = None
                     async with SessionLocal() as db:
                         ack, event = await challenge_service.submit_answer(
                             challenge_id=challenge_id,
@@ -358,8 +359,16 @@ async def challenge_websocket(
                             answer=answer_event.answer,
                             db=db,
                         )
-                        runtime_state = await challenge_service.get_challenge_state_for_runtime(challenge_id, db)
-                    await websocket.send_json({"type": "answer_ack", "data": ack})
+                        # Acknowledge immediately so the client can advance without waiting on the opponent.
+                        await websocket.send_json({"type": "answer_ack", "data": ack})
+                        try:
+                            runtime_state = await challenge_service.get_challenge_state_for_runtime(challenge_id, db)
+                        except Exception:
+                            logger.exception(
+                                "challenge_runtime_state_failed challenge_id=%s user_id=%s",
+                                challenge_id,
+                                user.id,
+                            )
                     if event:
                         await manager.broadcast(challenge_id, event)
                     if runtime_state:

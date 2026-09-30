@@ -482,7 +482,7 @@ function LiveQuiz({ challenge, now, onAnswer, submitting }) {
       <div className="ch-quiz-card">
         <div className="ch-quiz-meta">
           <span className="ch-diff">{q.difficulty || "medium"}</span>
-          <span className="ch-meta-hint">Same timer for both · results after the last question</span>
+          <span className="ch-meta-hint">Play at your own pace · results after both finish</span>
         </div>
         <h2 className="ch-quiz-question"><MathText text={q.question} /></h2>
 
@@ -798,7 +798,15 @@ export default function ChallengePage() {
       onMessage: (event) => {
         if (closed) return;
         if (event?.type === "error") {
+          // Non-fatal for independent play — still refresh state so neither player is blocked.
           toast.error(event.data?.message || "Challenge connection error.");
+          setSubmitting(false);
+          window.setTimeout(loadChallenge, 100);
+          return;
+        }
+        if (event?.type === "answer_ack") {
+          setSubmitting(false);
+          window.setTimeout(loadChallenge, 50);
           return;
         }
         if (event?.type === "challenge_state" && event.data) {
@@ -809,6 +817,7 @@ export default function ChallengePage() {
           "question_started", "question_reveal", "next_question", "challenge_completed",
           "challenge_expired", "challenge_updated", "challenge_prepared", "challenge_declined",
           "player_ready", "opponent_reconnected", "opponent_disconnected", "countdown",
+          "answer_submitted",
         ].includes(event?.type)) {
           window.setTimeout(loadChallenge, event.type === "question_reveal" ? 0 : 120);
         }
@@ -845,10 +854,19 @@ export default function ChallengePage() {
   async function handleAnswer(questionId, answer) {
     setSubmitting(true);
     try {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: "answer", questionId, answer }));
-      } else {
+      // Prefer HTTP so this player advances immediately even if the socket glitches.
+      // WebSocket is still used for live opponent presence / completion events.
+      try {
         await api.answerChallenge(challengeId, questionId, answer);
+      } catch (httpErr) {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: "answer", questionId, answer }));
+          // answer_ack handler will clear submitting; soft timeout below as safety net
+          window.setTimeout(() => setSubmitting(false), 4000);
+          await loadChallenge();
+          return;
+        }
+        throw httpErr;
       }
       await loadChallenge();
     } catch (err) {

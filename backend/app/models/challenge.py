@@ -170,6 +170,8 @@ class ChallengeSession(Base):
         "ChallengeAnswer",
         back_populates="challenge",
         cascade="all, delete-orphan",
+        foreign_keys="ChallengeAnswer.challenge_id",
+        overlaps="answers,question",
     )
     results: Mapped[list["ChallengeResult"]] = relationship(
         "ChallengeResult",
@@ -264,7 +266,11 @@ class ChallengeQuestion(Base):
         "ChallengeSession", back_populates="questions"
     )
     answers: Mapped[list["ChallengeAnswer"]] = relationship(
-        "ChallengeAnswer", back_populates="question", cascade="all, delete-orphan"
+        "ChallengeAnswer",
+        back_populates="question",
+        cascade="all, delete-orphan",
+        foreign_keys="[ChallengeAnswer.challenge_id, ChallengeAnswer.question_id]",
+        overlaps="answers,challenge",
     )
 
 
@@ -320,11 +326,18 @@ class ChallengeAnswer(Base):
     )
 
     challenge: Mapped["ChallengeSession"] = relationship(
-        "ChallengeSession", back_populates="answers"
+        "ChallengeSession",
+        back_populates="answers",
+        foreign_keys=[challenge_id],
+        overlaps="answers,question",
     )
     question: Mapped["ChallengeQuestion"] = relationship(
-        "ChallengeQuestion", back_populates="answers"
+        "ChallengeQuestion",
+        back_populates="answers",
+        foreign_keys=[challenge_id, question_id],
+        overlaps="answers,challenge",
     )
+
 
 
 class ChallengeResult(Base):
