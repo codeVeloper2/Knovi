@@ -1,4 +1,4 @@
-# Knovi — Learn. Connect. Grow.
+# Knovi — Learn. Challenge. Grow.
 
 
 AI-first learning for students: curriculum-aware KnoAI tutoring, peer discovery, real-time chat, and 1-v-1 quiz battles on shared concepts.
